@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Length Operator with Nil Holes Explained - lua</title>
+    <meta name="description" content="In Lua, the length operator (#) is designed to measure continuous arrays, meaning tables that contain internal nil values—often referred to as &quot;holes&quot;—break its standard guarantees. This article explains how Lua&#39;s length operator formally defines a bounda">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-length-operator-with-nil-holes-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Length Operator with Nil Holes Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-length-operator-with-nil-holes-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, the length operator (#) is designed to measure continuous arrays, meaning tables that contain internal nil values—often referred to as &quot;holes&quot;—break its standard guarantees. This article explains how Lua&#39;s length operator formally defines a bounda" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-length-operator-with-nil-holes-explained">Lua Length
+Operator with Nil Holes Explained</h1>
+<p>In Lua, the length operator (<code>#</code>) is designed to measure
+continuous arrays, meaning tables that contain internal <code>nil</code>
+values—often referred to as "holes"—break its standard guarantees. This
+article explains how Lua's length operator formally defines a boundary,
+why tables containing internal <code>nil</code> values produce
+unpredictable results, the underlying binary search mechanism Lua uses
+to find lengths, and how to safely handle sparse tables in your
+code.</p>
+<h3 id="the-formal-definition-of-a-sequence">The Formal Definition of a
+Sequence</h3>
+<p>In the Lua specification, a table is considered a <em>sequence</em>
+if its positive numeric keys form an unbroken range from <code>1</code>
+up to some integer <code>n</code> (that is,
+<code>{1, 2, ..., n}</code>). When a table qualifies as a sequence,
+<code>#t</code> reliably returns <code>n</code>.</p>
+<p>If the table contains <code>nil</code> between positive integer
+keys—such as <code>{10, nil, 30}</code>—it ceases to be a valid
+sequence.</p>
+<h3 id="the-boundary-rule">The Boundary Rule</h3>
+<p>The behavior of <code>#t</code> is defined by a mathematical
+condition called a <strong>boundary</strong>. An integer <span
+class="math inline">\(n\)</span> is a boundary for table <code>t</code>
+if:</p>
+<ol type="1">
+<li><code>t[n] ~= nil</code></li>
+<li><code>t[n + 1] == nil</code></li>
+</ol>
+<p>Alternatively, if <code>t[1] == nil</code>, <code>0</code> is also a
+valid boundary.</p>
+<p>When a table is a proper sequence, there is only one boundary: the
+final element. However, when a table contains internal <code>nil</code>
+holes, multiple indices can satisfy the boundary criteria
+simultaneously. In such cases, the Lua reference manual explicitly
+states that Lua is free to return <strong>any</strong> of those valid
+boundaries as the length.</p>
+<h3 id="why-the-result-appears-undefined">Why the Result Appears
+Undefined</h3>
+<p>When multiple boundaries exist, the specific index returned by
+<code>#t</code> depends on Lua’s internal memory layout for tables. Lua
+tables consist of two internal segments: an array part and a hash (node)
+part.</p>
+<ul>
+<li><strong>Binary Search Strategy:</strong> To find a boundary quickly
+without traversing the entire table in <span
+class="math inline">\(O(n)\)</span> time, Lua performs a binary search
+between the bounds of its allocated array slice and the hash map.</li>
+<li><strong>Internal Capacity Allocations:</strong> Lua allocates the
+array part in powers of two. Depending on how keys were inserted,
+updated, or removed, values may live either in the array segment or the
+hash segment.</li>
+<li><strong>Non-Deterministic Behavior:</strong> Because the binary
+search will converge on different boundaries depending on table capacity
+and internal key distribution, two tables with identical key-value pairs
+can yield different results for <code>#t</code> if they were constructed
+through different sequences of operations.</li>
+</ul>
+<p>Consider this example:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">a</span> <span class="op">=</span> <span class="op">{</span><span class="dv">1</span><span class="op">,</span> <span class="kw">nil</span><span class="op">,</span> <span class="dv">3</span><span class="op">}</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(#</span><span class="va">a</span><span class="op">)</span> <span class="co">-- Can output 1 or 3 depending on the Lua version and allocation</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">b</span> <span class="op">=</span> <span class="op">{</span><span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span><span class="op">,</span> <span class="dv">4</span><span class="op">,</span> <span class="dv">5</span><span class="op">}</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="va">b</span><span class="op">[</span><span class="dv">2</span><span class="op">]</span> <span class="op">=</span> <span class="kw">nil</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(#</span><span class="va">b</span><span class="op">)</span> <span class="co">-- Often outputs 5 because the array allocation remains intact</span></span></code></pre></div>
+<p>Both tables contain holes, but the length operator evaluates them
+based on internal boundary convergence rather than a full count of
+non-nil elements.</p>
+<h3 id="how-to-safely-handle-tables-with-holes">How to Safely Handle
+Tables with Holes</h3>
+<p>If your data requires <code>nil</code> values to represent missing
+elements, do not rely on <code>#t</code>. Instead, use one of the
+following approaches:</p>
+<ul>
+<li><strong>Use <code>table.pack</code>:</strong> When capturing
+variable arguments that may contain <code>nil</code>, use
+<code>table.pack(...)</code>. It creates a table with an explicit
+<code>n</code> field containing the exact parameter count, which you can
+read using <code>t.n</code>.</li>
+<li><strong>Explicit Length Tracking:</strong> Maintain a separate
+counter variable or store the intended capacity inside the table under a
+separate key (e.g., <code>t.size = 10</code>).</li>
+<li><strong>Use Sentinel Values:</strong> Substitute <code>nil</code>
+with a custom sentinel value (such as a unique empty table
+<code>local NONE = {}</code> or <code>false</code>) so the table remains
+an unbroken sequence of valid values.</li>
+<li><strong>Traverse via <code>pairs</code>:</strong> If you simply need
+to count how many keys currently hold values, iterate with
+<code>pairs</code> and increment a counter manually.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Is LuaJIT and How Does Its Tracing JIT Work? - lua</title>
+    <meta name="description" content="LuaJIT is an independent, high-performance Just-In-Time (JIT) compiler for the Lua programming language that significantly boosts execution speed, often approaching the performance of compiled languages like C. This article explores what LuaJIT is, the in">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/what-is-lua-jit-and-how-does-its-tracing-jit-work">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What Is LuaJIT and How Does Its Tracing JIT Work? - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/what-is-lua-jit-and-how-does-its-tracing-jit-work" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="LuaJIT is an independent, high-performance Just-In-Time (JIT) compiler for the Lua programming language that significantly boosts execution speed, often approaching the performance of compiled languages like C. This article explores what LuaJIT is, the in" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="what-is-luajit-and-how-does-its-tracing-jit-work">What Is LuaJIT
+and How Does Its Tracing JIT Work?</h1>
+<p>LuaJIT is an independent, high-performance Just-In-Time (JIT)
+compiler for the Lua programming language that significantly boosts
+execution speed, often approaching the performance of compiled languages
+like C. This article explores what LuaJIT is, the inner mechanics of its
+unique tracing JIT compilation model, and how it transforms dynamic Lua
+code into highly optimized native machine code.</p>
+<h3 id="what-is-luajit">What Is LuaJIT?</h3>
+<p>LuaJIT is a drop-in replacement for the standard Lua 5.1 interpreter,
+originally developed by Mike Pall. While standard Lua relies on an
+interpreted register-based virtual machine, LuaJIT pairs an
+exceptionally fast, hand-written assembly interpreter with a
+Just-In-Time compiler. It is widely used in performance-critical
+domains, such as video game engines, high-concurrency web servers
+(notably OpenResty and Nginx), and scientific computing.</p>
+<h3 id="how-traditional-jit-compilers-compare-to-tracing-jits">How
+Traditional JIT Compilers Compare to Tracing JITs</h3>
+<p>Most traditional JIT compilers (such as those in standard Java or
+JavaScript engines) use <strong>method-based JIT compilation</strong>.
+When a function is called frequently, the compiler translates the entire
+function or method into machine code.</p>
+<p>LuaJIT uses a <strong>tracing JIT compiler</strong>. Instead of
+compiling entire functions, a tracing JIT compiles linear execution
+paths—known as "traces"—through frequently executed code segments,
+primarily loops. Because programs spend the vast majority of their
+runtime inside repetitive loops, focusing compilation efforts on these
+specific paths yields significant performance gains with lower
+compilation overhead.</p>
+<h3 id="the-mechanics-of-luajits-tracing-jit-compiler">The Mechanics of
+LuaJIT's Tracing JIT Compiler</h3>
+<p>LuaJIT’s execution pipeline operates in distinct stages:</p>
+<ol type="1">
+<li><p><strong>Profiling with the Interpreter</strong><br />
+LuaJIT starts running code using its hand-crafted assembly interpreter.
+As it interprets bytecode, it maintains counters to monitor loop headers
+and backward jumps. When a loop counter exceeds a specific threshold,
+that segment is marked as "hot."</p></li>
+<li><p><strong>Trace Recording</strong><br />
+Once a segment is deemed hot, the engine enters recording mode. The next
+time the loop executes, LuaJIT records the exact sequence of bytecode
+instructions that actually run, capturing a single, linear control path.
+Branch conditions are recorded as speculative "guards" (assertions)
+rather than complex control-flow branches.</p></li>
+<li><p><strong>Optimization via Intermediate Representation
+(IR)</strong><br />
+The recorded trace is converted into a linear Static Single Assignment
+(SSA) intermediate representation. Because the trace contains no complex
+internal branching, LuaJIT can aggressively apply optimizations,
+including:</p>
+<ul>
+<li><strong>Type Specialization:</strong> Eliminating runtime
+type-checking overhead by assuming variables retain the types observed
+during recording.</li>
+<li><strong>Common Subexpression Elimination (CSE):</strong> Eliminating
+redundant calculations.</li>
+<li><strong>Dead-Code Elimination (DCE):</strong> Removing instructions
+whose results are never used.</li>
+<li><strong>Allocation Sinking:</strong> Avoiding heap allocations for
+short-lived tables and numbers by keeping them in CPU registers or on
+the stack.</li>
+</ul></li>
+<li><p><strong>Machine Code Generation</strong><br />
+The optimized IR is compiled directly into native machine code (such as
+x86, x64, or ARM instructions) and cached in memory. Subsequent
+iterations of that loop bypass the interpreter entirely and run native
+machine code directly on the CPU.</p></li>
+<li><p><strong>Guard Failures and Side Traces</strong><br />
+Because the native code is built on assumptions (for instance, that a
+variable remains an integer), guards continuously verify that conditions
+hold true. If an assumption fails—such as a branch taking a different
+path or an unexpected data type appearing—the trace "bails out" and
+safely hands execution back to the interpreter. If a specific guard
+fails repeatedly, LuaJIT records a "side trace" from that exit point,
+stitching new native code directly into the existing trace.</p></li>
+</ol>
+<h3 id="key-factors-in-luajits-performance-advantage">Key Factors in
+LuaJIT's Performance Advantage</h3>
+<ul>
+<li><strong>Linearized Control Flow:</strong> Traces convert complex
+conditional structures into straight-line code, which CPUs can easily
+pipeline, branch-predict, and execute speculatively.</li>
+<li><strong>Low-Overhead Foreign Function Interface (FFI):</strong>
+LuaJIT includes a built-in FFI library that allows Lua code to call
+external C functions and manipulate C data structures directly. The
+tracing compiler can inline these C calls directly into generated
+machine code, removing typical wrapper overhead.</li>
+<li><strong>Register Allocation:</strong> LuaJIT features an advanced
+register allocator that keeps hot variables inside high-speed hardware
+registers, heavily reducing memory read and write operations.</li>
+</ul>
+<p>By replacing dynamic method overhead with speculative, highly
+optimized execution paths, LuaJIT eliminates the primary bottlenecks of
+dynamic languages, delivering near-native speed without sacrificing the
+flexibility of Lua.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

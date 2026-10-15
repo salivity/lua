@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tail Call Elimination in Lua: Rules and Syntax - lua</title>
+    <meta name="description" content="Lua guarantees proper tail call elimination (often called tail call optimization) only when a function call is executed as the absolute last action of another function. Under this mechanism, the calling function does not consume stack space while waiting">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/tail-call-elimination-in-lua-rules-and-syntax">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Tail Call Elimination in Lua: Rules and Syntax - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/tail-call-elimination-in-lua-rules-and-syntax" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua guarantees proper tail call elimination (often called tail call optimization) only when a function call is executed as the absolute last action of another function. Under this mechanism, the calling function does not consume stack space while waiting" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="tail-call-elimination-in-lua-rules-and-syntax">Tail Call
+Elimination in Lua: Rules and Syntax</h1>
+<p>Lua guarantees proper tail call elimination (often called tail call
+optimization) only when a function call is executed as the absolute last
+action of another function. Under this mechanism, the calling function
+does not consume stack space while waiting for the called function to
+finish, allowing theoretically infinite recursion without triggering a
+stack overflow. This article breaks down the precise syntactic
+structures Lua requires to guarantee tail call elimination, examines
+valid variations, and highlights subtle syntax patterns that
+accidentally break the optimization.</p>
+<h3 id="the-standard-tail-call-structure">The Standard Tail Call
+Structure</h3>
+<p>For Lua to guarantee tail call elimination, the call must strictly
+follow this syntactic form:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="op">&lt;</span><span class="va">func</span><span class="op">&gt;(&lt;</span><span class="va">args</span><span class="op">&gt;)</span></span></code></pre></div>
+<p>In this structure, <code>&lt;func&gt;</code> is any expression that
+evaluates to a function, and <code>&lt;args&gt;</code> are zero or more
+comma-separated argument expressions.</p>
+<p>When the Lua virtual machine encounters this exact statement:</p>
+<ol type="1">
+<li>It evaluates <code>&lt;func&gt;</code> and all expressions inside
+<code>&lt;args&gt;</code>.</li>
+<li>It completely discards or reuses the current function's call frame
+from the call stack.</li>
+<li>It performs a direct jump to the target function.</li>
+</ol>
+<p>Because the caller's frame is released before the callee begins
+execution, any number of nested calls can be chained indefinitely.</p>
+<h3 id="valid-variations-guaranteed-by-lua">Valid Variations Guaranteed
+by Lua</h3>
+<p>The guarantee holds across several standard call formats, provided
+the call remains the final operation tied directly to
+<code>return</code>:</p>
+<ul>
+<li><p><strong>Simple function calls:</strong></p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> func<span class="op">(</span><span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">)</span></span></code></pre></div></li>
+<li><p><strong>Table field calls:</strong></p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">module</span><span class="op">.</span>func<span class="op">(</span><span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">)</span></span></code></pre></div></li>
+<li><p><strong>Object-oriented method calls:</strong></p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">object</span><span class="op">:</span>method<span class="op">(</span><span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">)</span></span></code></pre></div></li>
+<li><p><strong>Complex argument evaluation:</strong></p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> func<span class="op">(</span><span class="va">x</span> <span class="op">+</span> <span class="dv">1</span><span class="op">,</span> <span class="fu">table.concat</span><span class="op">(</span><span class="va">list</span><span class="op">,</span> <span class="st">&quot;,&quot;</span><span class="op">))</span></span></code></pre></div>
+<p>The expressions for arguments are evaluated <em>before</em> the
+function call itself takes place. As long as no additional evaluation
+occurs <em>after</em> <code>func</code> is invoked, it is a valid tail
+call.</p></li>
+</ul>
+<h3 id="call-structures-that-invalidate-the-guarantee">Call Structures
+That Invalidate the Guarantee</h3>
+<p>A tail call guarantee is easily broken by seemingly harmless
+additions. If the runtime must perform any operation after the invoked
+function returns, the call frame must stay in memory, preventing
+elimination.</p>
+<h4 id="1-enclosing-parentheses">1. Enclosing Parentheses</h4>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="op">(</span>func<span class="op">(</span><span class="va">x</span><span class="op">))</span> <span class="co">-- NOT a tail call</span></span></code></pre></div>
+<p>Wrapping the call in parentheses forces Lua to adjust the results to
+exactly one return value. Because the caller must truncate the return
+values before passing them upward, the stack frame cannot be
+released.</p>
+<h4 id="2-operations-on-return-values">2. Operations on Return
+Values</h4>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> func<span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="op">+</span> <span class="dv">1</span>   <span class="co">-- NOT a tail call</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="kw">not</span> func<span class="op">(</span><span class="va">x</span><span class="op">)</span>   <span class="co">-- NOT a tail call</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="st">&quot;Result: &quot;</span> <span class="op">..</span> func<span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="co">-- NOT a tail call</span></span></code></pre></div>
+<p>Any arithmetic, logical, or concatenation operation requires the
+caller to wait for <code>func</code> to return its value before
+finishing execution.</p>
+<h4 id="3-assignment-before-return">3. Assignment Before Return</h4>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">res</span> <span class="op">=</span> func<span class="op">(</span><span class="va">x</span><span class="op">)</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">res</span> <span class="co">-- NOT a tail call</span></span></code></pre></div>
+<p>Storing the result in a local variable before returning requires the
+local variable's scope to remain intact until the assignment
+completes.</p>
+<h4 id="4-discarded-returns">4. Discarded Returns</h4>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>func<span class="op">(</span><span class="va">x</span><span class="op">)</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="co">-- NOT a tail call</span></span></code></pre></div>
+<p>Calling a function on one line and executing an empty
+<code>return</code> on the next causes the caller to handle the
+destruction of return values from <code>func(x)</code> before exiting,
+keeping the frame active during the call.</p>
+<h3 id="practical-implications">Practical Implications</h3>
+<p>Tail call elimination is primarily utilized in Lua to implement
+infinite loops, state machines, and recursive traversals without risking
+stack limits. To ensure the Lua interpreter applies this optimization,
+ensure that the function call itself is the sole, bare expression
+provided to the <code>return</code> statement.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

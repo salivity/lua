@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why Labels in Lua Consume No Runtime Cycles - lua</title>
+    <meta name="description" content="In the Lua programming language, labels used with goto statements act strictly as compile-time markers rather than executable instructions. During the compilation phase, the Lua compiler resolves these labels directly into bytecode instruction addresses a">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-labels-in-lua-consume-no-runtime-cycles">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why Labels in Lua Consume No Runtime Cycles - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-labels-in-lua-consume-no-runtime-cycles" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, labels used with goto statements act strictly as compile-time markers rather than executable instructions. During the compilation phase, the Lua compiler resolves these labels directly into bytecode instruction addresses a" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-labels-in-lua-consume-no-runtime-cycles">Why Labels in Lua
+Consume No Runtime Cycles</h1>
+<p>In the Lua programming language, labels used with <code>goto</code>
+statements act strictly as compile-time markers rather than executable
+instructions. During the compilation phase, the Lua compiler resolves
+these labels directly into bytecode instruction addresses and discards
+the label tokens entirely. Because the resulting bytecode contains no
+operational footprint for the labels themselves, the Lua Virtual Machine
+executes jumps without ever interpreting the destination label, ensuring
+that labels consume zero runtime CPU cycles and incur no memory overhead
+during program execution.</p>
+<h3 id="compile-time-address-resolution">Compile-Time Address
+Resolution</h3>
+<p>Lua is an interpreted language that compiles source code into an
+internal bytecode format before execution by the register-based Lua
+Virtual Machine (Lua VM). When the Lua compiler parses source code, it
+processes syntax sequentially:</p>
+<ol type="1">
+<li><strong>Symbol Registration:</strong> When the parser encounters a
+label declaration (e.g., <code>::mylabel::</code>), it does not generate
+a bytecode instruction. Instead, it records the label's identifier along
+with the index of the next executable bytecode instruction into an
+internal compile-time symbol table.</li>
+<li><strong>Offset Calculation:</strong> When the parser processes a
+<code>goto mylabel</code> statement, it emits an unconditional jump
+instruction (<code>OP_JMP</code>). The argument for this jump
+instruction is calculated as the relative offset between the
+<code>goto</code> location and the bytecode index associated with the
+destination label.</li>
+<li><strong>Backpatching:</strong> If a <code>goto</code> appears before
+its target label is defined (a forward jump), the compiler temporarily
+emits a placeholder jump. Once the label is declared later in the scope,
+the compiler "backpatches" the correct relative offset into the
+previously emitted jump instruction.</li>
+</ol>
+<h3 id="absence-of-bytecode-footprint">Absence of Bytecode
+Footprint</h3>
+<p>In some low-level architectures or virtual machines, labels might be
+implemented as explicit <code>NOP</code> (no-operation) instructions to
+preserve alignment or simplify jump targets. Lua does not use this
+approach.</p>
+<p>The Lua VM never sees a label instruction because no such opcode
+exists in Lua's instruction set. The bytecode generated for:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">::</span><span class="va">start</span><span class="op">::</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="va">x</span> <span class="op">=</span> <span class="va">x</span> <span class="op">+</span> <span class="dv">1</span></span></code></pre></div>
+<p>is identical to the bytecode generated for:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="va">x</span> <span class="op">=</span> <span class="va">x</span> <span class="op">+</span> <span class="dv">1</span></span></code></pre></div>
+<p>Because the label produces no bytecode, the instruction pointer
+simply lands on the instruction following the label. The Lua VM executes
+the target operation immediately without needing an intermediate step to
+process, decode, or skip a label instruction.</p>
+<h3 id="compile-time-scoping-and-validation">Compile-Time Scoping and
+Validation</h3>
+<p>Lua enforces strict scoping rules for <code>goto</code> statements,
+such as preventing jumps into the scope of an active local variable. All
+of these validations are handled purely at compile time.</p>
+<p>The compiler verifies whether a jump is valid by analyzing variable
+visibility, lexical scoping depth, and active local registries while
+generating bytecode. Because illegal jumps trigger syntax errors before
+code execution ever begins, the Lua VM requires no dynamic validation
+checks or safety routines at runtime when reaching a label target.</p>
+<p>By offloading the entire resolution, address calculation, and
+validation workload to the compiler, Lua ensures that labels remain
+entirely inert at runtime, functioning as zero-cost abstractions for
+flow control.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

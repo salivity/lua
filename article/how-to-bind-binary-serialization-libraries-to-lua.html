@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Bind Binary Serialization Libraries to Lua - lua</title>
+    <meta name="description" content="Binary data serialization libraries like MessagePack and Protocol Buffers are essential for compact, high-speed data interchange in network programming, game development, and embedded systems. This article outlines the primary methods for binding these li">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-bind-binary-serialization-libraries-to-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Bind Binary Serialization Libraries to Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-bind-binary-serialization-libraries-to-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Binary data serialization libraries like MessagePack and Protocol Buffers are essential for compact, high-speed data interchange in network programming, game development, and embedded systems. This article outlines the primary methods for binding these li" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-bind-binary-serialization-libraries-to-lua">How to Bind
+Binary Serialization Libraries to Lua</h1>
+<p>Binary data serialization libraries like MessagePack and Protocol
+Buffers are essential for compact, high-speed data interchange in
+network programming, game development, and embedded systems. This
+article outlines the primary methods for binding these libraries to the
+Lua programming language, focusing on Lua’s C Application Programming
+Interface (API), LuaJIT’s Foreign Function Interface (FFI),
+code-generation compilers, and pure Lua fallbacks using binary packing
+utilities.</p>
+<h2 id="the-lua-c-api-approach">The Lua C API Approach</h2>
+<p>The standard and most portable way to integrate C/C++ binary
+serialization libraries (such as <code>msgpack-c</code> or
+<code>protobuf-c</code>) into standard Lua (PUC-Rio Lua) is through the
+Lua C API.</p>
+<ol type="1">
+<li><strong>Include Headers and Libraries</strong>: Link against the C
+library and Lua development headers (<code>lua.h</code>,
+<code>lauxlib.h</code>).</li>
+<li><strong>Implement Wrapper Functions</strong>: Write C functions
+matching the <code>lua_CFunction</code> signature
+(<code>int func(lua_State *L)</code>).
+<ul>
+<li><strong>Serialization (Packing)</strong>: Traverse a Lua table by
+reading its keys and values using <code>lua_next</code>, translate the
+Lua types into the library's native data structures, serialize the data
+into a binary buffer, and push the resulting buffer onto the Lua stack
+using <code>lua_pushlstring</code>.</li>
+<li><strong>Deserialization (Unpacking)</strong>: Accept a binary string
+argument via <code>luaL_checklstring</code>, pass the pointer and length
+to the library's decoding routines, and recursively push Lua tables,
+numbers, strings, and booleans to reconstruct the original data
+structure.</li>
+</ul></li>
+<li><strong>Register the Module</strong>: Expose these wrapper functions
+to Lua using <code>luaL_newlib</code> (Lua 5.2+) or
+<code>luaL_register</code> (Lua 5.1). When compiled as a shared library
+(<code>.so</code> or <code>.dll</code>), Lua can load the module via
+<code>require()</code>.</li>
+</ol>
+<h2 id="luajit-ffi-binding">LuaJIT FFI Binding</h2>
+<p>For environments running LuaJIT, the Foreign Function Interface (FFI)
+allows direct binding to binary serialization libraries without writing
+separate C bridge code or introducing JIT-exit overheads.</p>
+<ol type="1">
+<li><strong>Declare C Interfaces</strong>: Use <code>ffi.cdef</code> to
+define the C structs and functions from the serialization library (e.g.,
+<code>msgpack_packer</code>, <code>msgpack_unpack</code>).</li>
+<li><strong>Load the Shared Object</strong>: Use
+<code>ffi.load("msgpack")</code> to bind the dynamic library symbols
+directly into Lua memory.</li>
+<li><strong>Handle Memory and Buffers</strong>: Allocate native C
+buffers using <code>ffi.new("char[?]", size)</code> to avoid the
+overhead of the Lua garbage collector during intensive read/write
+cycles. Data can be serialized directly into contiguous memory blocks
+and cast to a Lua string only when necessary using
+<code>ffi.string</code>.</li>
+</ol>
+<p>FFI is commonly the fastest binding strategy because it eliminates
+the overhead of pushing and popping elements on the Lua C API stack.</p>
+<h2 id="schema-driven-generation-for-protocol-buffers">Schema-Driven
+Generation for Protocol Buffers</h2>
+<p>Unlike schema-less formats like MessagePack, Protocol Buffers rely on
+defined <code>.proto</code> files. Binding Protobuf to Lua usually
+involves schema compilation rather than only a generic runtime
+wrapper:</p>
+<ul>
+<li><strong>Custom Protoc Plugins</strong>: The Google
+<code>protoc</code> compiler supports custom plugins. A Lua plugin
+processes <code>.proto</code> files to generate Lua code that defines
+message structures, field IDs, wire types, and validation rules.</li>
+<li><strong>Descriptor-Based Runtimes</strong>: Alternatively, a generic
+C binding loads <code>.pb</code> descriptor files at runtime using the
+Protobuf C++ Reflection API or <code>protobuf-c</code>. The runtime
+dynamically validates and maps Lua tables against the loaded descriptor
+schemas.</li>
+</ul>
+<h2 id="pure-lua-implementation-with-string-packing">Pure Lua
+Implementation with String Packing</h2>
+<p>If external compiled libraries cannot be introduced—such as in
+restricted sandboxes or cross-compilation environments—binary
+serialization can be implemented in pure Lua:</p>
+<ul>
+<li><strong>Lua 5.3+</strong>: The built-in <code>string.pack</code> and
+<code>string.unpack</code> functions natively support reading and
+writing signed/unsigned integers, floating-point numbers, and
+variable-length strings according to format specifiers.</li>
+<li><strong>Bitwise Operations</strong>: MessagePack and Protobuf both
+utilize variable-length integers (varints) and bit-masked prefix bytes.
+Lua 5.3+ provides native bitwise operators (<code>&amp;</code>,
+<code>|</code>, <code>&gt;&gt;</code>, <code>&lt;&lt;</code>) to encode
+and parse these binary headers directly without native extensions.</li>
+</ul>
+<h2 id="key-implementation-considerations">Key Implementation
+Considerations</h2>
+<ul>
+<li><strong>64-bit Integer Handling</strong>: MessagePack and Protobuf
+heavily utilize 64-bit integers. Lua 5.1 and 5.2 use double-precision
+floating-point numbers by default, which lose precision beyond 53 bits.
+Ensure your binding handles 64-bit types via custom userdata, libraries
+like <code>int64</code>, or Lua 5.3+ native integers.</li>
+<li><strong>Table Identification</strong>: Lua represents both
+sequential lists (arrays) and key-value maps using the
+<code>table</code> type. Serializers must inspect the table keys
+(typically using <code>lua_rawgeti</code> or length operators) to
+accurately determine whether to emit a list/array wire type or a
+map/dictionary wire type.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

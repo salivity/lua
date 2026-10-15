@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua GC: Mark, Sweep, and Atomic Phases - lua</title>
+    <meta name="description" content="This article provides an overview of the incremental garbage collector (GC) in the Lua programming language, focusing on its core execution cycle. Lua employs a tri-color incremental mark-and-sweep collector designed to interleave garbage collection steps">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-gc-mark-sweep-and-atomic-phases">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua GC: Mark, Sweep, and Atomic Phases - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-gc-mark-sweep-and-atomic-phases" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of the incremental garbage collector (GC) in the Lua programming language, focusing on its core execution cycle. Lua employs a tri-color incremental mark-and-sweep collector designed to interleave garbage collection steps" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-gc-mark-sweep-and-atomic-phases">Lua GC: Mark, Sweep, and
+Atomic Phases</h1>
+<p>This article provides an overview of the incremental garbage
+collector (GC) in the Lua programming language, focusing on its core
+execution cycle. Lua employs a tri-color incremental mark-and-sweep
+collector designed to interleave garbage collection steps with program
+execution to minimize latency. Below is a detailed breakdown of the
+three primary phases of this cycle: the mark phase, the atomic phase,
+and the sweep phase.</p>
+<h3 id="tri-color-marking-basics">Tri-Color Marking Basics</h3>
+<p>To understand Lua's GC phases, it helps to understand its tri-color
+abstraction:</p>
+<ul>
+<li><strong>White:</strong> Unvisited objects that are candidates for
+collection. Lua distinguishes between "current white" and "other white"
+to track object generations across cycles.</li>
+<li><strong>Gray:</strong> Objects visited by the collector, but whose
+referenced objects (children) have not yet been examined.</li>
+<li><strong>Black:</strong> Reachable objects whose references have all
+been fully traversed. Black objects cannot point directly to white
+objects without triggering a barrier.</li>
+</ul>
+<hr />
+<h3 id="1-the-mark-phase">1. The Mark Phase</h3>
+<p>The mark phase identifies all live objects reachable by the program.
+Because Lua's collector is incremental, this phase runs in small steps
+interleaved with regular program execution.</p>
+<ul>
+<li><strong>Root Initialization:</strong> The phase begins by marking
+the root set—including the global table, the registry, and active
+coroutine stacks—turning them gray.</li>
+<li><strong>Incremental Propagation:</strong> In successive steps, the
+collector pops an object from the gray list, traverses its references
+(such as table keys and values), marks those referenced objects as gray
+(if they were white), and transitions the original object to black.</li>
+<li><strong>Write Barriers:</strong> Because user code runs concurrently
+between mark steps, the running program might link a white (unmarked)
+object to a black (fully visited) object. To preserve the invariant that
+black objects never point to white objects, Lua uses write barriers. A
+write barrier either reverts the black object back to gray (barrier
+back) or immediately marks the white object as gray (barrier
+forward).</li>
+</ul>
+<hr />
+<h3 id="2-the-atomic-phase">2. The Atomic Phase</h3>
+<p>The atomic phase is an uninterruptible, stop-the-world transition
+point between marking and sweeping. It handles state that cannot safely
+or efficiently be processed incrementally.</p>
+<ul>
+<li><strong>Finishing the Mark:</strong> The collector processes any
+remaining gray objects, including tables that were pushed back to the
+gray list by write barriers.</li>
+<li><strong>Weak Tables Handling:</strong> Lua clears references inside
+weak-keyed or weak-valued tables if the associated key or value is about
+to be collected.</li>
+<li><strong>Finalization (<code>__gc</code> Metamethods):</strong>
+Objects with finalizers that are marked for collection are identified.
+Lua rescues these objects for the duration of finalization by marking
+them and moving them to a separate finalization list so their
+<code>__gc</code> metamethods can run safely later.</li>
+<li><strong>Color Flip:</strong> The collector flips the internal
+definition of "white." Objects currently marked white are definitively
+garbage, while surviving black objects will be prepared for the next
+cycle.</li>
+</ul>
+<hr />
+<h3 id="3-the-sweep-phase">3. The Sweep Phase</h3>
+<p>The sweep phase reclaims memory from dead objects and resets the
+remaining live objects for future GC cycles. Like the mark phase,
+sweeping is performed incrementally across multiple engine ticks.</p>
+<ul>
+<li><strong>Dead Object Deallocation:</strong> The collector traverses
+Lua’s global linked list of all allocated objects. Any object that
+remains white (not reached during marking) is unlinked and deallocated,
+freeing its memory back to the system.</li>
+<li><strong>State Reset for Survivors:</strong> Surviving objects
+(marked black) are reset back to the current white state so they can be
+evaluated afresh in the subsequent garbage collection cycle.</li>
+<li><strong>String Table Sweeping:</strong> Unused, unreferenced strings
+in the internal string pool are freed during this phase.</li>
+</ul>
+<p>Once the sweep phase finishes traversing the global object list, the
+cycle concludes, and the collector enters a pause state until memory
+allocation thresholds trigger the next mark phase.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

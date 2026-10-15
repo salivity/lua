@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why Empty Lua Tables Cause JSON Ambiguity - lua</title>
+    <meta name="description" content="In the Lua programming language, a single data structure called a table serves as both an associative map and an ordered list. When serializing Lua data into JSON, this unified design creates a fundamental ambiguity: an empty table {} contains no keys, va">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-empty-lua-tables-cause-json-ambiguity">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why Empty Lua Tables Cause JSON Ambiguity - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-empty-lua-tables-cause-json-ambiguity" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, a single data structure called a table serves as both an associative map and an ordered list. When serializing Lua data into JSON, this unified design creates a fundamental ambiguity: an empty table {} contains no keys, va" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-empty-lua-tables-cause-json-ambiguity">Why Empty Lua Tables
+Cause JSON Ambiguity</h1>
+<p>In the Lua programming language, a single data structure called a
+table serves as both an associative map and an ordered list. When
+serializing Lua data into JSON, this unified design creates a
+fundamental ambiguity: an empty table <code>{}</code> contains no keys,
+values, or metadata to indicate whether it represents a JSON object
+(<code>{}</code>) or a JSON array (<code>[]</code>). Because JSON
+strictly distinguishes between these two structures, serializers must
+guess the programmer's intent, frequently resulting in type mismatches,
+broken API contracts, and schema validation failures in downstream
+applications.</p>
+<h3 id="the-unified-design-of-lua-tables">The Unified Design of Lua
+Tables</h3>
+<p>Unlike most programming languages, Lua does not provide distinct
+native types for arrays and hash maps. Instead, it provides only the
+<code>table</code> type.</p>
+<ul>
+<li>To represent an <strong>array</strong>, Lua uses a table with
+sequential integer keys starting at index 1 (e.g.,
+<code>{ "apple", "banana" }</code>, which internally maps
+<code>1 -&gt; "apple"</code> and <code>2 -&gt; "banana"</code>).</li>
+<li>To represent an <strong>object</strong> or dictionary, Lua uses a
+table with string or non-numeric keys (e.g.,
+<code>{ name = "Alice", role = "admin" }</code>).</li>
+</ul>
+<p>Because these implementations share the same underlying structure,
+the categorization of a table depends entirely on the keys it holds at
+runtime.</p>
+<h3 id="jsons-strict-structural-separation">JSON's Strict Structural
+Separation</h3>
+<p>JSON enforces a clear boundary between collections:</p>
+<ul>
+<li>An <strong>Array</strong> (<code>[...]</code>) is an ordered list of
+values accessed by zero-based sequential indices.</li>
+<li>An <strong>Object</strong> (<code>{...}</code>) is an unordered
+collection of key-value pairs where keys must be strings.</li>
+</ul>
+<p>Strict parsers and schema validators in receiving environments (such
+as TypeScript, Python, or relational databases using JSON columns) treat
+<code>[]</code> and <code>{}</code> as incompatible types. Receiving an
+object where an array was expected—or vice versa—often produces runtime
+exceptions.</p>
+<h3 id="the-source-of-the-ambiguity">The Source of the Ambiguity</h3>
+<p>When a Lua table contains data, a JSON serializer can inspect its
+keys to deduce the correct JSON representation:</p>
+<ul>
+<li>If the keys are consecutive integers starting at <code>1</code>, the
+library serializes the table to a JSON array.</li>
+<li>If the keys are strings or non-sequential integers, the library
+serializes the table to a JSON object.</li>
+</ul>
+<p>However, an empty table <code>{}</code> contains zero keys. The
+serializer cannot inspect key types or sequences because none exist. A
+table defined as <code>local data = {}</code> could represent an empty
+list of users intended to become <code>[]</code>, or it could represent
+an empty profile object intended to become <code>{}</code>. Because the
+Lua runtime treats both intentions identically, the serializer lacks the
+context required to make a deterministic decision.</p>
+<h3 id="how-lua-json-libraries-resolve-the-issue">How Lua JSON Libraries
+Resolve the Issue</h3>
+<p>Because the language offers no built-in distinction, JSON libraries
+in the Lua ecosystem adopt different strategies to handle empty
+tables:</p>
+<ol type="1">
+<li><strong>Defaulting to One Type:</strong> Many libraries default to
+encoding all empty tables as either objects (<code>{}</code>) or arrays
+(<code>[]</code>). This frequently requires developers to fix anomalies
+when the chosen default does not match the target schema.</li>
+<li><strong>Sentinel Values and Metatables:</strong> Advanced libraries
+(such as <code>lua-cjson</code>) provide explicit sentinels or metatable
+markers. For example, assigning a special metatable—like
+<code>setmetatable({}, cjson.empty_array_mt)</code>—explicitly instructs
+the encoder to produce <code>[]</code> instead of <code>{}</code>.</li>
+<li><strong>Schema-Driven Encoding:</strong> Some serializers allow
+developers to pass a predefined schema alongside the data, enforcing the
+intended target type regardless of whether the table currently contains
+elements.</li>
+</ol>
+<p>Without these explicit workarounds, the architectural difference
+between Lua's flexible single-table design and JSON's dual-type system
+makes ambiguous serialization inevitable.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

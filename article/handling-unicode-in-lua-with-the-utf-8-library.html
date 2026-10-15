@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handling Unicode in Lua with the utf8 Library - lua</title>
+    <meta name="description" content="The Lua programming language treats strings as arbitrary byte sequences by default, which historically made multi-byte character processing difficult. Introduced in Lua 5.3, the standard utf8 library provides lightweight, built-in functionality to bridge">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/handling-unicode-in-lua-with-the-utf-8-library">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Handling Unicode in Lua with the utf8 Library - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/handling-unicode-in-lua-with-the-utf-8-library" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The Lua programming language treats strings as arbitrary byte sequences by default, which historically made multi-byte character processing difficult. Introduced in Lua 5.3, the standard utf8 library provides lightweight, built-in functionality to bridge" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="handling-unicode-in-lua-with-the-utf8-library">Handling Unicode
+in Lua with the utf8 Library</h1>
+<p>The Lua programming language treats strings as arbitrary byte
+sequences by default, which historically made multi-byte character
+processing difficult. Introduced in Lua 5.3, the standard
+<code>utf8</code> library provides lightweight, built-in functionality
+to bridge this gap, enabling developers to validate UTF-8 encodings,
+convert between Unicode code points and byte sequences, determine
+character counts, and iterate over characters within UTF-8 strings.</p>
+<h3 id="converting-code-points-to-utf-8-sequences-utf8char">Converting
+Code Points to UTF-8 Sequences (<code>utf8.char</code>)</h3>
+<p>The <code>utf8.char</code> function accepts zero or more integer code
+points and converts them into a valid UTF-8 string. It acts as the
+Unicode-aware counterpart to <code>string.char</code>.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">str</span> <span class="op">=</span> <span class="fu">utf8.char</span><span class="op">(</span><span class="dv">0x1F600</span><span class="op">,</span> <span class="dv">0x41</span><span class="op">)</span> <span class="co">-- Produces a grinning face emoji followed by &#39;A&#39;</span></span></code></pre></div>
+<p>If an argument is an invalid Unicode code point, the function raises
+an error.</p>
+<h3 id="extracting-code-points-from-strings-utf8codepoint">Extracting
+Code Points from Strings (<code>utf8.codepoint</code>)</h3>
+<p>The <code>utf8.codepoint</code> function performs the reverse of
+<code>utf8.char</code>. It accepts a string and returns the numerical
+code points as integers.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">cp1</span><span class="op">,</span> <span class="va">cp2</span> <span class="op">=</span> <span class="fu">utf8.codepoint</span><span class="op">(</span><span class="st">&quot;Lua&quot;</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">)</span> <span class="co">-- Returns 76, 117</span></span></code></pre></div>
+<p>You can supply optional byte offsets <code>i</code> and
+<code>j</code> to specify the slice of the string to examine. If the
+target substring contains an invalid UTF-8 byte sequence, an error is
+raised.</p>
+<h3 id="counting-characters-vs-bytes-utf8len">Counting Characters vs.
+Bytes (<code>utf8.len</code>)</h3>
+<p>Because Unicode characters can span anywhere from 1 to 4 bytes in
+UTF-8, standard length operators (<code>#str</code>) only return the raw
+byte count. The <code>utf8.len</code> function calculates the actual
+number of UTF-8 characters within a given byte range.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">text</span> <span class="op">=</span> <span class="st">&quot;Olá&quot;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(#</span><span class="va">text</span><span class="op">)</span>          <span class="co">-- 4 (bytes)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">utf8.len</span><span class="op">(</span><span class="va">text</span><span class="op">))</span> <span class="co">-- 3 (characters)</span></span></code></pre></div>
+<p>In addition to counting, <code>utf8.len</code> serves as a validator.
+If it encounters an invalid UTF-8 sequence, it returns
+<code>false</code> (or <code>nil</code> in earlier Lua 5.3 releases)
+alongside the byte index of the first invalid byte.</p>
+<h3 id="iterating-over-characters-utf8codes">Iterating Over Characters
+(<code>utf8.codes</code>)</h3>
+<p>Iterating through a UTF-8 string by byte index can break multi-byte
+characters. The <code>utf8.codes</code> function provides a stateful
+iterator for <code>for</code> loops, returning both the byte offset and
+the code point for each character in the string.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">position</span><span class="op">,</span> <span class="va">code</span> <span class="kw">in</span> <span class="fu">utf8.codes</span><span class="op">(</span><span class="st">&quot;Café&quot;</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">position</span><span class="op">,</span> <span class="va">code</span><span class="op">)</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h3
+id="translating-character-positions-to-byte-offsets-utf8offset">Translating
+Character Positions to Byte Offsets (<code>utf8.offset</code>)</h3>
+<p>The <code>utf8.offset</code> function translates relative character
+positions into raw byte indices. Given a string and a character index
+<code>n</code>, it returns the byte offset where that character
+begins.</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">text</span> <span class="op">=</span> <span class="st">&quot;Привет&quot;</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">byte_index</span> <span class="op">=</span> <span class="fu">utf8.offset</span><span class="op">(</span><span class="va">text</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span> <span class="co">-- Finds the starting byte of the 3rd character</span></span></code></pre></div>
+<p>A negative index counts backward from the end of the string. This
+utility is critical for safely slicing and manipulating strings using
+standard Lua functions like <code>string.sub</code>.</p>
+<h3 id="pattern-matching-with-utf8charpattern">Pattern Matching with
+<code>utf8.charpattern</code></h3>
+<p>The library provides the constant string pattern
+<code>utf8.charpattern</code>. This pattern strictly matches exactly one
+UTF-8 byte sequence (1 to 4 bytes). It integrates directly with Lua's
+pattern-matching functions to tokenize text character-by-character.</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="fu">char</span> <span class="kw">in</span> <span class="fu">string.gmatch</span><span class="op">(</span><span class="st">&quot;Hello, 世界&quot;</span><span class="op">,</span> <span class="va">utf8.charpattern</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Yields each individual UTF-8 character as a string</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h3 id="scope-and-limitations">Scope and Limitations</h3>
+<p>The <code>utf8</code> library focuses strictly on byte-to-codepoint
+encoding, validation, and traversal. To keep the Lua runtime small and
+dependency-free, it does not include Unicode character property tables.
+As a result, it does not provide case-folding (upper/lowercase
+conversion), collation, normalization, or grapheme cluster
+segmentation.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

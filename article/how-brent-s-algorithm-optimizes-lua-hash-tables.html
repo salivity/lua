@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Brent&#39;s Algorithm Optimizes Lua Hash Tables - lua</title>
+    <meta name="description" content="This article examines how the Lua programming language incorporates the principles of Brent&#39;s algorithm into its table implementation to optimize search and insertion operations. By balancing collision chains and displacing existing keys when beneficial,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-brent-s-algorithm-optimizes-lua-hash-tables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Brent&#39;s Algorithm Optimizes Lua Hash Tables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-brent-s-algorithm-optimizes-lua-hash-tables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article examines how the Lua programming language incorporates the principles of Brent&#39;s algorithm into its table implementation to optimize search and insertion operations. By balancing collision chains and displacing existing keys when beneficial," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-brents-algorithm-optimizes-lua-hash-tables">How Brent's
+Algorithm Optimizes Lua Hash Tables</h1>
+<p>This article examines how the Lua programming language incorporates
+the principles of Brent's algorithm into its table implementation to
+optimize search and insertion operations. By balancing collision chains
+and displacing existing keys when beneficial, Lua prevents hash
+degradation and maintains near-constant-time lookups. Readers will learn
+the mechanics of Lua’s internal hash structure, how displacement reduces
+probe chain lengths, and the specific performance trade-offs achieved
+during runtime.</p>
+<h3 id="hash-tables-in-lua">Hash Tables in Lua</h3>
+<p>In Lua, tables are the sole data structuring mechanism, acting as
+arrays, dictionaries, and objects. Internally, a table consists of an
+array part and a hash part. The hash part is implemented as a contiguous
+array of <code>Node</code> structures, where each node contains a key, a
+value, and a <code>next</code> pointer.</p>
+<p>Every key has a deterministic "main position," which is the index
+computed directly from its hash value:
+<code>mainposition = hash(key) % table_size</code>. Because multiple
+distinct keys can hash to the same main position, collisions are
+inevitable. Lua handles these collisions using a hybrid approach
+combining closed hashing (open addressing) and coalesced chaining.</p>
+<h3 id="the-problem-of-hash-collisions-and-chain-lengths">The Problem of
+Hash Collisions and Chain Lengths</h3>
+<p>In standard open addressing or traditional coalesced hashing, when a
+collision occurs, the newly inserted key is placed into a free slot, and
+a pointer links it to the collision chain. Over time, chains can
+interlock. A key might end up placed in a slot that serves as the main
+position for an entirely different, future key. When that future key
+arrives, its main position is already occupied by a "foreign" key,
+forcing it into a secondary position and extending its lookup path. This
+phenomenon increases the average number of probes required to locate
+keys.</p>
+<h3 id="brents-optimization-principle">Brent's Optimization
+Principle</h3>
+<p>Brent's algorithm addresses this lookup penalty. Originally designed
+for open addressing with double hashing, Brent’s algorithm evaluates
+whether it is cheaper to insert the new key deeper into the collision
+chain or to move an existing key already in the chain to a new location.
+By calculating the cost of moving an existing node versus placing the
+new key further along the probe sequence, it minimizes the average
+search path for both successful and unsuccessful lookups.</p>
+<h3 id="how-lua-implements-brent-style-displacement">How Lua Implements
+Brent-Style Displacement</h3>
+<p>Lua adopts the fundamental insight of Brent's algorithm—dynamic
+displacement of keys during insertion—to keep chain lengths as short as
+possible.</p>
+<p>When a key <span class="math inline">\(K_{new}\)</span> is inserted
+into the hash part:</p>
+<ol type="1">
+<li><strong>Check Main Position Availability:</strong> Lua calculates
+the main position <span class="math inline">\(P\)</span> for <span
+class="math inline">\(K_{new}\)</span>.</li>
+<li><strong>Handle Vacant Slots:</strong> If slot <span
+class="math inline">\(P\)</span> is empty, <span
+class="math inline">\(K_{new}\)</span> is placed directly into <span
+class="math inline">\(P\)</span>, requiring only one probe for future
+lookups.</li>
+<li><strong>Handle Collisions with Native Keys:</strong> If slot <span
+class="math inline">\(P\)</span> is occupied by an existing key <span
+class="math inline">\(K_{old}\)</span> whose main position is also <span
+class="math inline">\(P\)</span>, the collision is genuine. Lua finds an
+unused slot (allocated by decrementing an internal <code>lastfree</code>
+pointer) and links the new slot to <span
+class="math inline">\(K_{old}\)</span>'s collision chain.</li>
+<li><strong>Displacement of Foreign Keys (Brent's Variant):</strong> If
+slot <span class="math inline">\(P\)</span> is occupied by an existing
+key <span class="math inline">\(K_{foreign}\)</span> whose main position
+is <em>not</em> <span class="math inline">\(P\)</span> (meaning <span
+class="math inline">\(K_{foreign}\)</span> was placed there due to a
+previous collision elsewhere), Lua evicts <span
+class="math inline">\(K_{foreign}\)</span>. Lua allocates a free slot
+from <code>lastfree</code>, moves <span
+class="math inline">\(K_{foreign}\)</span> and its value to that free
+slot, updates the chain pointing to <span
+class="math inline">\(K_{foreign}\)</span>, and places <span
+class="math inline">\(K_{new}\)</span> into its rightful main position
+<span class="math inline">\(P\)</span>.</li>
+</ol>
+<h3 id="optimization-effects-on-lookups-and-insertions">Optimization
+Effects on Lookups and Insertions</h3>
+<p>This displacement strategy yields distinct performance
+advantages:</p>
+<ul>
+<li><strong>Shorter Lookup Sequences:</strong> Lookups always begin
+immediately at the key's main position. If the key exists, it is either
+found on the first check or reached by traversing a direct collision
+chain. No key is ever displaced by a foreign key that does not belong to
+that hash bucket, preventing unrelated chains from merging and keeping
+average lookup cost close to <span
+class="math inline">\(O(1)\)</span>.</li>
+<li><strong>Elimination of Secondary Clustering:</strong> Because keys
+occupying slots outside their main positions are evicted when a rightful
+owner arrives, the table eliminates long foreign chains that degrade
+cache locality and lookup efficiency.</li>
+<li><strong>Balanced Insertion Overhead:</strong> While displacing an
+existing node introduces a slight penalty during insertion (relocating
+the node and adjusting the preceding pointer in the chain), this work is
+strictly bounded. The eviction only requires moving a single node and
+repairing one pointer, avoiding full rehashes while permanently
+optimizing all subsequent lookups for that key.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua file:seek and File Truncation Guide - lua</title>
+    <meta name="description" content="This article provides an overview of how the Lua programming language manages file manipulation using the standard io library. It covers the mechanics of positioning the file pointer using file:seek, common navigation patterns such as calculating file siz">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-file-seek-and-file-truncation-guide">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua file:seek and File Truncation Guide - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-file-seek-and-file-truncation-guide" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of how the Lua programming language manages file manipulation using the standard io library. It covers the mechanics of positioning the file pointer using file:seek, common navigation patterns such as calculating file siz" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-fileseek-and-file-truncation-guide">Lua file:seek and File
+Truncation Guide</h1>
+<p>This article provides an overview of how the Lua programming language
+manages file manipulation using the standard <code>io</code> library. It
+covers the mechanics of positioning the file pointer using
+<code>file:seek</code>, common navigation patterns such as calculating
+file size, and the limitations and solutions regarding file truncation
+in standard Lua environments.</p>
+<h2 id="stream-positioning-with-fileseek">Stream Positioning with
+file:seek</h2>
+<p>In Lua, random access to files is controlled through the
+<code>file:seek</code> method, which wraps the standard C library
+function <code>fseek</code>. This method allows you to read or write
+data at specific offsets within an open file stream.</p>
+<p>The syntax for the function is:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">seek</span><span class="op">([</span><span class="va">whence</span> <span class="op">[,</span> <span class="va">offset</span><span class="op">]])</span></span></code></pre></div>
+<ul>
+<li><strong><code>whence</code></strong> (optional): A string specifying
+the base reference point for navigation:
+<ul>
+<li><code>"set"</code>: Base the offset from the beginning of the
+file.</li>
+<li><code>"cur"</code>: Base the offset from the current position of the
+file pointer (default).</li>
+<li><code>"end"</code>: Base the offset from the end of the file.</li>
+</ul></li>
+<li><strong><code>offset</code></strong> (optional): An integer
+indicating the number of bytes to move from the base reference point.
+The default value is <code>0</code>.</li>
+</ul>
+<p>The method returns the resulting file position (in bytes from the
+start of the file) on success, or <code>nil</code> followed by an error
+message on failure.</p>
+<h3 id="common-fileseek-operations">Common file:seek Operations</h3>
+<h4 id="1-checking-the-current-position">1. Checking the Current
+Position</h4>
+<p>Calling <code>file:seek()</code> with no arguments returns the
+current byte position without moving the pointer:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">current_pos</span> <span class="op">=</span> <span class="va">file</span><span class="op">:</span><span class="fu">seek</span><span class="op">()</span></span></code></pre></div>
+<h4 id="2-rewinding-to-the-beginning">2. Rewinding to the Beginning</h4>
+<p>To reset the file pointer back to the start:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">seek</span><span class="op">(</span><span class="st">&quot;set&quot;</span><span class="op">,</span> <span class="dv">0</span><span class="op">)</span></span></code></pre></div>
+<h4 id="3-determining-file-size">3. Determining File Size</h4>
+<p>You can find the total size of a file by seeking to the end and
+saving the returned byte count. To continue working with the file,
+ensure you restore the pointer if necessary:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">file</span> <span class="op">=</span> <span class="fu">io.open</span><span class="op">(</span><span class="st">&quot;data.txt&quot;</span><span class="op">,</span> <span class="st">&quot;r&quot;</span><span class="op">)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">current</span> <span class="op">=</span> <span class="va">file</span><span class="op">:</span><span class="fu">seek</span><span class="op">()</span>         <span class="co">-- Save current position</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">size</span> <span class="op">=</span> <span class="va">file</span><span class="op">:</span><span class="fu">seek</span><span class="op">(</span><span class="st">&quot;end&quot;</span><span class="op">)</span>       <span class="co">-- Jump to end to get file size</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">seek</span><span class="op">(</span><span class="st">&quot;set&quot;</span><span class="op">,</span> <span class="va">current</span><span class="op">)</span>           <span class="co">-- Restore original position</span></span></code></pre></div>
+<h4 id="4-moving-relative-to-current-position">4. Moving Relative to
+Current Position</h4>
+<p>To skip forward or backward by a specific number of bytes:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">seek</span><span class="op">(</span><span class="st">&quot;cur&quot;</span><span class="op">,</span> <span class="dv">16</span><span class="op">)</span>  <span class="co">-- Skip forward 16 bytes</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">seek</span><span class="op">(</span><span class="st">&quot;cur&quot;</span><span class="op">,</span> <span class="op">-</span><span class="dv">8</span><span class="op">)</span>  <span class="co">-- Step back 8 bytes</span></span></code></pre></div>
+<hr />
+<h2 id="file-truncation-in-lua">File Truncation in Lua</h2>
+<p>Standard Lua relies strictly on the ANSI C runtime environment.
+Because standard C does not specify an in-place truncation function
+(like POSIX <code>ftruncate</code> or Windows
+<code>SetEndOfFile</code>), <strong>Lua has no native
+<code>file:truncate()</code> method, and <code>file:seek</code> cannot
+truncate files.</strong></p>
+<p>Writing after moving the file pointer with <code>file:seek</code>
+will overwrite existing bytes, but it will not shorten the file or clear
+existing data past the end of your new write.</p>
+<h3 id="workarounds-for-file-truncation">Workarounds for File
+Truncation</h3>
+<p>Depending on your requirements and environment, you can truncate
+files in Lua using one of the following methods:</p>
+<h3 id="1-truncating-to-zero-bytes-reopening-in-write-mode">1.
+Truncating to Zero Bytes (Reopening in Write Mode)</h3>
+<p>The simplest way to completely truncate an existing file to zero
+bytes using standard Lua is to reopen it in <code>"w"</code> or
+<code>"w+"</code> mode:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Completely clears the file</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">file</span> <span class="op">=</span> <span class="fu">io.open</span><span class="op">(</span><span class="st">&quot;data.txt&quot;</span><span class="op">,</span> <span class="st">&quot;w&quot;</span><span class="op">)</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">write</span><span class="op">(</span><span class="st">&quot;New initial contents&quot;</span><span class="op">)</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">close</span><span class="op">()</span></span></code></pre></div>
+<h3 id="2-rewrite-partial-content-pure-standard-lua">2. Rewrite Partial
+Content (Pure Standard Lua)</h3>
+<p>If you need to truncate a file at a specific offset without external
+libraries, you must read the portion of the file you want to preserve,
+then overwrite the file using write mode:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">filename</span> <span class="op">=</span> <span class="st">&quot;data.txt&quot;</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">truncate_at</span> <span class="op">=</span> <span class="dv">128</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- Step 1: Read the desired portion</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">file</span> <span class="op">=</span> <span class="fu">io.open</span><span class="op">(</span><span class="va">filename</span><span class="op">,</span> <span class="st">&quot;r+b&quot;</span><span class="op">)</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">data</span> <span class="op">=</span> <span class="va">file</span><span class="op">:</span><span class="fu">read</span><span class="op">(</span><span class="va">truncate_at</span><span class="op">)</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">close</span><span class="op">()</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- Step 2: Overwrite the file from the start</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="va">file</span> <span class="op">=</span> <span class="fu">io.open</span><span class="op">(</span><span class="va">filename</span><span class="op">,</span> <span class="st">&quot;wb&quot;</span><span class="op">)</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">data</span> <span class="cf">then</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">file</span><span class="op">:</span><span class="fu">write</span><span class="op">(</span><span class="va">data</span><span class="op">)</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">close</span><span class="op">()</span></span></code></pre></div>
+<h3 id="3-in-place-truncation-using-os-specific-libraries">3. In-Place
+Truncation Using OS-Specific Libraries</h3>
+<p>For large files where rewriting data is inefficient, use an external
+library such as <code>luaposix</code> or standard Lua C-extensions to
+call the operating system's native truncation interface directly:</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">unistd</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;posix.unistd&quot;</span><span class="op">)</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">fcntl</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;posix.fcntl&quot;</span><span class="op">)</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">fd</span> <span class="op">=</span> <span class="va">fcntl</span><span class="op">.</span>open<span class="op">(</span><span class="st">&quot;data.txt&quot;</span><span class="op">,</span> <span class="va">fcntl</span><span class="op">.</span><span class="cn">O_RDWR</span><span class="op">)</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="va">unistd</span><span class="op">.</span>ftruncate<span class="op">(</span><span class="va">fd</span><span class="op">,</span> <span class="dv">64</span><span class="op">)</span> <span class="co">-- Truncate file in-place to 64 bytes</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="va">unistd</span><span class="op">.</span>close<span class="op">(</span><span class="va">fd</span><span class="op">)</span></span></code></pre></div></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Defold Integrates Lua for Game Scripting - lua</title>
+    <meta name="description" content="The Defold game engine uses Lua as its primary gameplay scripting language, pairing an embedded, high-performance Lua runtime with a lightweight C++ core. By employing standard Lua 5.1 and LuaJIT, Defold enables developers to write game logic, manage user">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-defold-integrates-lua-for-game-scripting">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Defold Integrates Lua for Game Scripting - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-defold-integrates-lua-for-game-scripting" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The Defold game engine uses Lua as its primary gameplay scripting language, pairing an embedded, high-performance Lua runtime with a lightweight C++ core. By employing standard Lua 5.1 and LuaJIT, Defold enables developers to write game logic, manage user" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-defold-integrates-lua-for-game-scripting">How Defold
+Integrates Lua for Game Scripting</h1>
+<p>The Defold game engine uses Lua as its primary gameplay scripting
+language, pairing an embedded, high-performance Lua runtime with a
+lightweight C++ core. By employing standard Lua 5.1 and LuaJIT, Defold
+enables developers to write game logic, manage user input, control user
+interfaces, and handle rendering pipelines through lightweight text
+scripts. These scripts integrate natively with the engine's
+component-based hierarchy and asynchronous message-passing system,
+ensuring clean separation of logic without sacrificing runtime execution
+speed.</p>
+<h3 id="embedded-runtime-and-performance">Embedded Runtime and
+Performance</h3>
+<p>Defold integrates Lua by embedding either standard Lua 5.1 or LuaJIT
+(Just-In-Time compiler), depending on the target platform architecture.
+Because the underlying engine core is written in highly optimized C and
+C++, the engine acts as the host environment, while Lua acts as the
+controller. Performance-intensive tasks—such as 2D sprite batching, 3D
+mesh rendering, physics simulation (via Box2D or 3D physics engines),
+and audio decoding—execute natively in C++. Lua scripts direct these
+systems through high-level engine APIs, minimizing garbage collection
+spikes and CPU overhead.</p>
+<h3 id="script-component-types">Script Component Types</h3>
+<p>Defold organizes game elements into Game Objects and Collections. Lua
+logic interacts with these elements through dedicated script
+components:</p>
+<ul>
+<li><strong>Logic Scripts (<code>.script</code>):</strong> Attached
+directly to Game Objects to control entity behaviors, state machines,
+and interactions.</li>
+<li><strong>GUI Scripts (<code>.gui_script</code>):</strong> Attached to
+GUI components to manage menus, HUD elements, layouts, and pointer
+events.</li>
+<li><strong>Render Scripts (<code>.render_script</code>):</strong>
+Control the engine's render loop, camera projections, frame buffers, and
+draw passes.</li>
+</ul>
+<h3 id="lifecycle-callback-system">Lifecycle Callback System</h3>
+<p>When an engine event occurs, Defold invokes predefined lifecycle
+functions within the corresponding Lua script. Rather than running an
+unrestricted while-loop in Lua, the engine dispatches hooks at specific
+moments in the frame loop:</p>
+<ul>
+<li><code>init(self)</code>: Called when the component is instantiated
+and ready for setup.</li>
+<li><code>update(self, dt)</code>: Executed once every frame, passing
+the delta time (<code>dt</code>) for variable-rate logic.</li>
+<li><code>fixed_update(self, dt)</code>: Executed at a constant time
+step for deterministic logic such as custom physics updates.</li>
+<li><code>on_message(self, message_id, message, sender)</code>:
+Triggered whenever the component receives a message from another entity
+or the engine.</li>
+<li><code>on_input(self, action_id, action)</code>: Receives forwarded
+input actions (keyboard, mouse, touch, or gamepad).</li>
+<li><code>final(self)</code>: Executes when the component is removed or
+the scene is destroyed, allowing for cleanup.</li>
+</ul>
+<p>The <code>self</code> parameter in these functions is a local table
+unique to each script instance, used to store instance-specific state
+across frames without polluting the global Lua scope.</p>
+<h3 id="the-message-passing-paradigm">The Message-Passing Paradigm</h3>
+<p>A core design principle of Defold’s Lua integration is asynchronous
+message passing. Game objects do not expose direct memory references or
+object instances to one another in Lua. Instead, communication occurs
+via the <code>msg.post()</code> API.</p>
+<p>Scripts send structured key-value payloads to specific URL addresses
+representing target components:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">msg</span><span class="op">.</span>post<span class="op">(</span><span class="st">&quot;hero#controller&quot;</span><span class="op">,</span> <span class="st">&quot;take_damage&quot;</span><span class="op">,</span> <span class="op">{</span> <span class="va">amount</span> <span class="op">=</span> <span class="dv">25</span> <span class="op">})</span></span></code></pre></div>
+<p>The recipient processes the payload inside its
+<code>on_message</code> callback. This design decouples game systems,
+avoids complex inheritance trees, and prevents memory corruption or race
+conditions across different game objects.</p>
+<h3 id="engine-api-and-native-extensions">Engine API and Native
+Extensions</h3>
+<p>Defold exposes its internal C++ modules directly to Lua through
+global namespaces:</p>
+<ul>
+<li><code>go</code>: Game object manipulation (position, rotation,
+scaling, spawning, deletion).</li>
+<li><code>msg</code>: URL handling and message dispatching.</li>
+<li><code>vmath</code>: Vector, matrix, and quaternion math calculations
+executed in compiled C++.</li>
+<li><code>gui</code>: Manipulation of GUI nodes, textures, and UI
+text.</li>
+<li><code>sys</code>: Low-level operating system calls, file I/O,
+application state, and engine diagnostics.</li>
+</ul>
+<p>For features outside the standard engine distribution, Defold allows
+developers to write Native Extensions using C, C++, Objective-C, or
+Java. These native extensions register new custom C functions into Lua's
+environment table, allowing Lua scripts to interact directly with
+third-party software development kits (SDKs), hardware interfaces, and
+platform-specific platform libraries.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

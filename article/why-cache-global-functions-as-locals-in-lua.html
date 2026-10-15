@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why Cache Global Functions as Locals in Lua - lua</title>
+    <meta name="description" content="Caching global functions into local variables is a standard performance optimization technique in Lua that significantly reduces runtime overhead. Because Lua stores global variables in a regular hash table, accessing a global function requires repeated,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-cache-global-functions-as-locals-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why Cache Global Functions as Locals in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-cache-global-functions-as-locals-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Caching global functions into local variables is a standard performance optimization technique in Lua that significantly reduces runtime overhead. Because Lua stores global variables in a regular hash table, accessing a global function requires repeated," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-cache-global-functions-as-locals-in-lua">Why Cache Global
+Functions as Locals in Lua</h1>
+<p>Caching global functions into local variables is a standard
+performance optimization technique in Lua that significantly reduces
+runtime overhead. Because Lua stores global variables in a regular hash
+table, accessing a global function requires repeated, relatively
+expensive table lookups. Storing these functions in local variables
+allows Lua’s virtual machine to access them directly from fast, internal
+registers using index-based bytecode instructions, dramatically speeding
+up execution in performance-critical sections such as loops.</p>
+<h3 id="how-lua-accesses-globals">How Lua Accesses Globals</h3>
+<p>In Lua, the global environment is not a separate low-level memory
+space; it is simply a standard Lua table, historically referred to as
+<code>_G</code> and handled via the <code>_ENV</code> upvalue in modern
+Lua versions (5.2+).</p>
+<p>When code calls a global function like <code>math.floor(x)</code>,
+the Lua virtual machine (VM) must perform a dynamic hash-table lookup at
+runtime to resolve the key <code>"math"</code>, and then perform a
+second lookup inside that table for the key <code>"floor"</code>. Even
+single-level global calls like <code>print()</code> require a hash
+lookup into <code>_ENV</code> every time the statement executes.</p>
+<p>Hash table lookups involve hashing the string key, finding the
+corresponding bucket, and resolving potential hash collisions. While
+Lua's hash table implementation is highly optimized, the CPU cost is
+non-zero.</p>
+<h3 id="how-lua-accesses-locals">How Lua Accesses Locals</h3>
+<p>Local variables in Lua are resolved at compile time rather than
+runtime. When a script is compiled into bytecode, local variables are
+assigned specific virtual machine register indices or stack slots.</p>
+<p>Accessing a local variable requires no table lookup or string
+hashing. Instead, the VM simply reads from an indexed array slot using
+direct, single-cycle register operations.</p>
+<h3 id="bytecode-comparison">Bytecode Comparison</h3>
+<p>The performance difference is evident when inspecting Lua
+bytecode:</p>
+<p><strong>Using a global function:</strong></p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">y</span> <span class="op">=</span> <span class="fu">math.sin</span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span></code></pre></div>
+<p>The VM produces instructions similar to:</p>
+<ol type="1">
+<li><code>GETTABUP</code> (Lookup <code>"math"</code> in
+<code>_ENV</code>)</li>
+<li><code>GETTABLE</code> (Lookup <code>"sin"</code> in
+<code>math</code>)</li>
+<li><code>CALL</code></li>
+</ol>
+<p><strong>Using a cached local function:</strong></p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">sin</span> <span class="op">=</span> <span class="fu">math.sin</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- later in execution:</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">y</span> <span class="op">=</span> sin<span class="op">(</span><span class="va">x</span><span class="op">)</span></span></code></pre></div>
+<p>The VM produces:</p>
+<ol type="1">
+<li><code>GETLOCAL</code> (Read from the local register slot)</li>
+<li><code>CALL</code></li>
+</ol>
+<p>The localized version completely bypasses two dynamic hash lookups at
+runtime.</p>
+<h3 id="cumulative-impact-in-loops">Cumulative Impact in Loops</h3>
+<p>In isolated, infrequently called code paths, the performance overhead
+of a global lookup is negligible. However, in tight loops or functions
+invoked thousands of times per second (such as game loops, rendering
+routines, or data processing pipelines), repeated table lookups compound
+quickly.</p>
+<p>Caching frequently used library functions (like
+<code>string.sub</code>, <code>table.insert</code>, or
+<code>math.sqrt</code>) at the top of a file or module can yield
+measurable execution time reductions, often between 10% to 30% in
+standard PUC-Rio Lua.</p>
+<h3 id="consideration-for-luajit">Consideration for LuaJIT</h3>
+<p>In LuaJIT, the Just-In-Time compiler can optimize global table
+accesses by hoisting invariant lookups out of traces. However, caching
+globals locally remains a recommended practice even in LuaJIT. It
+guarantees that accesses outside compiled traces remain fast, aids the
+trace compiler in generating cleaner machine code, and ensures code
+remains maximally performant across both standard Lua interpreters and
+JIT-enabled runtimes.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

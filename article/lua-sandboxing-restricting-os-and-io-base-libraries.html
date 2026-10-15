@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Sandboxing: Restricting os and io Base Libraries - lua</title>
+    <meta name="description" content="Sandboxing in Lua is the practice of isolating executed code within a restricted environment to prevent unauthorized operations on the host system. By default, Lua includes standard libraries such as os and io, which grant scripts direct access to the und">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-sandboxing-restricting-os-and-io-base-libraries">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Sandboxing: Restricting os and io Base Libraries - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-sandboxing-restricting-os-and-io-base-libraries" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Sandboxing in Lua is the practice of isolating executed code within a restricted environment to prevent unauthorized operations on the host system. By default, Lua includes standard libraries such as os and io, which grant scripts direct access to the und" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-sandboxing-restricting-os-and-io-base-libraries">Lua
+Sandboxing: Restricting os and io Base Libraries</h1>
+<p>Sandboxing in Lua is the practice of isolating executed code within a
+restricted environment to prevent unauthorized operations on the host
+system. By default, Lua includes standard libraries such as
+<code>os</code> and <code>io</code>, which grant scripts direct access
+to the underlying operating system and file system. Through sandboxing
+mechanisms such as custom environments, library whitelisting, and
+disabling debugging interfaces, developers can completely deny or
+heavily restrict access to these dangerous capabilities, ensuring that
+untrusted user scripts run safely.</p>
+<h3 id="the-threat-posed-by-base-libraries">The Threat Posed by Base
+Libraries</h3>
+<p>The default Lua runtime exposes powerful functions that pose severe
+security risks if exposed to untrusted scripts:</p>
+<ul>
+<li><strong>The <code>os</code> Library:</strong> Functions like
+<code>os.execute</code> allow execution of arbitrary shell commands on
+the host machine. Functions such as <code>os.remove</code>,
+<code>os.rename</code>, and <code>os.exit</code> can delete files,
+disrupt disk operations, or terminate the host process
+unexpectedly.</li>
+<li><strong>The <code>io</code> Library:</strong> Functions like
+<code>io.open</code>, <code>io.popen</code>, and <code>io.lines</code>
+permit read, write, and execute permissions on files across the system,
+potentially exposing sensitive configuration files, source code, or
+private user data.</li>
+</ul>
+<h3 id="how-sandboxing-works-manipulating-environments">How Sandboxing
+Works: Manipulating Environments</h3>
+<p>Lua manages variable lookups through an environment table,
+historically designated as <code>_G</code> in Lua 5.1 and handled
+lexically via <code>_ENV</code> in Lua 5.2 and newer versions. When a
+Lua script references <code>os.execute</code>, it looks up
+<code>os</code> inside its current environment table and then accesses
+the <code>execute</code> field.</p>
+<p>Sandboxing restricts this by replacing the default environment with a
+custom, restricted table before executing the script:</p>
+<ol type="1">
+<li><strong>Whitelisting Instead of Blacklisting:</strong> A secure
+sandbox constructs an empty table and populates it only with explicitly
+safe functions (such as <code>math</code>, <code>string</code>, and
+selected <code>table</code> operations). By omitting <code>os</code> and
+<code>io</code> entirely from this table, any attempt by the script to
+call <code>os.execute()</code> or <code>io.open()</code> results in an
+attempt to index a <code>nil</code> value, raising a runtime error.</li>
+<li><strong>Environment Binding:</strong>
+<ul>
+<li>In <strong>Lua 5.2+</strong>, the <code>load()</code> function
+accepts an environment argument:
+<code>load(script, "chunk", "t", sandbox_env)</code>. Passing a
+restricted table binds the script's <code>_ENV</code> to that custom
+table.</li>
+<li>In <strong>Lua 5.1</strong>, the <code>setfenv()</code> function
+explicitly binds the function’s global scope to the restricted sandbox
+table before running it.</li>
+</ul></li>
+</ol>
+<h3 id="selective-exposure-and-function-wrapping">Selective Exposure and
+Function Wrapping</h3>
+<p>In situations where a script requires limited functionality from
+dangerous libraries, developers do not expose the raw library table.
+Instead, they expose selectively whitelisted functions or sanitized
+wrappers:</p>
+<ul>
+<li><strong>Safe Subsets:</strong> To allow timestamps without allowing
+command execution, a host can map
+<code>sandbox_env.os = { time = os.time, date = os.date, difftime = os.difftime }</code>.</li>
+<li><strong>Virtual File Systems:</strong> To provide safe I/O without
+granting host disk access, a host can replace standard <code>io</code>
+calls with wrappers that read and write to an in-memory virtual
+filesystem or a strictly chrooted directory.</li>
+</ul>
+<h3 id="preventing-sandbox-escapes">Preventing Sandbox Escapes</h3>
+<p>Limiting <code>os</code> and <code>io</code> is ineffective if a
+script can navigate back to the original global environment. A complete
+sandbox must close secondary escape routes:</p>
+<ul>
+<li><strong>Removing the <code>debug</code> Library:</strong> The
+<code>debug</code> library contains functions like
+<code>debug.getinfo</code> and <code>debug.getupvalue</code>, which can
+inspect the call stack, traverse parent scopes, and retrieve the
+original, unrestricted <code>_G</code> table. Sandboxes routinely strip
+the entire <code>debug</code> table.</li>
+<li><strong>Disabling Bytecode:</strong> Precompiled Lua bytecode can
+bypass source-level checks and exploit virtual machine vulnerabilities
+to access native memory. Sandboxes enforce text-only compilation by
+supplying the <code>"t"</code> mode parameter to
+<code>load()</code>.</li>
+<li><strong>Metatable Protections:</strong> Sandboxes lock or sanitize
+metatables for shared core types (like strings) to prevent malicious
+code from modifying prototype behaviors that could affect other
+scopes.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

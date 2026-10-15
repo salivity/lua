@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Garbage Collection Handles Cyclical References - lua</title>
+    <meta name="description" content="This article examines how the Lua programming language manages memory when tables reference each other in a closed loop. Because Lua employs a tracing mark-and-sweep garbage collector rather than a reference counting mechanism, cyclical table references a">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-garbage-collection-handles-cyclical-references">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Garbage Collection Handles Cyclical References - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-garbage-collection-handles-cyclical-references" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article examines how the Lua programming language manages memory when tables reference each other in a closed loop. Because Lua employs a tracing mark-and-sweep garbage collector rather than a reference counting mechanism, cyclical table references a" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-garbage-collection-handles-cyclical-references">How Lua
+Garbage Collection Handles Cyclical References</h1>
+<p>This article examines how the Lua programming language manages memory
+when tables reference each other in a closed loop. Because Lua employs a
+tracing mark-and-sweep garbage collector rather than a reference
+counting mechanism, cyclical table references are automatically detected
+and collected when they become unreachable from the root set. Below is a
+detailed breakdown of the internal mechanisms, the tri-color marking
+algorithm, and the specific behaviors governing these circular data
+structures.</p>
+<h3 id="the-problem-of-cyclical-references">The Problem of Cyclical
+References</h3>
+<p>A cyclical reference occurs when two or more objects reference each
+other, either directly or indirectly. For example, Table A contains a
+field pointing to Table B, and Table B contains a field pointing back to
+Table A. In programming environments that rely strictly on reference
+counting, each table maintains a reference count of at least one, even
+after all external references to them are discarded. Consequently,
+reference counting engines cannot free these isolated "islands" of
+memory without explicit cycle-breaking logic or auxiliary cycle
+detectors.</p>
+<h3 id="luas-tracing-garbage-collector">Lua’s Tracing Garbage
+Collector</h3>
+<p>Lua resolves this issue inherently by using a tracing garbage
+collector based on the mark-and-sweep algorithm (implemented as an
+incremental or generational collector depending on the Lua version).
+Instead of monitoring how many pointers target a given table, Lua
+periodically determines which objects are actually reachable by
+traversing the entire object graph starting from a base set known as the
+<em>roots</em>.</p>
+<p>The root set includes:</p>
+<ul>
+<li>The main thread and current coroutines.</li>
+<li>The global environment table (<code>_G</code>).</li>
+<li>The Lua registry.</li>
+<li>Active stack frames, including local variables and upvalues.</li>
+</ul>
+<h3 id="the-tri-color-marking-algorithm">The Tri-Color Marking
+Algorithm</h3>
+<p>To trace reachable objects incrementally without stopping execution
+for long periods, Lua uses a tri-color marking abstraction:</p>
+<ol type="1">
+<li><strong>White</strong>: Objects that are candidates for garbage
+collection. At the start of a collection cycle, all objects are
+white.</li>
+<li><strong>Gray</strong>: Objects that have been visited by the
+collector, but their referenced objects (such as table keys and values)
+have not yet been traversed.</li>
+<li><strong>Black</strong>: Objects that have been visited, along with
+all objects directly referenced by them. Black objects are guaranteed
+not to point directly to white objects without the collector's
+knowledge.</li>
+</ol>
+<h3 id="handling-cycles-during-traversal">Handling Cycles During
+Traversal</h3>
+<p>When the garbage collector runs, it proceeds through the following
+phases:</p>
+<ol type="1">
+<li><strong>Root Scanning</strong>: All objects directly referenced by
+the root set are colored gray and pushed onto a traversal list.</li>
+<li><strong>Propagation (Marking)</strong>: The collector pops a gray
+object, inspects all tables and objects it references, turns those
+referenced white objects gray, and turns the original object black.</li>
+<li><strong>Cycle Termination</strong>: If Table A points to Table B,
+and Table B points back to Table A, the collector marks Table A as gray,
+moves to Table B and marks it gray, and then inspects Table B's
+reference back to Table A. Because Table A is already gray (or black),
+the traversal stops following that path, naturally preventing an
+infinite loop.</li>
+<li><strong>Sweep Phase</strong>: Once all reachable objects have turned
+black, any object that remains white is completely unreachable from the
+root set. The collector iterates through the master linked list of all
+allocated objects and deallocates every white object.</li>
+</ol>
+<p>If a pair or group of cyclical tables is decoupled from the root
+set—meaning no variable in the active program holds a reference to any
+member of the cycle—none of the tables in the cycle will ever be colored
+gray during the propagation phase. As a result, the entire cycle remains
+white and is reclaimed during the sweep phase in a single collection
+cycle.</p>
+<h3 id="weak-tables-and-ephemerons">Weak Tables and Ephemerons</h3>
+<p>Cyclical structures can present challenges when combined with weak
+tables (tables whose keys or values have the <code>__mode</code>
+metamethod set to <code>"k"</code>, <code>"v"</code>, or
+<code>"kv"</code>). In older garbage collection models, a table whose
+key was held in a cycle within the table itself could prevent
+collection.</p>
+<p>Starting in Lua 5.2, Lua implemented <em>ephemeron tables</em>. An
+ephemeron table is a table with weak keys and strong values where a
+value is considered reachable only if its corresponding key is
+reachable. Lua's collector iteratively marks ephemeron pairs, ensuring
+that self-referential or cyclical entries inside weak tables are
+collected properly once their external keys become unreachable.</p>
+<h3 id="finalizers-and-resurrection">Finalizers and Resurrection</h3>
+<p>If tables within a cycle define the <code>__gc</code> metamethod
+(finalizers), Lua still detects that the cycle is unreachable. However,
+the collector must run the finalizers before freeing the memory. During
+the cycle in which they are detected as dead, the tables are resurrected
+temporarily, their <code>__gc</code> metamethods are invoked, and their
+actual deallocation is deferred to the subsequent garbage collection
+cycle, provided they remain unreachable.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

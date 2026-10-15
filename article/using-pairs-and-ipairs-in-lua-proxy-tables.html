@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Using __pairs and __ipairs in Lua Proxy Tables - lua</title>
+    <meta name="description" content="In the Lua programming language, proxy tables are commonly used to intercept read and write operations for data validation, read-only protection, or state tracking. However, because proxy tables are deliberately kept empty to trigger index and newindex me">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/using-pairs-and-ipairs-in-lua-proxy-tables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Using __pairs and __ipairs in Lua Proxy Tables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/using-pairs-and-ipairs-in-lua-proxy-tables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, proxy tables are commonly used to intercept read and write operations for data validation, read-only protection, or state tracking. However, because proxy tables are deliberately kept empty to trigger index and newindex me" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="using-__pairs-and-__ipairs-in-lua-proxy-tables">Using __pairs
+and __ipairs in Lua Proxy Tables</h1>
+<p>In the Lua programming language, proxy tables are commonly used to
+intercept read and write operations for data validation, read-only
+protection, or state tracking. However, because proxy tables are
+deliberately kept empty to trigger <code>__index</code> and
+<code>__newindex</code> metamethods, standard iterative functions like
+<code>pairs()</code> and <code>ipairs()</code> fail to expose the
+underlying data by default. The <code>__pairs</code> and
+<code>__ipairs</code> metamethods solve this problem by allowing
+developers to define custom iteration logic, ensuring that external code
+can seamlessly traverse proxy tables using standard <code>for</code>
+loops without exposing internal storage mechanisms.</p>
+<h3 id="the-problem-with-default-traversal-in-proxy-tables">The Problem
+with Default Traversal in Proxy Tables</h3>
+<p>A basic proxy pattern delegates access from an empty proxy table to
+an internal, hidden table:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> create_proxy<span class="op">(</span><span class="va">target</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">proxy</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">mt</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>        <span class="bu">__index</span> <span class="op">=</span> <span class="va">target</span><span class="op">,</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>        <span class="bu">__newindex</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="cn">_</span><span class="op">,</span> <span class="va">k</span><span class="op">,</span> <span class="va">v</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>            <span class="va">target</span><span class="op">[</span><span class="va">k</span><span class="op">]</span> <span class="op">=</span> <span class="va">v</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>        <span class="kw">end</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">setmetatable</span><span class="op">(</span><span class="va">proxy</span><span class="op">,</span> <span class="va">mt</span><span class="op">)</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">proxy</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>If a developer executes <code>for k, v in pairs(proxy) do</code> on
+this structure, the loop terminates immediately. The native
+<code>pairs()</code> function traditionally inspects the table passed to
+it directly via <code>next()</code>. Since the proxy table itself
+contains no keys, it appears empty, breaking standard idioms of the
+language and forcing consumers of the API to know about and access the
+private target directly.</p>
+<h3 id="the-role-of-the-__pairs-metamethod">The Role of the
+<code>__pairs</code> Metamethod</h3>
+<p>Introduced in Lua 5.2, the <code>__pairs</code> metamethod intercepts
+calls to the global <code>pairs()</code> function. When
+<code>pairs(t)</code> is executed, Lua checks whether <code>t</code> has
+a metatable containing a <code>__pairs</code> key. If present, Lua
+invokes this metamethod instead of running its default traversal.</p>
+<p>The <code>__pairs</code> metamethod is expected to return three
+values, mirroring the requirements of a generic <code>for</code>
+loop:</p>
+<ol type="1">
+<li>An iterator function (such as <code>next</code>).</li>
+<li>The invariant state (usually the internal target table).</li>
+<li>The initial key (usually <code>nil</code>).</li>
+</ol>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">mt</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__index</span> <span class="op">=</span> <span class="va">target</span><span class="op">,</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__newindex</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="cn">_</span><span class="op">,</span> <span class="va">k</span><span class="op">,</span> <span class="va">v</span><span class="op">)</span> <span class="va">target</span><span class="op">[</span><span class="va">k</span><span class="op">]</span> <span class="op">=</span> <span class="va">v</span> <span class="kw">end</span><span class="op">,</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__pairs</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="cn">_</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="fu">next</span><span class="op">,</span> <span class="va">target</span><span class="op">,</span> <span class="kw">nil</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>With <code>__pairs</code> defined, invoking <code>pairs(proxy)</code>
+delegates traversal directly to the underlying <code>target</code>
+table. The consumer can write natural Lua code while the proxy maintains
+total control over element access.</p>
+<h3 id="the-role-of-the-__ipairs-metamethod">The Role of the
+<code>__ipairs</code> Metamethod</h3>
+<p>The <code>__ipairs</code> metamethod functions identically in concept
+to <code>__pairs</code>, but it specifically customizes the behavior of
+the <code>ipairs()</code> function for sequential, integer-indexed
+arrays.</p>
+<p>When implemented, <code>__ipairs</code> must return an iterator
+function, the state table, and the starting index (typically
+<code>0</code>):</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> ipairs_iterator<span class="op">(</span><span class="va">t</span><span class="op">,</span> <span class="va">i</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">i</span> <span class="op">=</span> <span class="va">i</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">v</span> <span class="op">=</span> <span class="va">t</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">v</span> <span class="op">~=</span> <span class="kw">nil</span> <span class="cf">then</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">i</span><span class="op">,</span> <span class="va">v</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="va">mt</span><span class="op">.</span><span class="va">__ipairs</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="cn">_</span><span class="op">)</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">ipairs_iterator</span><span class="op">,</span> <span class="va">target</span><span class="op">,</span> <span class="dv">0</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p><em>Note on Lua Versions:</em> While <code>__ipairs</code> was
+introduced in Lua 5.2, Lua 5.3 deprecated <code>__ipairs</code> and
+changed the native <code>ipairs()</code> implementation to honor the
+<code>__index</code> metamethod directly until it encounters a
+<code>nil</code> value. However, <code>__ipairs</code> remains relevant
+in Lua 5.2 environments and specific LuaJIT configurations.</p>
+<h3 id="key-benefits">Key Benefits</h3>
+<ul>
+<li><strong>Encapsulation:</strong> Internal storage remains completely
+private, hiding implementation details from the caller.</li>
+<li><strong>Idiomatic Code:</strong> Callers do not need specialized
+methods like <code>proxy:iterate()</code> or direct access to hidden
+references; standard Lua <code>for</code> loops work as expected.</li>
+<li><strong>Filtering and Transformation:</strong> Metamethods allow the
+iteration process itself to be customized, enabling on-the-fly
+transformations, key filtering, or sorting before values reach the loop
+body.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

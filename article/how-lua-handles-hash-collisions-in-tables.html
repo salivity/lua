@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Handles Hash Collisions in Tables - lua</title>
+    <meta name="description" content="Lua tables serve as the primary data structure in the language, utilizing a hybrid structure of an array part and a hash part to store arbitrary key-value pairs. Hash collisions occur when different keys map to the same bucket index within the hash part,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-handles-hash-collisions-in-tables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Handles Hash Collisions in Tables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-handles-hash-collisions-in-tables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua tables serve as the primary data structure in the language, utilizing a hybrid structure of an array part and a hash part to store arbitrary key-value pairs. Hash collisions occur when different keys map to the same bucket index within the hash part," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-handles-hash-collisions-in-tables">How Lua Handles Hash
+Collisions in Tables</h1>
+<p>Lua tables serve as the primary data structure in the language,
+utilizing a hybrid structure of an array part and a hash part to store
+arbitrary key-value pairs. Hash collisions occur when different keys map
+to the same bucket index within the hash part, caused by the
+mathematical constraints of mapping an infinite set of keys into a
+finite array size. Lua resolves these collisions using an optimized
+variation of coalesced hashing—specifically a chained scatter
+table—which manages collisions inside the existing array using a reverse
+search pointer (<code>lastfree</code>) and node relocation to keep
+search chains optimal.</p>
+<h3 id="what-causes-hash-collisions-in-lua">What Causes Hash Collisions
+in Lua</h3>
+<p>A collision in Lua occurs when two distinct keys yield the same
+index, known as the key's "main position," inside the hash part of a
+table.</p>
+<ol type="1">
+<li><strong>Finite Table Capacity vs. Infinite Key Domain:</strong> Lua
+accepts almost any value as a key, including strings, numbers, tables,
+functions, and threads. The hash part of a Lua table always has a size
+equal to a power of two. Because the universe of possible keys is
+practically infinite while the hash vector is strictly bounded, the
+pigeonhole principle guarantees that different keys will eventually
+target the same bucket.</li>
+<li><strong>Hash Function and Index Clamping:</strong> Lua computes a
+hash value for a key (for example, using a specialized string-hashing
+algorithm for strings or pointer addresses for reference types) and maps
+this integer to an index in the hash array using bitwise masking
+(<code>hash &amp; (size - 1)</code>). Even if the hash algorithm
+produces unique integer values, the modulo/masking operation maps many
+distinct hashes to identical array slots.</li>
+</ol>
+<h3 id="how-lua-resolves-collisions-coalesced-hashing">How Lua Resolves
+Collisions: Coalesced Hashing</h3>
+<p>Lua does not use separate chaining with external linked lists, nor
+does it use standard open addressing like linear or quadratic probing.
+Instead, it utilizes an internal <strong>chained scatter table</strong>
+(a form of coalesced hashing) where all chain nodes reside directly
+inside the allocated hash vector.</p>
+<p>Each entry in Lua's hash table is a <code>Node</code> structure that
+holds the key, the value, and a <code>next</code> field pointing to the
+next colliding node in the chain (as an offset/pointer). Lua maintains a
+pointer called <code>lastfree</code>, which initially points to the end
+of the hash array and moves backwards toward the beginning to locate
+unused nodes.</p>
+<p>When inserting a key, Lua calculates its main position:</p>
+<ul>
+<li><strong>The Main Position is Free:</strong> If the calculated bucket
+is empty, the key and value are stored directly in that slot. The
+<code>next</code> pointer is set to null.</li>
+<li><strong>Primary Collision (The Occupant Belongs There):</strong> If
+the slot is occupied and the current occupant belongs in that main
+position, Lua searches backwards from <code>lastfree</code> until it
+finds an empty node. The new key-value pair is placed into this free
+slot, and the new slot is linked into the collision chain originating
+from the main position.</li>
+<li><strong>Secondary Collision (The Occupant is an Intruder):</strong>
+If the slot is occupied by a node that <em>does not</em> naturally
+belong there—meaning it was placed there as a result of an earlier
+collision from a different main position—Lua performs a relocation. The
+existing intruder node is moved to an empty slot found by
+<code>lastfree</code>, the pointers in the intruder's original chain are
+updated to reflect the new location, and the newly inserted key claims
+its rightful main position.</li>
+</ul>
+<h3 id="rehashing-and-table-growth">Rehashing and Table Growth</h3>
+<p>Because Lua searches backwards with <code>lastfree</code>, the array
+eventually runs out of free slots. When an insertion requires a free
+node and <code>lastfree</code> reaches the beginning of the table
+without finding an empty slot, Lua triggers a
+<strong>rehash</strong>.</p>
+<p>During rehashing, Lua analyzes all existing keys, determines the
+optimal sizes for both the array part and the hash part, allocates a new
+hash vector, and re-inserts all elements into their new main positions,
+effectively resetting and clearing the collision chains.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

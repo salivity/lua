@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How NaN Tagging Works in 64-Bit Lua - lua</title>
+    <meta name="description" content="This article explains NaN tagging, an optimization technique prominently used in runtimes like LuaJIT to store dynamically typed values inside a single 64-bit word. By exploiting the IEEE 754 floating-point representation of &quot;Not a Number&quot; (NaN), the runt">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-na-n-tagging-works-in-64-bit-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How NaN Tagging Works in 64-Bit Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-na-n-tagging-works-in-64-bit-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains NaN tagging, an optimization technique prominently used in runtimes like LuaJIT to store dynamically typed values inside a single 64-bit word. By exploiting the IEEE 754 floating-point representation of &quot;Not a Number&quot; (NaN), the runt" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-nan-tagging-works-in-64-bit-lua">How NaN Tagging Works in
+64-Bit Lua</h1>
+<p>This article explains NaN tagging, an optimization technique
+prominently used in runtimes like LuaJIT to store dynamically typed
+values inside a single 64-bit word. By exploiting the IEEE 754
+floating-point representation of "Not a Number" (NaN), the runtime packs
+floating-point doubles, 48-bit pointers, primitive types, and type tags
+into the width of a standard 64-bit pointer. This eliminates the memory
+bloat of traditional tagged unions, dramatically improves CPU cache
+locality, and minimizes register pressure during execution.</p>
+<h3 id="the-anatomy-of-ieee-754-floating-point-numbers">The Anatomy of
+IEEE 754 Floating-Point Numbers</h3>
+<p>Under the IEEE 754 double-precision standard, a 64-bit float is
+structured into three distinct segments:</p>
+<ul>
+<li><strong>1 sign bit</strong> (bit 63)</li>
+<li><strong>11 exponent bits</strong> (bits 62–52)</li>
+<li><strong>52 mantissa (or fraction) bits</strong> (bits 51–0)</li>
+</ul>
+<p>A value is defined as a <code>NaN</code> when all 11 exponent bits
+are set to <code>1</code> (binary <code>11111111111</code>) and the
+mantissa is non-zero. Within this definition, standard hardware
+differentiates between "signaling" NaNs and "quiet" NaNs (qNaNs). A
+quiet NaN sets the most significant bit of the mantissa (bit 51) to
+<code>1</code>.</p>
+<p>Because a quiet NaN only requires the exponent to be all ones and bit
+51 to be <code>1</code>, the remaining 51 bits (bits 50 through 0) and
+the sign bit are ignored by floating-point hardware. These unused bits
+represent a payload space that dynamic language runtimes can
+repurpose.</p>
+<h3 id="exploiting-the-48-bit-architecture-limit">Exploiting the 48-Bit
+Architecture Limit</h3>
+<p>Modern 64-bit computing architectures (such as x86-64 and ARM64) do
+not actually use all 64 bits for addressing memory. Instead, canonical
+virtual address spaces use only the lower 48 bits (or occasionally 52
+bits in newer hardware extensions), sign-extended to 64 bits. In
+standard user-space allocations, the upper 16 bits of a valid pointer
+are zeros.</p>
+<p>Because a pointer only requires 48 bits, it can easily fit inside the
+51-bit payload of an IEEE 754 quiet NaN.</p>
+<h3 id="packing-types-and-values-in-lua">Packing Types and Values in
+Lua</h3>
+<p>In a standard C implementation of a dynamically typed language (like
+standard PUC-Rio Lua 5.1–5.3), a generic value is represented as a
+tagged union:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> Value <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">int</span> type<span class="op">;</span>      <span class="co">// 4 or 8 bytes</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">union</span> <span class="op">{</span>        <span class="co">// 8 bytes</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>        <span class="dt">void</span> <span class="op">*</span>gc_object<span class="op">;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>        <span class="dt">double</span> number<span class="op">;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>        <span class="dt">int</span> boolean<span class="op">;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> value<span class="op">;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>Due to struct alignment, this structure consumes 16 bytes (128 bits)
+per value on a 64-bit machine.</p>
+<p>LuaJIT replaces this 16-byte struct with an 8-byte (64-bit) primitive
+through NaN tagging:</p>
+<ol type="1">
+<li><strong>Floating-Point Numbers:</strong> Any valid 64-bit float that
+is not a masked qNaN is stored directly as its raw IEEE 754 double
+value. When the CPU processes standard arithmetic, it operates on the
+value without unpacking.</li>
+<li><strong>Pointers (GC Objects):</strong> When storing a reference to
+an allocated object (such as a Lua table, string, or function), the
+runtime sets the 11 exponent bits and the qNaN bit to form a NaN
+envelope. The lower 48 bits are populated with the target's memory
+address.</li>
+<li><strong>Primitives and Type Tags:</strong> The upper bits of the
+payload (bits 48 to 50) and the sign bit serve as an internal type tag.
+This tag designates whether the value is <code>nil</code>,
+<code>boolean</code>, <code>lightuserdata</code>, an integer, or an
+object reference. For simple primitives like <code>boolean</code>, the
+payload simply contains <code>0</code> (false) or <code>1</code>
+(true).</li>
+</ol>
+<h3 id="detection-and-unpacking">Detection and Unpacking</h3>
+<p>Checking a value's type requires only basic bitwise operations and
+integer comparisons:</p>
+<ul>
+<li>If the upper 16 bits match the NaN mask, the runtime treats the
+value as a tagged entity. It reads the specific tag bits to invoke the
+correct branch or unwraps the lower 48 bits to dereference the
+pointer.</li>
+<li>If the upper bits do not match the designated NaN mask, the CPU
+treats the entire 64-bit register directly as a normal floating-point
+double.</li>
+</ul>
+<h3 id="performance-implications">Performance Implications</h3>
+<p>NaN tagging cuts memory consumption for Lua values by exactly
+50%—from 16 bytes down to 8 bytes. Because Lua tables (arrays and hash
+maps) store numerous dynamically typed slots, this halving of size
+allows twice as many values to fit within L1 and L2 CPU caches.
+Furthermore, values can be moved between CPU registers and stack frames
+using single 64-bit register instructions instead of multi-step memory
+copies, drastically lowering execution overhead.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

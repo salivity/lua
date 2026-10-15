@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Tune Lua GC Pause and Step Multipliers - lua</title>
+    <meta name="description" content="This article provides a concise guide on optimizing the incremental garbage collector (GC) in the Lua programming language. By manipulating the garbage collector&#39;s pause and step multiplier settings using the built-in collectgarbage function, developers c">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-tune-lua-gc-pause-and-step-multipliers">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Tune Lua GC Pause and Step Multipliers - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-tune-lua-gc-pause-and-step-multipliers" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides a concise guide on optimizing the incremental garbage collector (GC) in the Lua programming language. By manipulating the garbage collector&#39;s pause and step multiplier settings using the built-in collectgarbage function, developers c" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-tune-lua-gc-pause-and-step-multipliers">How to Tune Lua
+GC Pause and Step Multipliers</h1>
+<p>This article provides a concise guide on optimizing the incremental
+garbage collector (GC) in the Lua programming language. By manipulating
+the garbage collector's pause and step multiplier settings using the
+built-in <code>collectgarbage</code> function, developers can reduce
+latency spikes, prevent out-of-memory errors, and balance memory
+footprint against CPU consumption.</p>
+<h3 id="understanding-the-key-parameters">Understanding the Key
+Parameters</h3>
+<p>Lua's incremental garbage collector relies on two primary tuning
+parameters:</p>
+<ol type="1">
+<li><strong>GC Pause (<code>pause</code>):</strong> Controls the amount
+of time the collector waits before beginning a new garbage collection
+cycle after the previous one finishes. The value represents a percentage
+of the total memory in use.
+<ul>
+<li>A value of <code>100</code> means the collector restarts as soon as
+memory usage matches the amount left after the last cycle.</li>
+<li>A value of <code>200</code> means the collector waits until total
+memory usage doubles before initiating a new cycle.</li>
+<li>Values smaller than <code>100</code> cause the collector to start
+immediately without waiting.</li>
+</ul></li>
+<li><strong>Step Multiplier (<code>stepmul</code>):</strong> Controls
+how aggressively the collector runs relative to memory allocation. It
+determines how many collection steps occur for each unit of allocated
+memory.
+<ul>
+<li>A value of <code>100</code> makes the collector work at the same
+rate as program allocations.</li>
+<li>Values greater than <code>200</code> force the collector to run much
+faster than the allocation rate, clearing objects quickly.</li>
+<li>A value that is too low may cause the collector to fall behind
+memory allocation, leading to unbounded memory growth.</li>
+</ul></li>
+</ol>
+<h3 id="configuring-settings-via-collectgarbage">Configuring Settings
+via <code>collectgarbage</code></h3>
+<p>The syntax for adjusting these parameters depends on the version of
+Lua being used.</p>
+<h4 id="lua-51-52-53-and-luajit">Lua 5.1, 5.2, 5.3, and LuaJIT</h4>
+<p>In earlier versions and LuaJIT, parameters are updated using
+individual <code>"setpause"</code> and <code>"setstepmul"</code>
+options:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Set the pause to 150% (collector waits for memory to grow by 50%)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;setpause&quot;</span><span class="op">,</span> <span class="dv">150</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- Set the step multiplier to 250% (collector works 2.5x faster than allocation)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;setstepmul&quot;</span><span class="op">,</span> <span class="dv">250</span><span class="op">)</span></span></code></pre></div>
+<p>Both options return the previous parameter value, allowing you to
+temporarily modify and later restore the collector's state.</p>
+<h4 id="lua-54-and-later">Lua 5.4 and Later</h4>
+<p>Lua 5.4 introduced a revised API for the incremental collector
+through the <code>"incremental"</code> command, allowing parameters to
+be configured in a single call:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Signature: collectgarbage(&quot;incremental&quot;, pause, stepmul, stepsize)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- Passing 0 keeps the current value for that parameter.</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- Set pause to 150, step multiplier to 250, and step size to default (0)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;incremental&quot;</span><span class="op">,</span> <span class="dv">150</span><span class="op">,</span> <span class="dv">250</span><span class="op">,</span> <span class="dv">0</span><span class="op">)</span></span></code></pre></div>
+<h3 id="tuning-strategies-for-common-scenarios">Tuning Strategies for
+Common Scenarios</h3>
+<h4 id="1-real-time-and-latency-sensitive-applications-eg-games">1.
+Real-Time and Latency-Sensitive Applications (e.g., Games)</h4>
+<p>In real-time loops, garbage collection pauses can cause dropped
+frames. The goal is to keep the collector active in small, frequent
+increments rather than large bursts:</p>
+<ul>
+<li><strong>Lower the Pause (e.g., 105–120):</strong> Starts cycles
+sooner so garbage never accumulates significantly.</li>
+<li><strong>Increase the Step Multiplier (e.g., 200–300):</strong>
+Ensures the collector finishes cycles promptly, preventing unfinished
+cycles from spilling into critical processing windows.</li>
+</ul>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Example for a game loop (Lua 5.1 / LuaJIT)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;setpause&quot;</span><span class="op">,</span> <span class="dv">110</span><span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;setstepmul&quot;</span><span class="op">,</span> <span class="dv">300</span><span class="op">)</span></span></code></pre></div>
+<h4 id="2-memory-constrained-systems">2. Memory-Constrained Systems</h4>
+<p>When RAM is limited, keeping heap size small takes priority over
+minimizing CPU overhead:</p>
+<ul>
+<li><strong>Set Pause to 100 or less:</strong> Forces continuous cycles
+so deallocated memory is reclaimed as soon as possible.</li>
+<li><strong>Set Step Multiplier high (e.g., 400+):</strong> Makes
+collection runs aggressive enough to reclaim objects faster than
+incoming allocations consume space.</li>
+</ul>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Aggressive memory reclamation (Lua 5.4)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;incremental&quot;</span><span class="op">,</span> <span class="dv">100</span><span class="op">,</span> <span class="dv">400</span><span class="op">,</span> <span class="dv">0</span><span class="op">)</span></span></code></pre></div>
+<h4 id="3-throughput-oriented-batch-workloads">3. Throughput-Oriented
+Batch Workloads</h4>
+<p>For non-interactive batch processing, minimizing CPU cycles spent on
+collection is more important than immediate memory reclamation:</p>
+<ul>
+<li><strong>Increase the Pause (e.g., 200–400):</strong> Delays
+collection until substantial garbage accumulates, reducing the frequency
+of garbage collection cycles.</li>
+<li><strong>Moderate Step Multiplier (e.g., 150–200):</strong> Collects
+memory steadily without halting batch execution threads
+excessively.</li>
+</ul>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- High throughput configuration (Lua 5.1 / LuaJIT)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;setpause&quot;</span><span class="op">,</span> <span class="dv">300</span><span class="op">)</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;setstepmul&quot;</span><span class="op">,</span> <span class="dv">150</span><span class="op">)</span></span></code></pre></div></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

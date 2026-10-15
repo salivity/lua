@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua OP_CLOSURE Instantiates Closures - lua</title>
+    <meta name="description" content="In the Lua virtual machine, the OPCLOSURE instruction is responsible for converting a compile-time function prototype (Proto) into a runtime closure object (LClosure). This article explains the technical mechanics of that process, detailing how the VM all">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-op-closure-instantiates-closures">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua OP_CLOSURE Instantiates Closures - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-op-closure-instantiates-closures" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua virtual machine, the OPCLOSURE instruction is responsible for converting a compile-time function prototype (Proto) into a runtime closure object (LClosure). This article explains the technical mechanics of that process, detailing how the VM all" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-op_closure-instantiates-closures">How Lua OP_CLOSURE
+Instantiates Closures</h1>
+<p>In the Lua virtual machine, the <code>OP_CLOSURE</code> instruction
+is responsible for converting a compile-time function prototype
+(<code>Proto</code>) into a runtime closure object
+(<code>LClosure</code>). This article explains the technical mechanics
+of that process, detailing how the VM allocates memory for the new
+closure, reads upvalue metadata, and resolves external references from
+either the current execution stack or existing parent upvalues.</p>
+<h3 id="function-prototypes-vs-runtime-closures">Function Prototypes vs.
+Runtime Closures</h3>
+<p>During compilation, Lua translates source code into bytecode and
+generates a static <code>Proto</code> structure for every function
+definition. A <code>Proto</code> contains immutable metadata, including
+bytecode instructions, constants, debug information, and definitions of
+expected upvalues. However, a <code>Proto</code> cannot be executed
+directly in an environment where state varies dynamically.</p>
+<p>A closure (<code>LClosure</code>) is the dynamic instance of a
+<code>Proto</code>. It pairs the static bytecode with a specific
+execution context by binding concrete runtime variables, known as
+upvalues, to the prototype.</p>
+<h3 id="the-op_closure-instruction-format">The OP_CLOSURE Instruction
+Format</h3>
+<p>The <code>OP_CLOSURE</code> instruction typically utilizes two
+primary operands:</p>
+<ul>
+<li><strong><code>A</code></strong>: The destination register index
+where the instantiated <code>LClosure</code> pointer will be
+stored.</li>
+<li><strong><code>Bx</code></strong>: An unsigned index into the
+enclosing function prototype's sub-prototype table
+(<code>p-&gt;p[]</code>).</li>
+</ul>
+<p>When the interpreter encounters <code>OP_CLOSURE A Bx</code>, it
+accesses the child prototype defined at index <code>Bx</code> within the
+currently executing prototype.</p>
+<h3 id="allocation-of-the-closure">Allocation of the Closure</h3>
+<p>The instantiation begins by allocating a new <code>LClosure</code>
+object on the Lua garbage-collected heap, usually via the internal
+function <code>luaF_newLclosure</code>.</p>
+<p>During this step:</p>
+<ol type="1">
+<li>Memory is allocated to hold the <code>LClosure</code> header, a
+reference pointer to the target <code>Proto</code>, and an array of
+pointers to <code>UpVal</code> objects sized to
+<code>p-&gt;sizeupvalues</code>.</li>
+<li>The newly created object's reference counter and garbage collection
+header are initialized.</li>
+<li>The closure's <code>p</code> field is assigned to the
+<code>Proto</code> located at <code>cl-&gt;p-&gt;p[Bx]</code>.</li>
+</ol>
+<h3 id="upvalue-resolution-and-binding">Upvalue Resolution and
+Binding</h3>
+<p>The most critical step in executing <code>OP_CLOSURE</code> is
+resolving the closure's upvalues. In modern Lua versions (such as Lua
+5.3 and 5.4), the <code>Proto</code> contains an array of
+<code>Upvaldesc</code> structures that dictate where each upvalue
+originates.</p>
+<p>The VM iterates through each upvalue descriptor defined in the
+prototype:</p>
+<ol type="1">
+<li><p><strong>Capturing Local Stack Variables
+(<code>instack == 1</code>):</strong> If the descriptor indicates that
+the variable resides in the current function's local stack, the VM calls
+<code>luaF_findupval</code>. This function checks the execution thread's
+list of open upvalues. If an open <code>UpVal</code> already points to
+the specific stack slot (register), that existing <code>UpVal</code> is
+reused and its reference count is incremented. If none exists, a new
+<code>UpVal</code> is allocated, set to point to the stack address, and
+inserted into the open upvalues list.</p></li>
+<li><p><strong>Inheriting Outer Upvalues
+(<code>instack == 0</code>):</strong> If the variable is not in the
+immediate local stack, it is an upvalue belonging to the parent
+function. The descriptor specifies an index into the parent closure’s
+own upvalue list (<code>cl-&gt;upvals[idx]</code>). The VM copies the
+pointer from the parent closure's upvalue array to the new child
+closure's upvalue array, incrementing its reference count.</p></li>
+</ol>
+<h3 id="register-assignment">Register Assignment</h3>
+<p>Once all upvalues are resolved and bound to the new
+<code>LClosure</code> instance, the VM places the resulting closure
+reference into register <code>R(A)</code> of the current stack frame.
+The program counter advances to the next instruction, completing the
+instantiation. The newly formed closure is now fully prepared for
+execution or assignment to a local or global variable.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

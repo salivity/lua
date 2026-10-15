@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua ipairs Iterates Array-Like Tables - lua</title>
+    <meta name="description" content="In the Lua programming language, the ipairs function provides a standardized way to traverse array-like tables in a strict, ordered sequence. This article explains how ipairs functions under the hood, how it handles indices and termination conditions, why">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-ipairs-iterates-array-like-tables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua ipairs Iterates Array-Like Tables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-ipairs-iterates-array-like-tables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the ipairs function provides a standardized way to traverse array-like tables in a strict, ordered sequence. This article explains how ipairs functions under the hood, how it handles indices and termination conditions, why" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-ipairs-iterates-array-like-tables">How Lua ipairs
+Iterates Array-Like Tables</h1>
+<p>In the Lua programming language, the <code>ipairs</code> function
+provides a standardized way to traverse array-like tables in a strict,
+ordered sequence. This article explains how <code>ipairs</code>
+functions under the hood, how it handles indices and termination
+conditions, why it ignores non-sequential keys, and how it differs from
+the general-purpose <code>pairs</code> iterator.</p>
+<h2 id="the-basic-mechanism-of-ipairs">The Basic Mechanism of
+ipairs</h2>
+<p>The <code>ipairs</code> function is a stateful iterator factory
+specifically tailored for tables with continuous, positive integer keys
+starting at <code>1</code>. When invoked in a <code>for</code> loop,
+<code>ipairs</code> returns three values: an iterator function, the
+table itself, and the starting index <code>0</code>.</p>
+<p>During each cycle of the loop, the iterator function increments the
+index by <code>1</code> and evaluates whether a value exists at that
+index:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">fruits</span> <span class="op">=</span> <span class="op">{</span><span class="st">&quot;apple&quot;</span><span class="op">,</span> <span class="st">&quot;banana&quot;</span><span class="op">,</span> <span class="st">&quot;cherry&quot;</span><span class="op">}</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">index</span><span class="op">,</span> <span class="va">value</span> <span class="kw">in</span> <span class="fu">ipairs</span><span class="op">(</span><span class="va">fruits</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">index</span><span class="op">,</span> <span class="va">value</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>Output:</p>
+<pre class="text"><code>1   apple
+2   banana
+3   cherry</code></pre>
+<h2 id="step-by-step-execution">Step-by-Step Execution</h2>
+<p>When the <code>for index, value in ipairs(t)</code> loop
+executes:</p>
+<ol type="1">
+<li><strong>Initialization</strong>: Lua calls <code>ipairs(t)</code>,
+obtaining the internal iterator function, the invariant state (the table
+<code>t</code>), and the control variable initialized to
+<code>0</code>.</li>
+<li><strong>Iteration Step</strong>: The loop calls the iterator
+function with <code>(t, 0)</code>. The iterator increments the index to
+<code>1</code> and fetches <code>t[1]</code>.</li>
+<li><strong>Condition Check</strong>: If <code>t[1]</code> is not
+<code>nil</code>, the loop assigns <code>1</code> to <code>index</code>
+and the element's content to <code>value</code>, executing the loop
+block.</li>
+<li><strong>Subsequent Cycles</strong>: The iterator receives the
+updated index, increments it to <code>2</code>, and checks
+<code>t[2]</code>. This process repeats consecutively (<code>3</code>,
+<code>4</code>, etc.).</li>
+<li><strong>Termination</strong>: The moment <code>t[i]</code> resolves
+to <code>nil</code>, the iterator function returns <code>nil</code>, and
+the loop terminates immediately.</li>
+</ol>
+<h2 id="handling-of-non-integer-keys-and-gaps">Handling of Non-Integer
+Keys and Gaps</h2>
+<p>Unlike the general <code>pairs</code> function, which uses
+<code>next</code> to traverse both the array and hash parts of a table
+in an arbitrary order, <code>ipairs</code> strictly evaluates integer
+arithmetic on keys:</p>
+<ul>
+<li><strong>Gaps (Holes)</strong>: If an array contains a
+<code>nil</code> between elements (such as <code>t[1] = "a"</code>,
+<code>t[3] = "c"</code> where <code>t[2]</code> is absent),
+<code>ipairs</code> stops at index <code>2</code>. Elements at index
+<code>3</code> and beyond will never be reached.</li>
+<li><strong>String and Custom Keys</strong>: Any keys that are strings,
+booleans, tables, or negative integers are completely bypassed by
+<code>ipairs</code>.</li>
+<li><strong>Zero and Negative Indices</strong>: Lua arrays are 1-indexed
+by convention. <code>ipairs</code> starts checking at index
+<code>1</code>, meaning values stored at index <code>0</code> or
+negative numbers are ignored.</li>
+</ul>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">mixed</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">[</span><span class="dv">1</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;first&quot;</span><span class="op">,</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">[</span><span class="dv">2</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;second&quot;</span><span class="op">,</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">[</span><span class="dv">4</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;fourth&quot;</span><span class="op">,</span>    <span class="co">-- Gap at 3 causes ipairs to stop before this</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">name</span> <span class="op">=</span> <span class="st">&quot;example&quot;</span><span class="op">,</span>  <span class="co">-- String key ignored</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">[-</span><span class="dv">1</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;negative&quot;</span>  <span class="co">-- Negative key ignored</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">i</span><span class="op">,</span> <span class="va">v</span> <span class="kw">in</span> <span class="fu">ipairs</span><span class="op">(</span><span class="va">mixed</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">i</span><span class="op">,</span> <span class="va">v</span><span class="op">)</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>Output:</p>
+<pre class="text"><code>1   first
+2   second</code></pre>
+<h2 id="conceptual-lua-equivalent">Conceptual Lua Equivalent</h2>
+<p>To understand the internal logic, the behavior of <code>ipairs</code>
+can be represented in pure Lua as follows:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> ipairs_iterator<span class="op">(</span><span class="va">t</span><span class="op">,</span> <span class="va">i</span><span class="op">)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">i</span> <span class="op">=</span> <span class="va">i</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">v</span> <span class="op">=</span> <span class="va">t</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">v</span> <span class="op">~=</span> <span class="kw">nil</span> <span class="cf">then</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">i</span><span class="op">,</span> <span class="va">v</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> custom_ipairs<span class="op">(</span><span class="va">t</span><span class="op">)</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">ipairs_iterator</span><span class="op">,</span> <span class="va">t</span><span class="op">,</span> <span class="dv">0</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Because <code>ipairs</code> relies exclusively on sequential
+numerical indexing (<code>t[i]</code>), it guarantees deterministic,
+ascending order traversal for array structures at predictable
+performance.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

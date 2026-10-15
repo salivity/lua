@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Luau Type Checking Differs from Standard Lua - lua</title>
+    <meta name="description" content="This article examines the fundamental differences in type checking between standard Lua and Luau, Roblox&#39;s open-source derivative language. While vanilla Lua relies exclusively on dynamic typing evaluated at runtime, Luau introduces an optional, gradual t">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-luau-type-checking-differs-from-standard-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Luau Type Checking Differs from Standard Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-luau-type-checking-differs-from-standard-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article examines the fundamental differences in type checking between standard Lua and Luau, Roblox&#39;s open-source derivative language. While vanilla Lua relies exclusively on dynamic typing evaluated at runtime, Luau introduces an optional, gradual t" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-luau-type-checking-differs-from-standard-lua">How Luau Type
+Checking Differs from Standard Lua</h1>
+<p>This article examines the fundamental differences in type checking
+between standard Lua and Luau, Roblox's open-source derivative language.
+While vanilla Lua relies exclusively on dynamic typing evaluated at
+runtime, Luau introduces an optional, gradual type system featuring
+static analysis, type inference, explicit annotations, and configurable
+strictness modes. Understanding these distinctions highlights how Luau
+catches errors during development and improves code maintainability in
+complex projects compared to standard Lua.</p>
+<h3 id="dynamic-typing-vs-gradual-typing">Dynamic Typing vs. Gradual
+Typing</h3>
+<p>Standard Lua is strictly dynamically typed. In Lua, variables do not
+have types; only the values assigned to them do. Type checking occurs
+exclusively at runtime, meaning that invalid operations—such as
+attempting to perform arithmetic on a string or calling a non-existent
+method—are only caught when that specific line of code executes.</p>
+<p>Luau introduces a gradual type system. It allows developers to write
+standard dynamically typed Lua when rapid prototyping is preferred, but
+also provides the ability to declare static types where reliability and
+performance are essential. This gives developers the flexibility to
+adopt type checking progressively across a codebase without requiring an
+all-or-nothing rewrite.</p>
+<h3 id="explicit-type-annotations-and-aliases">Explicit Type Annotations
+and Aliases</h3>
+<p>Standard Lua provides no native syntax for defining variable types or
+function contracts, forcing developers to rely on third-party
+documentation tools like LDoc.</p>
+<p>Luau introduces first-class syntax for static type annotations:</p>
+<ul>
+<li><strong>Variables and Constants:</strong> Variables can be
+explicitly bounded to a type (e.g.,
+<code>local count: number = 10</code>).</li>
+<li><strong>Function Signatures:</strong> Luau allows typing for
+parameters and return types (e.g.,
+<code>local function add(a: number, b: number): number</code>).</li>
+<li><strong>Type Aliases:</strong> Developers can define custom
+composite types and interface shapes using the <code>type</code>
+keyword, creating structures such as
+<code>type Player = { name: string, health: number }</code>.</li>
+</ul>
+<h3 id="type-inference">Type Inference</h3>
+<p>Even when explicit annotations are omitted, Luau includes a
+bidirectional type inference engine. It analyzes variable assignments,
+function return values, and control flow to automatically deduce types.
+For example, if a variable is initialized with a string, Luau infers its
+type as <code>string</code> and flags subsequent attempts to reassign it
+to a table or number as an error. Standard Lua performs no such
+analysis.</p>
+<h3 id="strictness-modes">Strictness Modes</h3>
+<p>Luau provides file-level control over how aggressively types are
+enforced through specific header directives:</p>
+<ul>
+<li><code>--!nocheck</code>: Disables type checking entirely, mimicking
+standard Lua behavior while retaining runtime optimizations.</li>
+<li><code>--!nonstrict</code>: The default mode. It infers types where
+possible and validates basic operations, but suppresses errors when
+types are ambiguous to avoid false positives.</li>
+<li><code>--!strict</code>: Enforces rigorous type analysis across all
+variables, parameters, and function returns, requiring unambiguous types
+and catching subtle logic flaws prior to execution.</li>
+</ul>
+<p>Vanilla Lua has no concept of strictness modes or static type
+checking pragmas.</p>
+<h3 id="compile-time-verification">Compile-Time Verification</h3>
+<p>In standard Lua, syntax errors are detected at parse time, but
+semantic errors—such as passing the wrong number of arguments, indexing
+a <code>nil</code> table, or using the wrong data type—always slip
+through to runtime. Luau integrates its type checker directly into the
+compilation and linting pipeline. As code is written, Luau reports type
+mismatches, missing table properties, and incorrect function arguments
+inside the IDE, preventing runtime exceptions before the code ever
+runs.</p>
+<h3 id="advanced-type-constructs">Advanced Type Constructs</h3>
+<p>Luau expands upon basic data types by offering advanced constructs
+found in languages like TypeScript:</p>
+<ul>
+<li><strong>Union and Intersection Types:</strong> Types can be combined
+using unions (<code>string | number</code>) or intersections
+(<code>Renderable &amp; Movable</code>).</li>
+<li><strong>Generics:</strong> Functions and data structures can be
+parameterized to operate over arbitrary types while retaining static
+guarantees (e.g.,
+<code>function map&lt;T, U&gt;(list: {T}, transform: (T) -&gt; U): {U}</code>).</li>
+<li><strong>Literal and Singleton Types:</strong> Luau can restrict
+variables to exact string or boolean values rather than the broader
+primitive type.</li>
+</ul>
+<p>Vanilla Lua lacks all of these concepts natively, treating every
+complex data structure as a general-purpose, untyped associative array
+(table).</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

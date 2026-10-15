@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How OpenResty Solves LuaJIT Memory Limits - lua</title>
+    <meta name="description" content="For high-throughput systems, the Lua programming language&#39;s standard JIT compiler, LuaJIT, has long presented a major infrastructure bottleneck due to its hard-coded 2GB garbage collection (GC) memory limit. Modern forks, most notably OpenResty’s branch o">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-open-resty-solves-lua-jit-memory-limits">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How OpenResty Solves LuaJIT Memory Limits - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-open-resty-solves-lua-jit-memory-limits" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="For high-throughput systems, the Lua programming language&#39;s standard JIT compiler, LuaJIT, has long presented a major infrastructure bottleneck due to its hard-coded 2GB garbage collection (GC) memory limit. Modern forks, most notably OpenResty’s branch o" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-openresty-solves-luajit-memory-limits">How OpenResty Solves
+LuaJIT Memory Limits</h1>
+<p>For high-throughput systems, the Lua programming language's standard
+JIT compiler, LuaJIT, has long presented a major infrastructure
+bottleneck due to its hard-coded 2GB garbage collection (GC) memory
+limit. Modern forks, most notably OpenResty’s branch of LuaJIT
+(LuaJIT2), resolve this boundary primarily by operationalizing and
+stabilizing the GC64 compilation mode, while simultaneously providing
+robust Foreign Function Interface (FFI) mechanisms to offload large data
+structures entirely outside the Lua GC boundary. This article explores
+how LuaJIT-openresty overcomes standard memory ceilings, how GC64 alters
+the internal representation of Lua values, and how external memory
+architectures prevent out-of-memory errors in data-intensive
+applications.</p>
+<h3 id="the-origin-of-the-2gb-boundary">The Origin of the 2GB
+Boundary</h3>
+<p>Standard LuaJIT on 64-bit architectures historically restricts memory
+allocations to the lower 31 or 32 bits of virtual address space, capping
+GC-managed memory at 1GB or 2GB depending on the host operating system.
+This constraint stems from its performance-oriented value
+representation: NaN-tagging.</p>
+<p>In classic 32-bit execution mode, all Lua values are represented as
+64-bit double-precision floating-point numbers. Any bit pattern that
+represents a quiet NaN (Not-a-Number) is repurposed to store other Lua
+types—such as strings, tables, functions, and garbage-collected
+objects—by embedding a 32-bit type tag and a 32-bit pointer directly
+inside the mantissa. This layout allows LuaJIT to pass all variables via
+uniform, machine-register-sized 64-bit payloads without dynamic heap
+boxing. However, it requires the operating system to allocate heap
+pointers using flags like <code>MAP_32BIT</code> in Linux, strictly
+limiting managed memory addresses to the lowest 2GB or 4GB of the
+address space.</p>
+<h3 id="the-gc64-execution-mode">The GC64 Execution Mode</h3>
+<p>To eliminate this barrier, the OpenResty maintainers matured and
+enabled the GC64 mode within their fork. GC64 redesigns the low-level
+tagged-value format to accommodate full 64-bit virtual memory pointers,
+removing the need for memory allocations to reside in the lowest 2GB of
+virtual memory.</p>
+<p>Under GC64, pointers can reference the entire 47-bit (or 57-bit)
+virtual address space provided by modern x86_64 and AArch64
+hardware:</p>
+<ol type="1">
+<li><strong>Alternate NaN Tagging:</strong> In GC64 mode, the highest
+bits of the 64-bit word distinguish between double-precision
+floating-point numbers and heap pointers. Instead of reserving the lower
+32 bits solely for pointers, the tagging scheme extends pointer fields
+across up to 47 bits of valid virtual addresses, encoding the type tag
+into the top 17 bits.</li>
+<li><strong>Elimination of <code>MAP_32BIT</code>:</strong> Because GC64
+handles true 64-bit references, the memory allocator drops the
+<code>MAP_32BIT</code> flag when calling <code>mmap</code>. The runtime
+can allocate memory anywhere in the system’s linear address space,
+theoretically enabling heaps of hundreds of gigabytes or terabytes,
+bounded only by the physical RAM and swap space of the host
+machine.</li>
+<li><strong>Bytecode and JIT Re-engineering:</strong> The tracing JIT
+compiler within the OpenResty fork was extensively patched to generate
+assembly instructions that handle 64-bit constants and address math
+directly, avoiding pointer truncations and register pressure bottlenecks
+during native machine code generation.</li>
+</ol>
+<h3 id="performance-trade-offs-of-gc64">Performance Trade-Offs of
+GC64</h3>
+<p>While GC64 unlocks practically infinite memory compared to the legacy
+implementation, it carries minor trade-offs:</p>
+<ul>
+<li><strong>Cache Density:</strong> Pointers and specific internal
+metadata occupy more bytes, leading to slightly increased memory
+consumption and potentially higher L1/L2 cache miss rates.</li>
+<li><strong>Instruction Overhead:</strong> Resolving 64-bit addresses
+directly in x86_64 machine code can occasionally require longer
+instruction sequences compared to 32-bit relative addressing.</li>
+</ul>
+<p>For the vast majority of I/O-bound and memory-heavy deployments, the
+ability to utilize full system RAM without runtime panics far outweighs
+the slight single-digit percentage variance in raw microbenchmark
+speed.</p>
+<h3 id="off-gc-memory-strategies-in-openresty">Off-GC Memory Strategies
+in OpenResty</h3>
+<p>In addition to GC64, modern OpenResty architectures mitigate GC
+memory pressure through explicit bypass mechanisms:</p>
+<ul>
+<li><strong>LuaJIT FFI Allocations:</strong> OpenResty encourages
+allocating large buffers and raw C structs through
+<code>ffi.C.malloc</code> or custom memory pools. Memory allocated via
+the C standard library is not tracked by the Lua GC and is never subject
+to Lua's internal heap limitations.</li>
+<li><strong>Shared Memory Zones (<code>lua_shared_dict</code>):</strong>
+OpenResty implements inter-worker shared memory via Nginx-level shared
+memory zones. These zones reside outside the Lua universe entirely,
+protected by their own lock structures and slab allocators, allowing
+hundreds of gigabytes of cached metadata to be shared safely across all
+worker processes without contributing to any individual Lua state's GC
+burden.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

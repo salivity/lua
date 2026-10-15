@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Can You Use a Table as a Key in Lua? - lua</title>
+    <meta name="description" content="In the Lua programming language, you can use another table as a key inside a table. Because tables are first-class values, Lua permits almost any value to serve as an index, excluding only nil and NaN (Not a Number). This article explains how table-based">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/can-you-use-a-table-as-a-key-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Can You Use a Table as a Key in Lua? - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/can-you-use-a-table-as-a-key-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, you can use another table as a key inside a table. Because tables are first-class values, Lua permits almost any value to serve as an index, excluding only nil and NaN (Not a Number). This article explains how table-based" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="can-you-use-a-table-as-a-key-in-lua">Can You Use a Table as a
+Key in Lua?</h1>
+<p>In the Lua programming language, you can use another table as a key
+inside a table. Because tables are first-class values, Lua permits
+almost any value to serve as an index, excluding only <code>nil</code>
+and <code>NaN</code> (Not a Number). This article explains how
+table-based keys work, how Lua evaluates key equality through
+references, and the memory management considerations you must keep in
+mind when implementing this pattern.</p>
+<h3 id="reference-equality-for-table-keys">Reference Equality for Table
+Keys</h3>
+<p>When you use a table as a key, Lua uses reference identity rather
+than structural equality to retrieve values. Lua does not compare the
+contents or fields inside the tables; instead, it checks whether two
+table variables point to the exact same memory location.</p>
+<p>Consider the following example:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">myTable</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">key1</span> <span class="op">=</span> <span class="op">{</span> <span class="va">id</span> <span class="op">=</span> <span class="dv">100</span> <span class="op">}</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">key2</span> <span class="op">=</span> <span class="op">{</span> <span class="va">id</span> <span class="op">=</span> <span class="dv">100</span> <span class="op">}</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- Assign a value using key1</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="va">myTable</span><span class="op">[</span><span class="va">key1</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;Active Session&quot;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co">-- Accessing via key1 succeeds</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">myTable</span><span class="op">[</span><span class="va">key1</span><span class="op">])</span> <span class="co">-- Output: Active Session</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co">-- Accessing via key2 fails because it is a different table instance</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">myTable</span><span class="op">[</span><span class="va">key2</span><span class="op">])</span> <span class="co">-- Output: nil</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="co">-- Assigning a variable by reference allows access</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">keyReference</span> <span class="op">=</span> <span class="va">key1</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">myTable</span><span class="op">[</span><span class="va">keyReference</span><span class="op">])</span> <span class="co">-- Output: Active Session</span></span></code></pre></div>
+<p>Even though <code>key1</code> and <code>key2</code> share the exact
+same internal structure and values, Lua treats them as completely
+distinct keys because they are separate objects in memory.</p>
+<h3 id="mutating-table-keys">Mutating Table Keys</h3>
+<p>Because lookup relies on table references rather than table contents,
+mutating a key table does not invalidate its association in the parent
+table. You can add, remove, or modify fields within the key table
+without losing the ability to access its stored value:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">cache</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">user</span> <span class="op">=</span> <span class="op">{</span> <span class="va">name</span> <span class="op">=</span> <span class="st">&quot;Alice&quot;</span> <span class="op">}</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="va">cache</span><span class="op">[</span><span class="va">user</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;Profile Data&quot;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- Mutate the key table</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="va">user</span><span class="op">.</span><span class="va">name</span> <span class="op">=</span> <span class="st">&quot;Bob&quot;</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="va">user</span><span class="op">.</span><span class="va">role</span> <span class="op">=</span> <span class="st">&quot;Admin&quot;</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- Lookup still works because the table reference remains identical</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">cache</span><span class="op">[</span><span class="va">user</span><span class="op">])</span> <span class="co">-- Output: Profile Data</span></span></code></pre></div>
+<h3 id="memory-management-and-weak-tables">Memory Management and Weak
+Tables</h3>
+<p>Using tables as keys creates a strong reference by default. As long
+as the parent table exists, any table used as a key inside it will not
+be collected by Lua's garbage collector, even if all other references to
+that key are deleted. This can lead to memory leaks if you use tables as
+temporary identifiers or cache keys.</p>
+<p>To prevent this issue, you can configure the parent table as a weak
+table using a metatable with the <code>__mode</code> field set to
+<code>"k"</code>:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">cache</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">setmetatable</span><span class="op">(</span><span class="va">cache</span><span class="op">,</span> <span class="op">{</span> <span class="bu">__mode</span> <span class="op">=</span> <span class="st">&quot;k&quot;</span> <span class="op">})</span> <span class="co">-- Keys are now weak references</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="cf">do</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">tempKey</span> <span class="op">=</span> <span class="op">{</span> <span class="va">id</span> <span class="op">=</span> <span class="dv">42</span> <span class="op">}</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">cache</span><span class="op">[</span><span class="va">tempKey</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;Temporary Data&quot;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">cache</span><span class="op">[</span><span class="va">tempKey</span><span class="op">])</span> <span class="co">-- Output: Temporary Data</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- Force garbage collection</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">()</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co">-- tempKey went out of scope and was collected, automatically removing its entry</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">k</span><span class="op">,</span> <span class="va">v</span> <span class="kw">in</span> <span class="fu">pairs</span><span class="op">(</span><span class="va">cache</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">k</span><span class="op">,</span> <span class="va">v</span><span class="op">)</span> <span class="co">-- Produces no output; the entry was collected</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>By marking keys as weak, Lua automatically removes the key-value pair
+from the table whenever the key table has no remaining strong references
+elsewhere in the program.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

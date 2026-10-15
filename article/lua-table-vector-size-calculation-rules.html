@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Table Vector Size Calculation Rules - lua</title>
+    <meta name="description" content="In the Lua programming language, tables are implemented as hybrid data structures containing an array (vector) part and a hash part. When a table runs out of space during an insertion, it triggers an internal reallocation process known as rehash. During t">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-table-vector-size-calculation-rules">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Table Vector Size Calculation Rules - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-table-vector-size-calculation-rules" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, tables are implemented as hybrid data structures containing an array (vector) part and a hash part. When a table runs out of space during an insertion, it triggers an internal reallocation process known as rehash. During t" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-table-vector-size-calculation-rules">Lua Table Vector Size
+Calculation Rules</h1>
+<p>In the Lua programming language, tables are implemented as hybrid
+data structures containing an array (vector) part and a hash part. When
+a table runs out of space during an insertion, it triggers an internal
+reallocation process known as <code>rehash</code>. During this growth
+phase, Lua uses a specific mathematical optimization rule to recompute
+the sizes of both parts: the vector part is set to the largest power of
+two such that more than half of the vector slots are occupied by
+existing integer keys (achieving at least 50% utilization), while any
+remaining keys are allocated to a hash table sized to the smallest power
+of two that can hold them.</p>
+<h3 id="the-trigger-condition">The Trigger Condition</h3>
+<p>Lua does not resize the array segment dynamically on every append.
+Instead, a reallocation occurs when an insertion fails because the hash
+part is full, or when Lua detects that resizing will improve efficiency.
+When triggered, the engine executes <code>luaH_resizearray</code> or the
+internal <code>rehash</code> routine found in <code>ltable.c</code>.</p>
+<h3 id="the-array-vector-optimization-rule">The Array (Vector)
+Optimization Rule</h3>
+<p>To balance fast index lookups with memory overhead, Lua enforces a
+strict 50% density rule for its vector component. The size of the array
+part is determined by the following mathematical algorithm:</p>
+<ol type="1">
+<li><strong>Bucket Counting</strong>: Lua inspects all integer keys
+present in the table (both in the current array and the hash parts). It
+categorizes them into power-of-two intervals <span
+class="math inline">\(I_i = (2^{i-1}, 2^i]\)</span> for <span
+class="math inline">\(i \ge 0\)</span>.</li>
+<li><strong>Cumulative Density Check</strong>: Lua calculates the
+cumulative number of integer keys <span
+class="math inline">\(a_i\)</span> present in the range <span
+class="math inline">\([1, 2^i]\)</span>: <span
+class="math display">\[a_i = \sum_{j=0}^{i}
+\text{count}(I_j)\]</span></li>
+<li><strong>Array Size Selection</strong>: The allocated array size
+<span class="math inline">\(S_{\text{array}}\)</span> is chosen as the
+largest power of two (<span class="math inline">\(2^i\)</span>) that
+satisfies the condition that strictly more than half of the slots up to
+that boundary are populated: <span
+class="math display">\[S_{\text{array}} = \max \left\{ 2^i \;\middle|\;
+a_i &gt; \frac{2^i}{2} \right\} = \max \left\{ 2^i \;\middle|\; a_i &gt;
+2^{i-1} \right\}\]</span></li>
+</ol>
+<p>If no power of two satisfies this condition (for example, if all
+integer keys are sparse and non-consecutive), <span
+class="math inline">\(S_{\text{array}}\)</span> is set to <span
+class="math inline">\(0\)</span>.</p>
+<h3 id="the-hash-part-calculation">The Hash Part Calculation</h3>
+<p>Any keys not accommodated by the newly sized array vector are
+relegated to the hash part. This includes all non-integer keys, negative
+integer keys, float keys, and any positive integer keys greater than
+<span class="math inline">\(S_{\text{array}}\)</span>.</p>
+<p>The required size for the hash part <span
+class="math inline">\(S_{\text{hash}}\)</span> is computed as:</p>
+<ol type="1">
+<li>Compute the number of remaining elements: <span
+class="math display">\[N_{\text{hash}} = N_{\text{total}} -
+a_{S}\]</span> where <span
+class="math inline">\(N_{\text{total}}\)</span> is the total number of
+keys in the table, and <span class="math inline">\(a_{S}\)</span> is the
+number of integer keys allocated to the array segment.</li>
+<li>If <span class="math inline">\(N_{\text{hash}} = 0\)</span>, <span
+class="math inline">\(S_{\text{hash}} = 0\)</span>.</li>
+<li>If <span class="math inline">\(N_{\text{hash}} &gt; 0\)</span>,
+<span class="math inline">\(S_{\text{hash}}\)</span> is the smallest
+power of two greater than or equal to <span
+class="math inline">\(N_{\text{hash}}\)</span>: <span
+class="math display">\[S_{\text{hash}} = 2^{\lceil
+\log_2(N_{\text{hash}}) \rceil}\]</span></li>
+</ol>
+<h3 id="practical-example">Practical Example</h3>
+<p>Consider a table populated with integer keys <span
+class="math inline">\(1, 2, 3, 4, 5, 6, 7\)</span> and <span
+class="math inline">\(100\)</span>:</p>
+<ul>
+<li>At <span class="math inline">\(2^0 = 1\)</span>: <span
+class="math inline">\(a_0 = 1 &gt; 0\)</span> (Valid candidate: 1)</li>
+<li>At <span class="math inline">\(2^1 = 2\)</span>: <span
+class="math inline">\(a_1 = 2 &gt; 1\)</span> (Valid candidate: 2)</li>
+<li>At <span class="math inline">\(2^2 = 4\)</span>: <span
+class="math inline">\(a_2 = 4 &gt; 2\)</span> (Valid candidate: 4)</li>
+<li>At <span class="math inline">\(2^3 = 8\)</span>: <span
+class="math inline">\(a_3 = 7 &gt; 4\)</span> (Valid candidate: 8)</li>
+<li>At <span class="math inline">\(2^4 = 16\)</span>: <span
+class="math inline">\(a_4 = 7 \ngtr 8\)</span> (Fails density
+requirement)</li>
+<li>At <span class="math inline">\(2^6 = 64\)</span>: <span
+class="math inline">\(a_6 = 7 \ngtr 32\)</span> (Fails)</li>
+<li>At <span class="math inline">\(2^7 = 128\)</span>: <span
+class="math inline">\(a_7 = 8 \ngtr 64\)</span> (Fails)</li>
+</ul>
+<p>The optimal array size chosen is <span
+class="math inline">\(8\)</span>, holding keys <span
+class="math inline">\(1\)</span> through <span
+class="math inline">\(7\)</span>. Key <span
+class="math inline">\(100\)</span> fails the 50% density cutoff for
+sizes 16 through 128, so it is routed to the hash part. Because there is
+only <span class="math inline">\(1\)</span> remaining key, the hash part
+is allocated with a size of <span class="math inline">\(2^{\lceil
+\log_2(1) \rceil} = 2^0 = 1\)</span> node.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

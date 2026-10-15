@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua C API lua_type Return Values Explained - lua</title>
+    <meta name="description" content="This article provides a technical overview of how the luatype function operates within the Lua C API, explaining how it queries the virtual stack and returns distinct integer constants representing fundamental Lua data types. Readers will learn the mechan">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-c-api-lua-type-return-values-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua C API lua_type Return Values Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-c-api-lua-type-return-values-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides a technical overview of how the luatype function operates within the Lua C API, explaining how it queries the virtual stack and returns distinct integer constants representing fundamental Lua data types. Readers will learn the mechan" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-c-api-lua_type-return-values-explained">Lua C API lua_type
+Return Values Explained</h1>
+<p>This article provides a technical overview of how the
+<code>lua_type</code> function operates within the Lua C API, explaining
+how it queries the virtual stack and returns distinct integer constants
+representing fundamental Lua data types. Readers will learn the
+mechanics behind these integer tags, the specific constant definitions
+provided by the API, and how to properly evaluate data types in C host
+programs.</p>
+<h3 id="the-role-and-signature-of-lua_type">The Role and Signature of
+lua_type</h3>
+<p>In the Lua C API, the <code>lua_type</code> function is the primary
+mechanism for inspecting the data type of an element located on the Lua
+virtual stack. Its C prototype is defined in <code>lua.h</code>:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> lua_type <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">int</span> index<span class="op">);</span></span></code></pre></div>
+<p>The function accepts the current execution thread
+(<code>lua_State *L</code>) and a stack index (<code>index</code>),
+which can be either positive (absolute) or negative (relative to the top
+of the stack). Upon invocation, it evaluates the value at that specific
+location and returns an <code>int</code> corresponding to a pre-defined
+macro.</p>
+<h3 id="internal-mechanism-how-types-are-resolved">Internal Mechanism:
+How Types Are Resolved</h3>
+<p>Internally, Lua represents every variable as a tagged value
+(typically a struct containing the raw data union alongside an integer
+type tag). When <code>lua_type</code> is called:</p>
+<ol type="1">
+<li><strong>Index Validation:</strong> The function checks whether the
+provided index points to a valid slot within the allocated stack bounds.
+If the index refers to an empty slot or is out of range (an acceptable,
+non-existent index), <code>lua_type</code> immediately returns
+<code>LUA_TNONE</code> (defined as <code>-1</code>).</li>
+<li><strong>Tag Extraction:</strong> If the index is valid, the C API
+retrieves the internal <code>TValue</code> reference at that stack
+position and reads its type descriptor tag.</li>
+<li><strong>Constant Mapping:</strong> The internal tag is returned as
+an integer that matches one of the public type constants defined in the
+public header <code>lua.h</code>.</li>
+</ol>
+<h3 id="the-defined-numeric-constants">The Defined Numeric
+Constants</h3>
+<p>The values returned by <code>lua_type</code> correspond directly to
+basic Lua types. These constants are explicitly defined in
+<code>lua.h</code> as follows:</p>
+<ul>
+<li><strong><code>LUA_TNONE</code> (-1):</strong> Represents an invalid
+index or an empty stack location.</li>
+<li><strong><code>LUA_TNIL</code> (0):</strong> The <code>nil</code>
+type.</li>
+<li><strong><code>LUA_TBOOLEAN</code> (1):</strong> A boolean value
+(<code>true</code> or <code>false</code>).</li>
+<li><strong><code>LUA_TLIGHTUSERDATA</code> (2):</strong> A raw C
+pointer (<code>void*</code>) managed by the host application rather than
+Lua's garbage collector.</li>
+<li><strong><code>LUA_TNUMBER</code> (3):</strong> Any numeric value
+(integers or floating-point numbers).</li>
+<li><strong><code>LUA_TSTRING</code> (4):</strong> An internalized
+string or byte array.</li>
+<li><strong><code>LUA_TTABLE</code> (5):</strong> A Lua table
+(associative array).</li>
+<li><strong><code>LUA_TFUNCTION</code> (6):</strong> A callable unit
+(Lua function, C function, or closure).</li>
+<li><strong><code>LUA_TUSERDATA</code> (7):</strong> A full userdata
+block (memory managed by Lua's garbage collector with metatable
+support).</li>
+<li><strong><code>LUA_TTHREAD</code> (8):</strong> A Lua coroutine.</li>
+</ul>
+<h3 id="practical-application-and-best-practices">Practical Application
+and Best Practices</h3>
+<p>In standard C code, developers evaluate <code>lua_type</code> using
+conditional statements or <code>switch</code> blocks to safely handle
+dynamic Lua inputs:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> type <span class="op">=</span> lua_type<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">);</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="cf">switch</span> <span class="op">(</span>type<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> LUA_TNUMBER<span class="op">:</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        printf<span class="op">(</span><span class="st">&quot;Received a number: </span><span class="sc">%f\n</span><span class="st">&quot;</span><span class="op">,</span> lua_tonumber<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">));</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span><span class="op">;</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> LUA_TSTRING<span class="op">:</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>        printf<span class="op">(</span><span class="st">&quot;Received a string: </span><span class="sc">%s\n</span><span class="st">&quot;</span><span class="op">,</span> lua_tostring<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">));</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span><span class="op">;</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> LUA_TTABLE<span class="op">:</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>        printf<span class="op">(</span><span class="st">&quot;Received a table.</span><span class="sc">\n</span><span class="st">&quot;</span><span class="op">);</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span><span class="op">;</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> LUA_TNONE<span class="op">:</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>        printf<span class="op">(</span><span class="st">&quot;No argument was provided at index 1.</span><span class="sc">\n</span><span class="st">&quot;</span><span class="op">);</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span><span class="op">;</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">default</span><span class="op">:</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>        printf<span class="op">(</span><span class="st">&quot;Received other type: </span><span class="sc">%s\n</span><span class="st">&quot;</span><span class="op">,</span> lua_typename<span class="op">(</span>L<span class="op">,</span> type<span class="op">));</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span><span class="op">;</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Using <code>lua_type</code> is often preferable to checking types via
+convenience functions like <code>lua_isstring</code> or
+<code>lua_isnumber</code>. The <code>lua_is*</code> helper functions
+often check whether a value can be coerced into that type (for example,
+<code>lua_isstring</code> returns <code>1</code> for numeric values
+because numbers automatically convert to strings). By contrast,
+<code>lua_type</code> checks the strict, actual data type of the value
+without performing any type coercion or mutating the value on the stack.
+To convert the resulting integer constant into a human-readable string,
+the C API provides <code>lua_typename(L, type)</code>, which returns
+strings such as <code>"number"</code>, <code>"string"</code>, or
+<code>"no value"</code>.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

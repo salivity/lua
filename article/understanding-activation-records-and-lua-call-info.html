@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding Activation Records and Lua CallInfo - lua</title>
+    <meta name="description" content="This article explains the concept of activation records in computer systems and examines how the Lua virtual machine implements and manages them via its internal CallInfo data structure. You will learn the purpose of activation records, how Lua separates">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/understanding-activation-records-and-lua-call-info">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding Activation Records and Lua CallInfo - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/understanding-activation-records-and-lua-call-info" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains the concept of activation records in computer systems and examines how the Lua virtual machine implements and manages them via its internal CallInfo data structure. You will learn the purpose of activation records, how Lua separates" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="understanding-activation-records-and-lua-callinfo">Understanding
+Activation Records and Lua CallInfo</h1>
+<p>This article explains the concept of activation records in computer
+systems and examines how the Lua virtual machine implements and manages
+them via its internal <code>CallInfo</code> data structure. You will
+learn the purpose of activation records, how Lua separates value storage
+from call control flow, the specific fields that make up a
+<code>CallInfo</code> node, and the step-by-step lifecycle of function
+calls, tail calls, and returns inside Lua's execution engine.</p>
+<h3 id="what-is-an-activation-record">What Is an Activation Record?</h3>
+<p>An activation record, commonly referred to as a stack frame, is a
+control structure generated when a subroutine or function is invoked. In
+standard compiler theory, an activation record manages the state
+necessary to execute a function and safely return control to the
+caller.</p>
+<p>Typically, an activation record stores:</p>
+<ul>
+<li><strong>Incoming Arguments:</strong> Values passed to the routine by
+the caller.</li>
+<li><strong>Local Variables:</strong> Storage allocated for variables
+scoped strictly to the function.</li>
+<li><strong>Temporaries:</strong> Scratchpad locations used by the
+compiler or interpreter during expression evaluation.</li>
+<li><strong>Return Address:</strong> The instruction pointer to resume
+execution in the calling procedure once the callee terminates.</li>
+<li><strong>Control Links:</strong> Pointers to the previous activation
+record (dynamic link) and lexical scopes (static link).</li>
+</ul>
+<p>While native architectures (like x86-64) map activation records
+directly onto a contiguous native hardware stack using stack and frame
+registers (<code>RSP</code> and <code>RBP</code>), interpreted
+register-based virtual machines like Lua decouple this mechanism to
+support coroutines, dynamic stack resizing, and tail-call
+optimization.</p>
+<h3 id="activation-records-in-lua-dual-stack-architecture">Activation
+Records in Lua: Dual-Stack Architecture</h3>
+<p>The Lua runtime does not store complete activation records as single
+contiguous blocks. Instead, Lua uses a dual architecture within the
+thread state (<code>lua_State</code>):</p>
+<ol type="1">
+<li><strong>The Data Stack (<code>TValue</code> array):</strong> A
+contiguous array of tagged values containing function objects, passed
+arguments, local variables, and temporaries.</li>
+<li><strong>The Call Stack (<code>CallInfo</code> list):</strong> A
+separate doubly-linked structure containing execution metadata that
+defines the boundaries and state of each active call.</li>
+</ol>
+<p>Each activation record in Lua is represented by a
+<code>CallInfo</code> struct, and the current active frame is pointed to
+by <code>L-&gt;ci</code>. While the values used by the function reside
+on the data stack, the <code>CallInfo</code> structure points into that
+data stack, providing context on which slices of values belong to which
+function.</p>
+<h3 id="the-anatomy-of-the-callinfo-structure">The Anatomy of the
+<code>CallInfo</code> Structure</h3>
+<p>Defined in <code>lstate.h</code>, the <code>CallInfo</code> struct
+acts as the dynamic frame controller for both Lua functions and C
+functions executed through the Lua C API. Key fields include:</p>
+<ul>
+<li><strong><code>StkId func</code>:</strong> Points to the location on
+the data stack where the callable object (the <code>LClosure</code> or
+<code>CClosure</code>) resides. Arguments immediately follow this
+position.</li>
+<li><strong><code>StkId top</code>:</strong> Marks the exclusive upper
+boundary of the stack space available to this invocation. It prevents a
+function from indexing outside its allocated virtual registers.</li>
+<li><strong><code>struct CallInfo *previous, *next</code>:</strong>
+Pointers linking activation records into a doubly-linked list. Lua
+allocates <code>CallInfo</code> nodes in an array-backed pool,
+dynamically expanding it when recursion depth increases.</li>
+<li><strong>Function-Specific State Union (<code>u</code>):</strong>
+<ul>
+<li><strong>For Lua Functions (<code>u.l</code>):</strong>
+<ul>
+<li><code>savedpc</code>: The instruction pointer (program counter)
+storing the address of the next bytecode instruction to execute when
+this frame regains control.</li>
+<li><code>trap</code>: A flag signaling whether execution hooks or
+debuggers are monitoring this call.</li>
+<li><code>nextraargs</code>: Tracks variable arguments
+(<code>...</code>) when dealing with vararg functions.</li>
+</ul></li>
+<li><strong>For C Functions (<code>u.c</code>):</strong>
+<ul>
+<li><code>k</code>: A continuation function used to resume execution
+after a yield across a C boundary.</li>
+<li><code>old_errfunc</code>: Preserves the previous error handler
+index.</li>
+<li><code>ctx</code>: Contextual data passed to the continuation
+function.</li>
+</ul></li>
+</ul></li>
+<li><strong><code>nresults</code>:</strong> The number of values the
+caller expects this function to return.</li>
+<li><strong><code>callstatus</code>:</strong> Bitmask flags tracking
+state such as whether the function is running a hook, executed as a tail
+call, or running inside a protected environment
+(<code>pcall</code>).</li>
+</ul>
+<h3 id="maintaining-callinfo-across-function-lifecycles">Maintaining
+<code>CallInfo</code> Across Function Lifecycles</h3>
+<p>Lua manages activation records across three main operations: invoking
+a function, executing a tail call, and returning results.</p>
+<h4 id="1-function-invocation">1. Function Invocation</h4>
+<p>When a function call instruction (<code>OP_CALL</code>) is
+executed:</p>
+<ul>
+<li>Lua advances the current call pointer:
+<code>L-&gt;ci = L-&gt;ci-&gt;next</code>. If the preallocated
+<code>CallInfo</code> list is exhausted, <code>luaD_growCI</code>
+allocates more nodes.</li>
+<li><code>ci-&gt;func</code> is set to the stack index of the target
+function.</li>
+<li>For Lua functions, <code>ci-&gt;top</code> is set to
+<code>ci-&gt;func + 1 + maxstacksize</code>, where
+<code>maxstacksize</code> is a statically determined register count
+computed by the bytecode compiler.</li>
+<li>The instruction pointer <code>ci-&gt;u.l.savedpc</code> is pointed
+to the first opcode of the target prototype.</li>
+<li>The previous frame's <code>savedpc</code> is preserved so execution
+can resume seamlessly later.</li>
+</ul>
+<h4 id="2-tail-call-optimization">2. Tail-Call Optimization</h4>
+<p>Lua enforces proper tail calls (<code>OP_TAILCALL</code>). When a
+return statement directly invokes another function, Lua avoids unbounded
+stack growth by reusing the current activation record:</p>
+<ul>
+<li>The arguments for the new function are shifted downward on the data
+stack to overwrite the current function's register window.</li>
+<li>Instead of allocating a new <code>CallInfo</code> node via
+<code>L-&gt;ci-&gt;next</code>, Lua reuses the current
+<code>L-&gt;ci</code>.</li>
+<li>The <code>func</code> and <code>top</code> pointers are updated, and
+<code>savedpc</code> is pointed to the new function’s entry point.</li>
+<li>The caller link (<code>ci-&gt;previous</code>) remains unchanged,
+ensuring the new function eventually returns directly to the original
+caller.</li>
+</ul>
+<h4 id="3-returning-from-execution">3. Returning from Execution</h4>
+<p>When a function finishes via <code>OP_RETURN</code>:</p>
+<ul>
+<li>Lua copies the return values down the data stack to the position
+expected by the caller, using <code>ci-&gt;func</code> as the reference
+anchor.</li>
+<li>If <code>ci-&gt;nresults</code> specifies a fixed number of results,
+Lua adjusts the returned count by padding with <code>nil</code> or
+trimming excess values.</li>
+<li>The virtual machine restores the caller’s context:
+<code>L-&gt;ci = L-&gt;ci-&gt;previous</code>.</li>
+<li>Execution resumes at the instruction pointed to by the restored
+frame's <code>u.l.savedpc</code>.</li>
+</ul>
+<p>By decoupling call bookkeeping (<code>CallInfo</code>) from data
+storage (the <code>TValue</code> stack), Lua manages coroutine yields,
+dynamically resizes register windows, and avoids C-stack overflow during
+deeply nested or tail-recursive execution.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

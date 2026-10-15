@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lexical Scoping and Variable Visibility in Lua - lua</title>
+    <meta name="description" content="This article explains how lexical scoping governs variable visibility across nested blocks, functions, and chunks in the Lua programming language. In Lua, lexical scoping means that the scope of a variable is determined entirely by the syntactic structure">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lexical-scoping-and-variable-visibility-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lexical Scoping and Variable Visibility in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lexical-scoping-and-variable-visibility-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains how lexical scoping governs variable visibility across nested blocks, functions, and chunks in the Lua programming language. In Lua, lexical scoping means that the scope of a variable is determined entirely by the syntactic structure" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lexical-scoping-and-variable-visibility-in-lua">Lexical Scoping
+and Variable Visibility in Lua</h1>
+<p>This article explains how lexical scoping governs variable visibility
+across nested blocks, functions, and chunks in the Lua programming
+language. In Lua, lexical scoping means that the scope of a variable is
+determined entirely by the syntactic structure of the source code at
+compile time. By understanding how Lua delimits blocks, manages chunks
+as anonymous functions, resolves variable shadowing, and captures
+external local variables as upvalues within closures, developers can
+write cleaner code and prevent accidental global state leakage.</p>
+<h3 id="the-mechanism-of-lexical-scoping">The Mechanism of Lexical
+Scoping</h3>
+<p>In Lua, local variables are lexically scoped. Their visibility begins
+at the point of declaration using the <code>local</code> keyword and
+ends at the end of the syntactic block in which they are declared.
+Syntactic blocks include the bodies of control structures (such as
+<code>if</code>, <code>while</code>, <code>repeat</code>, and
+<code>for</code>), explicit <code>do ... end</code> blocks, and function
+bodies.</p>
+<p>Any statement inside a block can access local variables declared in
+that block prior to the statement, as well as local variables declared
+in any enclosing (outer) blocks. Because this resolution is static, Lua
+determines which variable an identifier refers to before runtime,
+providing both predictable behavior and performance optimizations.</p>
+<h3 id="nested-blocks-and-variable-shadowing">Nested Blocks and Variable
+Shadowing</h3>
+<p>When blocks are nested within other blocks, an inner block retains
+access to all local variables declared in its enclosing blocks. However,
+if an inner block declares a local variable with the identical name of
+an outer variable, variable shadowing occurs.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">x</span> <span class="op">=</span> <span class="dv">10</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">do</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">x</span> <span class="op">=</span> <span class="dv">20</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="co">-- Prints 20 (inner variable)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="co">-- Prints 10 (outer variable)</span></span></code></pre></div>
+<p>In this scenario, the inner declaration hides the outer
+<code>x</code> for the duration of the inner block. Once execution
+leaves the inner block, the outer declaration becomes visible again. The
+outer variable remains unaffected by any operations performed on the
+shadowed inner variable.</p>
+<h3 id="chunks-as-implicit-blocks">Chunks as Implicit Blocks</h3>
+<p>A chunk in Lua is a sequence of statements—typically an entire file
+or a string passed to <code>load()</code> or <code>loadfile()</code>.
+Lua treats every chunk as the body of an anonymous, variadic
+function.</p>
+<p>Because a chunk is effectively a function block, any variable
+declared with <code>local</code> at the top level of a file is scoped
+strictly to that chunk. It is not accessible to other files or scripts
+unless explicitly returned by the chunk (as commonly done with Lua
+modules). This behavior enforces encapsulation, ensuring that file-level
+local variables do not pollute the global namespace.</p>
+<h3 id="closures-and-upvalues">Closures and Upvalues</h3>
+<p>The interaction between lexical scoping and first-class functions in
+Lua creates closures. When an inner function references a local variable
+from an enclosing function or chunk, that variable is referred to as an
+"upvalue" (or an external local variable).</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> createCounter<span class="op">()</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">count</span> <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">count</span> <span class="op">=</span> <span class="va">count</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">count</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">counter</span> <span class="op">=</span> createCounter<span class="op">()</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>counter<span class="op">())</span> <span class="co">-- Prints 1</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>counter<span class="op">())</span> <span class="co">-- Prints 2</span></span></code></pre></div>
+<p>In this example:</p>
+<ol type="1">
+<li><code>count</code> is local to <code>createCounter</code>.</li>
+<li>The anonymous function captures <code>count</code> as an
+upvalue.</li>
+<li>Even after <code>createCounter</code> returns and its execution
+context finishes, the returned function retains direct access to the
+exact memory location of <code>count</code>.</li>
+</ol>
+<p>If multiple inner functions share the same outer local variable, they
+share the same upvalue, allowing them to coordinate state without
+relying on global variables.</p>
+<h3 id="global-variables-and-lexical-environments">Global Variables and
+Lexical Environments</h3>
+<p>Any variable used without a preceding <code>local</code> declaration
+is considered a global variable. Unlike local variables, globals are not
+resolved through lexical scoping. Instead, from Lua 5.2 onward, global
+accesses are syntactic sugar for table lookups in the lexical
+environment table, <code>_ENV</code>.</p>
+<p>When Lua encounters an identifier, it checks the current lexical
+scope from the innermost block outward for a matching local variable or
+upvalue. If no matching local name exists, Lua rewrites the access as
+<code>_ENV.&lt;variable_name&gt;</code>. Because <code>_ENV</code>
+itself is a normal lexically scoped variable, the visibility of the
+global environment can also be manipulated, localized, or shadowed just
+like any other local variable.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

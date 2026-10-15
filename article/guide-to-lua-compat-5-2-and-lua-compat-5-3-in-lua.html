@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guide to LUA_COMPAT_5_2 and LUA_COMPAT_5_3 in Lua - lua</title>
+    <meta name="description" content="This article explains the purpose and implementation of the LUACOMPAT52 and LUACOMPAT53 preprocessor macros in the Lua source code. It covers how these build-time flags control backward compatibility between minor versions of the Lua runtime, what feature">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/guide-to-lua-compat-5-2-and-lua-compat-5-3-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Guide to LUA_COMPAT_5_2 and LUA_COMPAT_5_3 in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/guide-to-lua-compat-5-2-and-lua-compat-5-3-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains the purpose and implementation of the LUACOMPAT52 and LUACOMPAT53 preprocessor macros in the Lua source code. It covers how these build-time flags control backward compatibility between minor versions of the Lua runtime, what feature" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="guide-to-lua_compat_5_2-and-lua_compat_5_3-in-lua">Guide to
+LUA_COMPAT_5_2 and LUA_COMPAT_5_3 in Lua</h1>
+<p>This article explains the purpose and implementation of the
+<code>LUA_COMPAT_5_2</code> and <code>LUA_COMPAT_5_3</code> preprocessor
+macros in the Lua source code. It covers how these build-time flags
+control backward compatibility between minor versions of the Lua
+runtime, what features they restore for legacy codebases, and how
+developers configure them during compilation.</p>
+<h3 id="the-purpose-of-compatibility-macros">The Purpose of
+Compatibility Macros</h3>
+<p>The Lua programming language evolves through minor version bumps
+(such as 5.2 to 5.3, or 5.3 to 5.4) that deliberately introduce breaking
+changes to both the Lua script API and the C API. To prevent existing
+codebases from breaking when upgrading the interpreter, Lua's
+maintainers include conditional compilation blocks guarded by macros
+such as <code>LUA_COMPAT_5_2</code> and <code>LUA_COMPAT_5_3</code>.</p>
+<p>Defining these macros instructs the C preprocessor to retain legacy
+behaviors, deprecated functions, and obsolete C API functions that would
+otherwise be excluded from the build.</p>
+<h3 id="the-function-of-lua_compat_5_2">The Function of
+LUA_COMPAT_5_2</h3>
+<p>The <code>LUA_COMPAT_5_2</code> macro is primarily used in Lua 5.3
+(and carried forward into Lua 5.4) to restore features deprecated or
+modified between Lua 5.2 and Lua 5.3.</p>
+<p>When enabled, <code>LUA_COMPAT_5_2</code> activates several
+backwards-compatible behaviors:</p>
+<ul>
+<li><strong>Math Library Compatibility:</strong> Restores functions like
+<code>math.atan2</code> (superseded by standard <code>math.atan</code>),
+<code>math.cosh</code>, <code>math.sinh</code>, <code>math.tanh</code>,
+and <code>math.pow</code> (superseded by the <code>^</code>
+operator).</li>
+<li><strong>Bitwise Operations:</strong> Re-enables the external
+<code>bit32</code> library in Lua 5.3, which was deprecated after native
+bitwise operators (<code>&amp;</code>, <code>|</code>, <code>~</code>,
+etc.) were introduced.</li>
+<li><strong>C API Compatibility:</strong> Restores older C functions and
+macros, such as legacy signatures for string buffers and functions like
+<code>luaL_checkint</code> and <code>luaL_optint</code>, which were
+replaced by integer-specific operations using
+<code>lua_Integer</code>.</li>
+<li><strong>Table Functions:</strong> Preserves legacy behaviors such as
+<code>table.maxn</code>.</li>
+</ul>
+<h3 id="the-function-of-lua_compat_5_3">The Function of
+LUA_COMPAT_5_3</h3>
+<p>The <code>LUA_COMPAT_5_3</code> macro was introduced in Lua 5.4 to
+preserve features that were altered or removed after Lua 5.3.</p>
+<p>When enabled, <code>LUA_COMPAT_5_3</code> restores:</p>
+<ul>
+<li><strong>Garbage Collector Modes:</strong> Preserves the older
+generational and step options for <code>collectgarbage</code> that were
+restructured in Lua 5.4.</li>
+<li><strong>Math and String Functions:</strong> Restores
+<code>math.log10</code> and preserves older variations of string
+formatting flags.</li>
+<li><strong>C API Functions:</strong> Re-enables deprecated C API calls,
+such as legacy bindings for <code>lua_dump</code> (which gained a
+<code>strip</code> parameter) and older userdata access patterns.</li>
+<li><strong>Coercion Semantics:</strong> Maintains older
+string-to-number coercion rules in specific contexts where Lua 5.4
+tightened type checking.</li>
+</ul>
+<h3 id="how-to-configure-compatibility-switches">How to Configure
+Compatibility Switches</h3>
+<p>These switches are defined in <code>luaconf.h</code>, the primary
+configuration header file in the Lua source distribution. By default,
+official release tarballs often define compatibility flags for the
+immediate predecessor (for example, Lua 5.4 typically enables
+<code>LUA_COMPAT_5_3</code> by default).</p>
+<p>To configure them explicitly, you can modify
+<code>src/luaconf.h</code>:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_COMPAT_5_2</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_COMPAT_5_3</span></span></code></pre></div>
+<p>Alternatively, you can pass them as compiler definitions during the
+build process:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> linux MYCFLAGS=<span class="st">&quot;-DLUA_COMPAT_5_2 -DLUA_COMPAT_5_3&quot;</span></span></code></pre></div>
+<p>To build a strictly modern, minimal Lua interpreter without any
+legacy baggage, comment out or <code>#undef</code> these macros in
+<code>luaconf.h</code>, or build using <code>-DLUA_COMPAT_5_3=0</code>.
+Disabling these switches slightly reduces the memory footprint of the
+binary and ensures that running scripts adhere strictly to modern Lua
+specifications.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

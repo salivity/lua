@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Do End Blocks and Lexical Variable Lifetime - lua</title>
+    <meta name="description" content="In the Lua programming language, the do ... end construct creates an explicit lexical block that directly governs the scope, visibility, and lifetime of local variables. By defining an isolated boundary within code, developers can strictly limit where var">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-do-end-blocks-and-lexical-variable-lifetime">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Do End Blocks and Lexical Variable Lifetime - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-do-end-blocks-and-lexical-variable-lifetime" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the do ... end construct creates an explicit lexical block that directly governs the scope, visibility, and lifetime of local variables. By defining an isolated boundary within code, developers can strictly limit where var" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-do-end-blocks-and-lexical-variable-lifetime">Lua Do End
+Blocks and Lexical Variable Lifetime</h1>
+<p>In the Lua programming language, the <code>do ... end</code>
+construct creates an explicit lexical block that directly governs the
+scope, visibility, and lifetime of local variables. By defining an
+isolated boundary within code, developers can strictly limit where
+variables exist, prevent accidental variable leakage, manage memory more
+efficiently, and create encapsulated environments without needing to
+invoke functions or conditional control structures.</p>
+<h2 id="lexical-scoping-and-the-do--end-construct">Lexical Scoping and
+the <code>do ... end</code> Construct</h2>
+<p>Lua relies entirely on lexical scoping, meaning the visibility of
+variables is determined by their physical location in the source code.
+Normally, a local variable's scope extends from its declaration to the
+end of the enclosing syntactic block—such as a function body, a
+<code>for</code> loop, or an <code>if</code> statement.</p>
+<p>The <code>do ... end</code> block allows you to explicitly introduce
+a new scope anywhere in your code. It does not alter execution flow,
+repeat actions, or evaluate conditions; it simply marks the beginning
+and ending boundaries of a local environment.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">x</span> <span class="op">=</span> <span class="dv">10</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">do</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">y</span> <span class="op">=</span> <span class="dv">20</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">x</span> <span class="op">+</span> <span class="va">y</span><span class="op">)</span> <span class="co">-- Output: 30</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="co">-- Output: 10</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">y</span><span class="op">)</span> <span class="co">-- Output: nil (y is out of scope and does not exist here)</span></span></code></pre></div>
+<h2 id="controlling-variable-lifetimes">Controlling Variable
+Lifetimes</h2>
+<p>The primary purpose of wrapping code in a <code>do ... end</code>
+block is to precisely restrict variable lifetimes. Once the execution
+leaves the <code>end</code> statement, any local variables declared
+inside the block cease to be accessible. This provides three main
+technical benefits:</p>
+<h3 id="1-preventing-namespace-pollution">1. Preventing Namespace
+Pollution</h3>
+<p>In larger scripts or functions, declaring temporary variables in the
+main body risks accidental reuse, naming collisions, or shadowed
+variables later in the code. Enclosing intermediate variables inside a
+<code>do ... end</code> block ensures that temporary computation values
+discard themselves immediately after their immediate purpose is
+fulfilled.</p>
+<h3 id="2-enabling-earlier-garbage-collection">2. Enabling Earlier
+Garbage Collection</h3>
+<p>In Lua, values assigned to local variables remain reachable—and
+therefore ineligible for garbage collection—for as long as that local
+variable remains in scope. If a local variable holds a large table,
+string, or user data, confining it to a <code>do ... end</code> block
+terminates its reference the moment the block terminates. This marks the
+underlying memory as eligible for garbage collection without waiting for
+the enclosing function or script to exit.</p>
+<h3 id="3-managing-closures-and-upvalues">3. Managing Closures and
+Upvalues</h3>
+<p><code>do ... end</code> blocks are frequently used to create private
+state for functions without exposing helper variables to the rest of the
+file. A function defined inside the block can capture local variables as
+"upvalues," retaining access to them while hiding them from external
+code.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">getCounter</span><span class="op">,</span> <span class="va">incrementCounter</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="cf">do</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">count</span> <span class="op">=</span> <span class="dv">0</span> <span class="co">-- Private variable, exists only for the closures below</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">getCounter</span> <span class="op">=</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">count</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">incrementCounter</span> <span class="op">=</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">count</span> <span class="op">=</span> <span class="va">count</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>incrementCounter<span class="op">()</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>getCounter<span class="op">())</span> <span class="co">-- Output: 1</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="co">-- count cannot be accessed or modified directly from here</span></span></code></pre></div>
+<p>By constraining lexical scope, the <code>do ... end</code> pattern
+acts as a zero-overhead structural tool that produces cleaner, safer,
+and more memory-conscious Lua code.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

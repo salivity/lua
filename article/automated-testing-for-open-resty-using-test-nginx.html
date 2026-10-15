@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automated Testing for OpenResty Using Test::Nginx - lua</title>
+    <meta name="description" content="Automated testing is critical for validating the performance and correctness of OpenResty applications. This guide explains how to set up the Test::Nginx testing framework, configure a proper environment, write Perl-driven specification files targeting em">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/automated-testing-for-open-resty-using-test-nginx">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Automated Testing for OpenResty Using Test::Nginx - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/automated-testing-for-open-resty-using-test-nginx" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Automated testing is critical for validating the performance and correctness of OpenResty applications. This guide explains how to set up the Test::Nginx testing framework, configure a proper environment, write Perl-driven specification files targeting em" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="automated-testing-for-openresty-using-testnginx">Automated
+Testing for OpenResty Using Test::Nginx</h1>
+<p>Automated testing is critical for validating the performance and
+correctness of OpenResty applications. This guide explains how to set up
+the <code>Test::Nginx</code> testing framework, configure a proper
+environment, write Perl-driven specification files targeting embedded
+Lua scripts, and execute test suites via the command line and continuous
+integration pipelines.</p>
+<h2 id="prerequisites-and-environment-setup">Prerequisites and
+Environment Setup</h2>
+<p><code>Test::Nginx</code> is a Perl-based test scaffold originally
+developed for testing the OpenResty core and its various Nginx C and Lua
+modules. Before writing tests, ensure that OpenResty and Perl's package
+manager (<code>cpanm</code>) are installed on your system.</p>
+<p>Install <code>Test::Nginx</code> via CPAN:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">cpanm</span> Test::Nginx</span></code></pre></div>
+<p>Ensure the OpenResty binary is available in your shell's
+<code>PATH</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">PATH</span><span class="op">=</span>/usr/local/openresty/nginx/sbin:<span class="va">$PATH</span></span></code></pre></div>
+<h2 id="structure-of-a-testnginx-test-file">Structure of a Test::Nginx
+Test File</h2>
+<p>Tests are placed in a <code>t/</code> directory with a
+<code>.t</code> extension. Each file is a Perl script containing
+embedded test blocks defined below the <code>__DATA__</code> token.</p>
+<p>Create a file named <code>t/sanity.t</code>:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode perl"><code class="sourceCode perl"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">use</span> <span class="fu">Test::Nginx</span>::<span class="fu">Socket</span> <span class="ot">&#39;</span><span class="ss">no_plan</span><span class="ot">&#39;</span>;</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>run_tests();</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="kw">__DATA__</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>=== TEST 1: Basic Lua endpoint response</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>--- config</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    location /test {</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>        content_by_lua_block {</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>            ngx.say(&quot;hello from openresty&quot;)</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>--- request</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>GET /test</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>--- response_body</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>hello from openresty</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>--- error_code: 200</span></code></pre></div>
+<h3 id="key-sections-of-a-test-block">Key Sections of a Test Block</h3>
+<ul>
+<li><strong>=== TEST [name]:</strong> Declares the test case identifier
+and a short description.</li>
+<li><strong>--- config:</strong> Injects custom Nginx configuration
+directives into the temporary server block generated for the test.</li>
+<li><strong>--- request:</strong> Specifies the HTTP method, URI, and
+optional headers or payload to send.</li>
+<li><strong>--- response_body:</strong> The expected response body from
+the server.</li>
+<li><strong>--- error_code:</strong> The expected HTTP status code
+(defaults to 200 if omitted).</li>
+</ul>
+<h2 id="testing-lua-modules-and-logic">Testing Lua Modules and
+Logic</h2>
+<p>When testing an application composed of separate <code>.lua</code>
+files, configure the <code>lua_package_path</code> within the test to
+point to your project's source code directory.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode perl"><code class="sourceCode perl"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">use</span> <span class="fu">Test::Nginx</span>::<span class="fu">Socket</span> <span class="ot">&#39;</span><span class="ss">no_plan</span><span class="ot">&#39;</span>;</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Add project root to package path</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="kw">our</span> <span class="dt">$HttpConfig</span> = <span class="ot">&lt;&lt;</span><span class="kw">&#39;_EOC_&#39;;</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    lua_package_path &quot;$TEST_NGINX_HTML_DIR/../../lib/?.lua;;&quot;;</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="kw">_EOC_</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>run_tests();</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="kw">__DATA__</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>=== TEST 2: Testing custom Lua module</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>--- http_config eval: $::HttpConfig</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>--- config</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    location /api/process {</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>        content_by_lua_block {</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>            local mymodule = require(&quot;mymodule&quot;)</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>            local result = mymodule.process(&quot;input_data&quot;)</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>            ngx.say(result)</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>--- request</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>POST /api/process</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>--- response_body</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>processed: input_data</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>--- error_code: 200</span></code></pre></div>
+<h2 id="asserting-logs-and-headers">Asserting Logs and Headers</h2>
+<p><code>Test::Nginx</code> can validate HTTP response headers and
+ensure that no unintended errors were written to
+<code>error.log</code>.</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode perl"><code class="sourceCode perl"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>=== TEST <span class="dv">3</span>: Validate response headers <span class="ot">and</span> error logs</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>--- config</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    location /headers {</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>        content_by_lua_block {</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>            ngx.header[<span class="ot">&quot;</span><span class="st">X-Custom-Header</span><span class="ot">&quot;</span>] = <span class="ot">&quot;</span><span class="st">OpenRestyTest</span><span class="ot">&quot;</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>            ngx.<span class="fu">log</span>(ngx.WARN, <span class="ot">&quot;</span><span class="st">Non-fatal warning</span><span class="ot">&quot;</span>)</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>            ngx.<span class="fu">say</span>(<span class="ot">&quot;</span><span class="st">ok</span><span class="ot">&quot;</span>)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>--- request</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>GET /headers</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>--- response_headers</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>X-Custom-Header: OpenRestyTest</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>--- error_log</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>Non-fatal warning</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>--- no_error_log</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>[error]</span></code></pre></div>
+<ul>
+<li><strong>--- response_headers:</strong> Verifies specific key-value
+pairs in the returned HTTP headers.</li>
+<li><strong>--- error_log:</strong> Asserts that the specified string
+appears in the Nginx error log.</li>
+<li><strong>--- no_error_log:</strong> Ensures that patterns such as
+<code>[error]</code> or <code>[alert]</code> are absent, confirming
+clean execution.</li>
+</ul>
+<h2 id="executing-the-test-suite">Executing the Test Suite</h2>
+<p>Use Perl's built-in <code>prove</code> command to run the automated
+test suite.</p>
+<p>Run all tests in the <code>t/</code> directory:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">prove</span> <span class="at">-r</span> t</span></code></pre></div>
+<p>To run a specific test file with verbose output for debugging:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">prove</span> <span class="at">-v</span> t/sanity.t</span></code></pre></div>
+<p>When debugging failed tests, set the <code>TEST_NGINX_NO_CLEAN</code>
+environment variable to inspect the generated <code>nginx.conf</code>,
+logs, and temporary working directories:</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="va">TEST_NGINX_NO_CLEAN</span><span class="op">=</span>1 <span class="ex">prove</span> <span class="at">-v</span> t/sanity.t</span></code></pre></div>
+<p>The test artifacts will remain in <code>t/servroot/</code> for
+inspection. Ensure this directory is added to
+<code>.gitignore</code>.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

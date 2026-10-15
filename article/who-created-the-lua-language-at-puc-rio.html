@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Who Created the Lua Language at PUC-Rio? - lua</title>
+    <meta name="description" content="Lua was created in 1993 at the Pontifical Catholic University of Rio de Janeiro (PUC-Rio) in Brazil by Roberto Ierusalimschy, Luiz Henrique de Figueiredo, and Waldemar Celes. Developed within the university’s Computer Graphics Technology Group (Tecgraf),">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/who-created-the-lua-language-at-puc-rio">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Who Created the Lua Language at PUC-Rio? - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/who-created-the-lua-language-at-puc-rio" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua was created in 1993 at the Pontifical Catholic University of Rio de Janeiro (PUC-Rio) in Brazil by Roberto Ierusalimschy, Luiz Henrique de Figueiredo, and Waldemar Celes. Developed within the university’s Computer Graphics Technology Group (Tecgraf)," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="who-created-the-lua-language-at-puc-rio">Who Created the Lua
+Language at PUC-Rio?</h1>
+<p>Lua was created in 1993 at the Pontifical Catholic University of Rio
+de Janeiro (PUC-Rio) in Brazil by Roberto Ierusalimschy, Luiz Henrique
+de Figueiredo, and Waldemar Celes. Developed within the university’s
+Computer Graphics Technology Group (Tecgraf), the language emerged from
+a practical necessity to build a lightweight, embeddable configuration
+and scripting tool for engineering software. Today, Lua is celebrated
+globally for its high performance, minimal memory footprint, and
+straightforward C API, powering everything from game engines to embedded
+devices.</p>
+<h2 id="the-core-creators">The Core Creators</h2>
+<p>The creation of Lua was a collaborative effort among three Brazilian
+computer scientists working at Tecgraf/PUC-Rio:</p>
+<ul>
+<li><strong>Roberto Ierusalimschy:</strong> A professor of computer
+science at PUC-Rio, Ierusalimschy served as the chief architect of the
+language. He led the design of Lua’s syntax, semantics, and virtual
+machine, and has authored several foundational texts on the language,
+including <em>Programming in Lua</em>.</li>
+<li><strong>Luiz Henrique de Figueiredo:</strong> A researcher and
+mathematician with deep expertise in algorithms and numerical computing,
+Figueiredo contributed heavily to language design, documentation, and
+the clean, minimalist structure of the runtime environment.</li>
+<li><strong>Waldemar Celes:</strong> An expert in computer graphics and
+software engineering, Celes focused on integrating the language into
+complex engineering workflows, ensuring Lua could communicate seamlessly
+with native C libraries.</li>
+</ul>
+<h2 id="why-lua-was-created">Why Lua Was Created</h2>
+<p>Between 1977 and 1992, Brazil maintained strict market barriers on
+computer hardware and software under a protectionist policy known as the
+"market reserve." Because importing commercial software was costly and
+bureaucratic, Brazilian institutions frequently developed in-house
+solutions.</p>
+<p>Tecgraf was contracted by Petrobras, the Brazilian state oil company,
+to develop graphical engineering applications. Petrobras engineers
+needed ways to configure simulations and customize data-entry pipelines
+without recompiling massive C and Fortran codebases.</p>
+<p>The team originally designed two separate, specialized
+domain-specific languages:</p>
+<ol type="1">
+<li><strong>SOL (Simple Object Language):</strong> A declarative
+configuration language used for describing complex structures.</li>
+<li><strong>DEL (Data Entry Language):</strong> A language intended to
+specify data-entry interfaces.</li>
+</ol>
+<p>Recognizing that users continuously demanded more procedural power,
+such as loops, conditional statements, and arithmetic, the team decided
+against continually bolting features onto SOL and DEL. Instead, in
+mid-1993, they unified these concepts into a single, clean procedural
+language designed from scratch to be embedded inside host programs. They
+named it Lua, meaning "Moon" in Portuguese, echoing the name of its
+predecessor, SOL, which means "Sun."</p>
+<h2 id="architectural-philosophy-and-legacy">Architectural Philosophy
+and Legacy</h2>
+<p>The creators designed Lua with several guiding principles that remain
+intact today:</p>
+<ul>
+<li><strong>Embeddability First:</strong> Lua was never intended as a
+standalone scripting environment, but rather as an extension library
+meant to be embedded into host applications written in C or C++.</li>
+<li><strong>Minimal Mechanism:</strong> Instead of providing an
+extensive set of specialized language features, Lua provides a few
+powerful, general-purpose mechanisms. For example, associative tables
+serve as Lua’s sole data-structuring mechanism, representing arrays,
+records, sets, and objects.</li>
+<li><strong>Portability and Speed:</strong> Written in clean ANSI C, Lua
+compiles out of the box on virtually any platform that possesses a
+standard C compiler.</li>
+</ul>
+<p>Through the work of Ierusalimschy, Figueiredo, and Celes, Lua grew
+from a localized corporate utility into one of the most widely used
+embedded languages in the global computing industry.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

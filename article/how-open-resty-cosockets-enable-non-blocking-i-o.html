@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How OpenResty Cosockets Enable Non-Blocking I/O - lua</title>
+    <meta name="description" content="This article provides an in-depth explanation of the cosocket (coroutine-based socket) abstraction in OpenResty. It explores how cosockets seamlessly combine Lua coroutines with Nginx&#39;s asynchronous event-driven architecture to achieve fully non-blocking">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-open-resty-cosockets-enable-non-blocking-i-o">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How OpenResty Cosockets Enable Non-Blocking I/O - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-open-resty-cosockets-enable-non-blocking-i-o" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an in-depth explanation of the cosocket (coroutine-based socket) abstraction in OpenResty. It explores how cosockets seamlessly combine Lua coroutines with Nginx&#39;s asynchronous event-driven architecture to achieve fully non-blocking" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-openresty-cosockets-enable-non-blocking-io">How OpenResty
+Cosockets Enable Non-Blocking I/O</h1>
+<p>This article provides an in-depth explanation of the cosocket
+(coroutine-based socket) abstraction in OpenResty. It explores how
+cosockets seamlessly combine Lua coroutines with Nginx's asynchronous
+event-driven architecture to achieve fully non-blocking network
+operations. Readers will learn the underlying mechanics of yielding and
+resuming execution contexts, understand how developers can write
+sequential, easy-to-read code without callback chains, and see why this
+architecture achieves massive concurrency and minimal resource
+consumption.</p>
+<h2 id="what-is-a-cosocket">What Is a Cosocket?</h2>
+<p>A cosocket is a coroutine-based network socket provided by the
+OpenResty framework. OpenResty embeds LuaJIT into the Nginx web server,
+allowing developers to handle web traffic, route requests, and interface
+with upstream services like Redis, Memcached, MySQL, and external HTTP
+APIs directly inside Nginx worker processes.</p>
+<p>Standard network sockets in traditional programming languages are
+typically blocking; a thread calling <code>read()</code> or
+<code>write()</code> halts until data arrives or the buffer flushes.
+Alternatively, non-blocking I/O often requires asynchronous callback
+patterns, event listeners, or complex promise chains that complicate
+application logic.</p>
+<p>A cosocket bridges this gap by marrying Lua coroutines (cooperative
+multitasking threads) with Nginx's underlying non-blocking event loop
+(such as <code>epoll</code> on Linux or <code>kqueue</code> on
+BSD/macOS).</p>
+<h2 id="how-cosockets-work-under-the-hood">How Cosockets Work Under the
+Hood</h2>
+<p>The non-blocking behavior of a cosocket relies on a continuous cycle
+of yielding and resuming Lua coroutines managed by the Nginx event
+loop:</p>
+<ol type="1">
+<li><strong>Request Initiation:</strong> When a network request arrives
+at Nginx, OpenResty spawns a Lua coroutine to process the request.</li>
+<li><strong>I/O Call Execution:</strong> The Lua script invokes a
+network operation using a cosocket API, such as
+<code>tcpsock:connect()</code>, <code>tcpsock:send()</code>, or
+<code>tcpsock:receive()</code>.</li>
+<li><strong>Yielding on Wait:</strong> Instead of freezing the
+underlying OS thread, the cosocket attempts the operation in a
+non-blocking system call. If the data is not immediately available
+(e.g., waiting for a remote server to send bytes), the cosocket
+registers the underlying file descriptor and the desired event
+(read/write readiness) directly with the Nginx event loop. It then calls
+<code>coroutine.yield()</code>.</li>
+<li><strong>Worker Freedom:</strong> The Lua coroutine suspends its
+execution. The operating system thread—the Nginx worker process—is now
+completely free to handle other incoming requests, process timer events,
+or execute other coroutines.</li>
+<li><strong>Event Notification and Resumption:</strong> When the remote
+endpoint responds, the operating system notifies Nginx via
+<code>epoll</code> or <code>kqueue</code>. Nginx identifies the file
+descriptor associated with the waiting coroutine and triggers
+<code>coroutine.resume()</code>.</li>
+<li><strong>Data Handover:</strong> The Lua coroutine wakes up precisely
+where it yielded, receives the incoming payload, and continues executing
+its sequential logic.</li>
+</ol>
+<h2 id="synchronous-coding-with-asynchronous-execution">Synchronous
+Coding with Asynchronous Execution</h2>
+<p>The core advantage of the cosocket abstraction is that it delivers
+asynchronous performance while preserving synchronous programming
+semantics. Developers write standard, linear code:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">sock</span> <span class="op">=</span> <span class="va">ngx</span><span class="op">.</span><span class="va">socket</span><span class="op">.</span>tcp<span class="op">()</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="va">sock</span><span class="op">:</span>settimeout<span class="op">(</span><span class="dv">1000</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ok</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">sock</span><span class="op">:</span><span class="fu">connect</span><span class="op">(</span><span class="st">&quot;127.0.0.1&quot;</span><span class="op">,</span> <span class="dv">6379</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">ok</span> <span class="cf">then</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">ngx</span><span class="op">.</span>log<span class="op">(</span><span class="va">ngx</span><span class="op">.</span><span class="cn">ERR</span><span class="op">,</span> <span class="st">&quot;failed to connect: &quot;</span><span class="op">,</span> <span class="va">err</span><span class="op">)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">bytes</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">sock</span><span class="op">:</span>send<span class="op">(</span><span class="st">&quot;PING</span><span class="sc">\r\n</span><span class="st">&quot;</span><span class="op">)</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">line</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">sock</span><span class="op">:</span>receive<span class="op">(</span><span class="st">&quot;*l&quot;</span><span class="op">)</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">line</span> <span class="op">==</span> <span class="st">&quot;+PONG&quot;</span> <span class="cf">then</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">ngx</span><span class="op">.</span>say<span class="op">(</span><span class="st">&quot;Redis is alive&quot;</span><span class="op">)</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="va">sock</span><span class="op">:</span><span class="fu">close</span><span class="op">()</span></span></code></pre></div>
+<p>In the example above, there are no nested callbacks, state machines,
+or nested promise handlers. Each operation looks as if it blocks the
+thread until completion, but under the hood, OpenResty yields the
+coroutine during <code>connect</code>, <code>send</code>, and
+<code>receive</code>, keeping the Nginx worker process active and ready
+to service thousands of other concurrent requests.</p>
+<h2 id="performance-and-resource-efficiency">Performance and Resource
+Efficiency</h2>
+<p>Cosockets yield significant architectural advantages over traditional
+concurrency models:</p>
+<ul>
+<li><strong>Minimal Memory Overhead:</strong> Lua coroutines are
+lightweight user-space threads. An inactive coroutine consumes only a
+few kilobytes of memory, compared to native operating system threads
+which typically require 1 to 8 megabytes for their call stack.</li>
+<li><strong>Zero Context-Switching Penalties:</strong> Because switching
+occurs entirely in user space within the single-threaded event loop of
+an Nginx worker, the CPU avoids the heavy overhead of kernel-level
+thread context switches.</li>
+<li><strong>High Concurrency:</strong> A single Nginx worker running on
+one CPU core can easily maintain tens of thousands of active, concurrent
+cosocket connections, bound primarily by system memory and open file
+descriptor limits rather than processing power.</li>
+</ul>
+<p>By combining Lua's simple execution model with Nginx's battle-tested
+networking core, the cosocket abstraction allows developers to build
+high-performance, non-blocking network services with clean,
+maintainable, and sequential code.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

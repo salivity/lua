@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Publish a Package to LuaRocks - lua</title>
+    <meta name="description" content="Publishing custom Lua libraries to the public LuaRocks repository allows developers to share reusable modules with the global Lua community. This guide covers the complete step-by-step workflow for distributing your code, from structuring your project and">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-publish-a-package-to-lua-rocks">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Publish a Package to LuaRocks - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-publish-a-package-to-lua-rocks" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Publishing custom Lua libraries to the public LuaRocks repository allows developers to share reusable modules with the global Lua community. This guide covers the complete step-by-step workflow for distributing your code, from structuring your project and" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-publish-a-package-to-luarocks">How to Publish a Package
+to LuaRocks</h1>
+<p>Publishing custom Lua libraries to the public LuaRocks repository
+allows developers to share reusable modules with the global Lua
+community. This guide covers the complete step-by-step workflow for
+distributing your code, from structuring your project and creating a
+rockspec manifest file to authenticating your account and uploading the
+package using the LuaRocks command-line interface.</p>
+<h3 id="1-create-a-luarocks-account">1. Create a LuaRocks Account</h3>
+<p>To publish packages to the public repository, you must have an active
+LuaRocks account:</p>
+<ol type="1">
+<li>Visit <a href="https://luarocks.org">luarocks.org</a> and register
+for an account.</li>
+<li>Log in and navigate to your <strong>Settings</strong> page.</li>
+<li>Locate the <strong>API Keys</strong> section and generate an API
+key.</li>
+<li>Copy the key; you will need it to authenticate uploads from your
+terminal.</li>
+</ol>
+<h3 id="2-prepare-your-library-repository">2. Prepare Your Library
+Repository</h3>
+<p>Host your library code in a publicly accessible Git repository, such
+as on GitHub or GitLab.</p>
+<p>Organize your project directory:</p>
+<pre class="text"><code>my-library/
+├── src/
+│   └── mylibrary.lua
+├── LICENSE
+└── README.md</code></pre>
+<p>Once your code is ready, commit your changes, push them to your
+remote repository, and create a Git release tag (for example,
+<code>v1.0.0</code>). LuaRocks relies on static release archives or
+specific tags to download and build your package.</p>
+<h3 id="3-generate-the-rockspec-file">3. Generate the Rockspec File</h3>
+<p>A <code>.rockspec</code> file is a Lua script containing package
+metadata, source URLs, dependencies, and build instructions. You can
+generate a template using the <code>luarocks write_rockspec</code>
+command:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luarocks</span> write_rockspec https://github.com/username/my-library/archive/refs/tags/v1.0.0.tar.gz</span></code></pre></div>
+<p>Alternatively, you can manually create a file named
+<code>my-library-1.0.0-1.rockspec</code>:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="va">package</span> <span class="op">=</span> <span class="st">&quot;my-library&quot;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="va">version</span> <span class="op">=</span> <span class="st">&quot;1.0.0-1&quot;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="va">source</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>   <span class="va">url</span> <span class="op">=</span> <span class="st">&quot;git+https://github.com/username/my-library.git&quot;</span><span class="op">,</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>   <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;v1.0.0&quot;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="va">description</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>   <span class="va">summary</span> <span class="op">=</span> <span class="st">&quot;A brief description of your library&quot;</span><span class="op">,</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>   <span class="va">detailed</span> <span class="op">=</span> <span class="st">&quot;A longer explanation of what your module does.&quot;</span><span class="op">,</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>   <span class="va">homepage</span> <span class="op">=</span> <span class="st">&quot;https://github.com/username/my-library&quot;</span><span class="op">,</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>   <span class="va">license</span> <span class="op">=</span> <span class="st">&quot;MIT&quot;</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="va">dependencies</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>   <span class="st">&quot;lua &gt;= 5.1&quot;</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="va">build</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>   <span class="fu">type</span> <span class="op">=</span> <span class="st">&quot;builtin&quot;</span><span class="op">,</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>   <span class="va">modules</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>      <span class="op">[</span><span class="st">&quot;my-library&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;src/mylibrary.lua&quot;</span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>   <span class="op">}</span></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="4-test-the-rockspec-locally">4. Test the Rockspec Locally</h3>
+<p>Before publishing, verify that the rockspec builds and installs
+properly on your machine:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luarocks</span> make my-library-1.0.0-1.rockspec</span></code></pre></div>
+<p>Test loading the library in the Lua interpreter:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-l</span> my-library</span></code></pre></div>
+<p>If it loads without errors, the package is configured properly.</p>
+<h3 id="5-upload-to-luarocks">5. Upload to LuaRocks</h3>
+<p>Authenticate your local LuaRocks CLI with the API key generated in
+Step 1:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luarocks</span> config api_key YOUR_API_KEY</span></code></pre></div>
+<p>Once authenticated, upload your rockspec:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luarocks</span> upload my-library-1.0.0-1.rockspec</span></code></pre></div>
+<p>The CLI tool will automatically validate the file, upload the
+rockspec, and trigger the build on the LuaRocks servers.</p>
+<h3 id="6-verify-installation">6. Verify Installation</h3>
+<p>After the upload completes, your package will appear on your LuaRocks
+user profile. Verify that users can install it globally by running:</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luarocks</span> install my-library</span></code></pre></div></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

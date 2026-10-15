@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reducing String Memory Churn in Lua Loops - lua</title>
+    <meta name="description" content="In the Lua programming language, strings are immutable and interned, meaning every unique string created at runtime requires dynamic memory allocation, hashing, and garbage collector tracking. Inside tight or high-frequency loops, continuously generating">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/reducing-string-memory-churn-in-lua-loops">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Reducing String Memory Churn in Lua Loops - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/reducing-string-memory-churn-in-lua-loops" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, strings are immutable and interned, meaning every unique string created at runtime requires dynamic memory allocation, hashing, and garbage collector tracking. Inside tight or high-frequency loops, continuously generating" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="reducing-string-memory-churn-in-lua-loops">Reducing String
+Memory Churn in Lua Loops</h1>
+<p>In the Lua programming language, strings are immutable and interned,
+meaning every unique string created at runtime requires dynamic memory
+allocation, hashing, and garbage collector tracking. Inside tight or
+high-frequency loops, continuously generating temporary strings—such as
+coordinates, logs, or formatted text—triggers severe memory churn and
+frequent garbage collection cycles, degrading performance. Developers
+can circumvent this overhead by reusing preallocated buffer tables,
+caching repetitive values, using direct I/O streaming, or leveraging the
+Foreign Function Interface (FFI) in LuaJIT to manage raw byte
+arrays.</p>
+<h3 id="understand-the-root-cause-immutability-and-interning">Understand
+the Root Cause: Immutability and Interning</h3>
+<p>Lua handles strings via an internal hash table. When a new string is
+generated via concatenation (<code>..</code>),
+<code>string.format()</code>, or <code>tostring()</code>, the Lua
+runtime hashes the string and searches the global string pool. If the
+string is missing, Lua allocates heap memory to store it. In tight loops
+running thousands or millions of times per second, creating temporary
+strings produces massive amounts of short-lived garbage, forcing the
+Garbage Collector (GC) to run frequently and stall execution.</p>
+<h3 id="reuse-preallocated-buffer-tables">Reuse Preallocated Buffer
+Tables</h3>
+<p>The standard method for building strings in Lua is appending
+components to a sequence and calling <code>table.concat()</code>. While
+this prevents the quadratic performance cost of the <code>..</code>
+operator, creating a new table on every iteration introduces table
+allocation churn instead.</p>
+<p>To eliminate allocations completely, preallocate a single table
+outside the loop and clear its entries without reallocating the
+underlying array:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Preallocate the buffer outside the high-frequency loop</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">buffer</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">1000000</span> <span class="cf">do</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Populate the reused buffer</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">buffer</span><span class="op">[</span><span class="dv">1</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;entity_&quot;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">buffer</span><span class="op">[</span><span class="dv">2</span><span class="op">]</span> <span class="op">=</span> <span class="va">i</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">buffer</span><span class="op">[</span><span class="dv">3</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;_active&quot;</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> <span class="fu">table.concat</span><span class="op">(</span><span class="va">buffer</span><span class="op">)</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Process the resulting string</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    process_data<span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Clear the table for the next iteration without dropping the internal array</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="va">j</span> <span class="op">=</span> <span class="op">#</span><span class="va">buffer</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="op">-</span><span class="dv">1</span> <span class="cf">do</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>        <span class="va">buffer</span><span class="op">[</span><span class="va">j</span><span class="op">]</span> <span class="op">=</span> <span class="kw">nil</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h3 id="precompute-and-cache-finite-values">Precompute and Cache Finite
+Values</h3>
+<p>If loop iterations produce strings from a bounded set of values (such
+as integers within a known range, statuses, or coordinates), precompute
+them into an array or lookup table before entering the loop.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Precompute string representations for byte values 0 to 255</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">byte_to_string</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">0</span><span class="op">,</span> <span class="dv">255</span> <span class="cf">do</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">byte_to_string</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">=</span> <span class="fu">string.char</span><span class="op">(</span><span class="va">i</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- Inside the loop, read directly from the table without allocations</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="va">stream_length</span> <span class="cf">do</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">b</span> <span class="op">=</span> get_byte<span class="op">(</span><span class="va">i</span><span class="op">)</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">char_val</span> <span class="op">=</span> <span class="va">byte_to_string</span><span class="op">[</span><span class="va">b</span><span class="op">]</span> <span class="co">-- No string created; points to existing interned string</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    handle_char<span class="op">(</span><span class="va">char_val</span><span class="op">)</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h3 id="stream-data-instead-of-constructing-intermediates">Stream Data
+Instead of Constructing Intermediates</h3>
+<p>When strings are constructed solely to be written to a file, network
+socket, or external interface, avoid assembling them into a single
+string. Most output functions accept multiple arguments or allow
+incremental writes.</p>
+<p>Instead of:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Allocates multiple temporary strings and a concatenated result</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="va">socket</span><span class="op">:</span>send<span class="op">(</span><span class="st">&quot;ID:&quot;</span> <span class="op">..</span> <span class="va">id</span> <span class="op">..</span> <span class="st">&quot;;STATUS:&quot;</span> <span class="op">..</span> <span class="va">status</span> <span class="op">..</span> <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>Write chunks directly to the sink:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Avoids intermediate string creation</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="va">socket</span><span class="op">:</span>send<span class="op">(</span><span class="st">&quot;ID:&quot;</span><span class="op">)</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="va">socket</span><span class="op">:</span>send<span class="op">(</span><span class="fu">tostring</span><span class="op">(</span><span class="va">id</span><span class="op">))</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="va">socket</span><span class="op">:</span>send<span class="op">(</span><span class="st">&quot;;STATUS:&quot;</span><span class="op">)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="va">socket</span><span class="op">:</span>send<span class="op">(</span><span class="va">status</span><span class="op">)</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="va">socket</span><span class="op">:</span>send<span class="op">(</span><span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>Alternatively, pass multiple arguments directly if the API supports
+it, as standard <code>file:write()</code> does:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">write</span><span class="op">(</span><span class="st">&quot;ID:&quot;</span><span class="op">,</span> <span class="va">id</span><span class="op">,</span> <span class="st">&quot;;STATUS:&quot;</span><span class="op">,</span> <span class="va">status</span><span class="op">,</span> <span class="st">&quot;</span><span class="sc">\n</span><span class="st">&quot;</span><span class="op">)</span></span></code></pre></div>
+<h3 id="use-luajit-ffi-for-mutable-byte-buffers">Use LuaJIT FFI for
+Mutable Byte Buffers</h3>
+<p>For projects running on LuaJIT, the Foreign Function Interface (FFI)
+provides the most effective solution for bypassing the Lua string
+allocator entirely. By allocating a mutable C-style character buffer,
+byte manipulation can be performed in-place without touching Lua's
+string interning mechanism.</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ffi</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;ffi&quot;</span><span class="op">)</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Allocate a single reusable raw buffer</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">buf_size</span> <span class="op">=</span> <span class="dv">256</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">raw_buffer</span> <span class="op">=</span> <span class="va">ffi</span><span class="op">.</span>new<span class="op">(</span><span class="st">&quot;uint8_t[?]&quot;</span><span class="op">,</span> <span class="va">buf_size</span><span class="op">)</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">1000000</span> <span class="cf">do</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Write bytes directly into the C buffer</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">raw_buffer</span><span class="op">[</span><span class="dv">0</span><span class="op">]</span> <span class="op">=</span> <span class="dv">0x48</span> <span class="co">-- &#39;H&#39;</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">raw_buffer</span><span class="op">[</span><span class="dv">1</span><span class="op">]</span> <span class="op">=</span> <span class="dv">0x69</span> <span class="co">-- &#39;i&#39;</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">raw_buffer</span><span class="op">[</span><span class="dv">2</span><span class="op">]</span> <span class="op">=</span> <span class="dv">0x00</span> <span class="co">-- Null-terminator</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Pass the raw pointer directly to native C functions or libraries</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">ffi</span><span class="op">.</span><span class="cn">C</span><span class="op">.</span>write<span class="op">(</span><span class="dv">1</span><span class="op">,</span> <span class="va">raw_buffer</span><span class="op">,</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>Using FFI structures avoids all Lua runtime allocations, keeps data
+off the Lua garbage collector's radar, and guarantees predictable frame
+times in performance-critical code paths.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

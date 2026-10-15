@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pandoc Lua Filters: AST Document Processing - lua</title>
+    <meta name="description" content="Pandoc uses an embedded Lua interpreter to provide a fast, dependency-free mechanism for transforming documents via their Abstract Syntax Tree (AST). When Pandoc converts a file from one markup format to another, it first parses the input into an internal">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/pandoc-lua-filters-ast-document-processing">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Pandoc Lua Filters: AST Document Processing - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/pandoc-lua-filters-ast-document-processing" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Pandoc uses an embedded Lua interpreter to provide a fast, dependency-free mechanism for transforming documents via their Abstract Syntax Tree (AST). When Pandoc converts a file from one markup format to another, it first parses the input into an internal" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="pandoc-lua-filters-ast-document-processing">Pandoc Lua Filters:
+AST Document Processing</h1>
+<p>Pandoc uses an embedded Lua interpreter to provide a fast,
+dependency-free mechanism for transforming documents via their Abstract
+Syntax Tree (AST). When Pandoc converts a file from one markup format to
+another, it first parses the input into an internal AST representation
+composed of blocks and inlines. Lua filters intercept this AST between
+the parsing and writing stages, allowing users to programmatically
+inspect, modify, delete, or replace document nodes using standard Lua
+scripts before final rendering.</p>
+<h3 id="the-pandoc-ast-pipeline">The Pandoc AST Pipeline</h3>
+<p>Pandoc operates as a pipeline consisting of three main phases:
+Reader, Filter, and Writer.</p>
+<ol type="1">
+<li><strong>Reader:</strong> Reads the source format (e.g., Markdown,
+LaTeX, DOCX) and parses it into a native Pandoc AST.</li>
+<li><strong>Filter:</strong> The AST is exposed to external or built-in
+filter mechanisms for programmatic manipulation.</li>
+<li><strong>Writer:</strong> Converts the modified AST into the desired
+output format (e.g., PDF, HTML, EPUB).</li>
+</ol>
+<p>Historically, Pandoc filters relied on piping the AST as JSON through
+external processes (such as Python scripts via
+<code>pandocfilters</code> or <code>panflute</code>). While flexible,
+this approach introduced serialization overhead and required external
+runtime dependencies. Pandoc solved this by embedding a Lua engine
+directly into the binary, allowing filters to run in-memory with
+near-native performance.</p>
+<h3 id="how-lua-interacts-with-the-ast">How Lua Interacts with the
+AST</h3>
+<p>Pandoc maps AST elements directly to Lua tables and functions using
+the global <code>pandoc</code> module. Elements in a document are
+divided into two primary types:</p>
+<ul>
+<li><strong>Blocks:</strong> Structural elements such as
+<code>Header</code>, <code>Para</code>, <code>BlockQuote</code>,
+<code>CodeBlock</code>, and <code>Table</code>.</li>
+<li><strong>Inlines:</strong> Elements within blocks such as
+<code>Str</code>, <code>Emph</code>, <code>Strong</code>,
+<code>Link</code>, and <code>Image</code>.</li>
+</ul>
+<p>When a Lua filter script is executed with the
+<code>--lua-filter=script.lua</code> flag, Pandoc traverses the AST. If
+a function in the Lua script matches the name of an AST element, Pandoc
+calls that function, passing the element node as an argument.</p>
+<h3 id="filtering-mechanics-and-transformations">Filtering Mechanics and
+Transformations</h3>
+<p>A filter function inspects the properties of an AST element and
+returns a value that determines the transformation:</p>
+<ul>
+<li><strong>Return an element:</strong> Replaces the current element
+with the returned node.</li>
+<li><strong>Return a list of elements:</strong> Replaces a single node
+with multiple new nodes (e.g., expanding a custom shortcode into several
+paragraphs).</li>
+<li><strong>Return an empty table (<code>{}</code>):</strong> Deletes
+the element from the document.</li>
+<li><strong>Return <code>nil</code> (or nothing):</strong> Leaves the
+element unchanged.</li>
+</ul>
+<p>For example, to convert all second-level headers to uppercase, a Lua
+filter defines a <code>Header</code> function:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> Header<span class="op">(</span><span class="va">el</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> <span class="va">el</span><span class="op">.</span><span class="va">level</span> <span class="op">==</span> <span class="dv">2</span> <span class="cf">then</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">pandoc</span><span class="op">.</span>walk_inline<span class="op">(</span><span class="va">el</span><span class="op">,</span> <span class="op">{</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>      <span class="va">Str</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">pandoc</span><span class="op">.</span>Str<span class="op">(</span><span class="va">s</span><span class="op">.</span><span class="va">text</span><span class="op">:</span><span class="fu">upper</span><span class="op">())</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>      <span class="kw">end</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">})</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="cf">end</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="traversal-and-execution-order">Traversal and Execution
+Order</h3>
+<p>By default, Pandoc performs a depth-first traversal of the AST. It
+processes inner inline elements before the enclosing block elements.
+However, Lua filters allow users to customize this behavior.</p>
+<p>A filter can return an array of filter tables to specify an explicit
+execution order:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="op">{</span> <span class="va">Image</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">img</span><span class="op">)</span> <span class="op">...</span> <span class="kw">end</span> <span class="op">},</span> <span class="co">-- Runs first</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="op">{</span> <span class="va">Para</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">para</span><span class="op">)</span> <span class="op">...</span> <span class="kw">end</span> <span class="op">}</span>   <span class="co">-- Runs second</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Filters can also alter the traversal strategy directly using the
+<code>traverse</code> option, choosing between standard traversal or a
+<code>topdown</code> approach where parent blocks are evaluated before
+their children.</p>
+<h3 id="document-level-metadata-and-the-pandoc-object">Document-Level
+Metadata and the <code>Pandoc</code> Object</h3>
+<p>In addition to individual elements, Lua filters can inspect and
+modify global metadata and the entire document structure.</p>
+<ul>
+<li>The <code>Meta(meta)</code> function receives the document's
+metadata block, enabling dynamic configuration adjustments (such as
+adding authors, modifying variables, or setting document dates).</li>
+<li>The <code>Pandoc(doc)</code> function receives the entire document
+object containing both <code>doc.blocks</code> and
+<code>doc.meta</code>, providing full control over the complete AST
+hierarchy in a single pass.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

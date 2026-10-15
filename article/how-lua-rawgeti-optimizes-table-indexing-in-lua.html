@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How lua_rawgeti Optimizes Table Indexing in Lua - lua</title>
+    <meta name="description" content="In the Lua C API, retrieving table values efficiently is critical for performance-sensitive applications. Using luarawgeti optimizes table indexing over general key lookup mechanisms like luagettable or luagetfield by bypassing the Lua C virtual stack for">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-rawgeti-optimizes-table-indexing-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How lua_rawgeti Optimizes Table Indexing in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-rawgeti-optimizes-table-indexing-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua C API, retrieving table values efficiently is critical for performance-sensitive applications. Using luarawgeti optimizes table indexing over general key lookup mechanisms like luagettable or luagetfield by bypassing the Lua C virtual stack for" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua_rawgeti-optimizes-table-indexing-in-lua">How lua_rawgeti
+Optimizes Table Indexing in Lua</h1>
+<p>In the Lua C API, retrieving table values efficiently is critical for
+performance-sensitive applications. Using <code>lua_rawgeti</code>
+optimizes table indexing over general key lookup mechanisms like
+<code>lua_gettable</code> or <code>lua_getfield</code> by bypassing the
+Lua C virtual stack for the key parameter, skipping metatable checks,
+and leveraging direct C-array access within Lua's internal table
+implementation. This approach avoids key-hashing overhead and reduces
+C-Lua interface stack manipulation, allowing integer-indexed elements to
+be read with minimal CPU cycles.</p>
+<h3 id="internal-table-architecture-array-vs-hash-part">Internal Table
+Architecture: Array vs. Hash Part</h3>
+<p>Internally, a Lua table is implemented as a hybrid data structure
+containing two components:</p>
+<ol type="1">
+<li><strong>The Array Part:</strong> A contiguous C array of
+<code>TValue</code> structs indexed from 1 up to a dynamically sized
+boundary.</li>
+<li><strong>The Hash Part:</strong> A hash table storing key-value pairs
+for non-integer keys or sparse/out-of-bounds integer keys.</li>
+</ol>
+<p>When an operation accesses an integer key within the range of the
+array part, Lua avoids the hash table entirely.</p>
+<h3 id="direct-array-part-access">Direct Array-Part Access</h3>
+<p>General lookup functions must determine the type of the key and
+decide whether to search the array part or compute a hash for the hash
+part.</p>
+<p>When you call <code>lua_rawgeti(L, index, n)</code>, the function
+accepts the index directly as a native C integer
+(<code>lua_Integer</code>). Lua performs a fast bounds check against the
+size of the internal array part:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">((</span>l_castS2U<span class="op">(</span>n<span class="op">)</span> <span class="op">-</span> <span class="dv">1</span><span class="bu">u</span><span class="op">)</span> <span class="op">&lt;</span> cast_uint<span class="op">(</span>t<span class="op">-&gt;</span>alimit<span class="op">))</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    setobj2s<span class="op">(</span>L<span class="op">,</span> L<span class="op">-&gt;</span>top<span class="op">.</span>p<span class="op">,</span> <span class="op">&amp;</span>t<span class="op">-&gt;</span>array<span class="op">[</span>n <span class="op">-</span> <span class="dv">1</span><span class="op">]);</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    L<span class="op">-&gt;</span>top<span class="op">.</span>p<span class="op">++;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>If the key <code>n</code> falls within bounds, the value is retrieved
+via direct pointer offset (<code>t-&gt;array[n - 1]</code>). This is an
+<span class="math inline">\(O(1)\)</span> pointer dereference that
+involves zero hash computation, zero collision chaining, and no node
+traversal.</p>
+<h3 id="elimination-of-metamethod-overhead">Elimination of Metamethod
+Overhead</h3>
+<p>The "raw" prefix in <code>lua_rawgeti</code> indicates that the
+operation bypasses metamethods.</p>
+<p>A general lookup via <code>lua_gettable</code> monitors for the
+presence of an <code>__index</code> metamethod. If a key evaluates to
+<code>nil</code>, or if the target is not strictly a table, Lua
+traverses the metatable hierarchy to resolve the key. Checking and
+calling these metamethods incurs branching and execution overhead.
+<code>lua_rawgeti</code> skips metatable resolution entirely,
+guaranteeing that the operation operates strictly on the raw table
+data.</p>
+<h3 id="virtual-stack-reduction">Virtual Stack Reduction</h3>
+<p>Under <code>lua_gettable</code>, passing a key requires managing
+Lua's virtual stack:</p>
+<ol type="1">
+<li>Pushing the key onto the stack (e.g.,
+<code>lua_pushinteger(L, n)</code>).</li>
+<li>Invoking <code>lua_gettable(L, table_index)</code>, which reads the
+key, replaces it with the result, and shifts internal stack
+pointers.</li>
+</ol>
+<p>This approach requires multiple C API calls and manipulates the
+virtual stack pointer twice. <code>lua_rawgeti</code> passes the integer
+directly as a native C parameter. The key is never pushed to the stack,
+cutting the required C API invocations in half and reducing stack frame
+management overhead.</p>
+<h3 id="hash-fallback-efficiency">Hash Fallback Efficiency</h3>
+<p>If the integer key falls outside the bounds of the array part,
+<code>lua_rawgeti</code> falls back to the hash part. Even in this
+fallback path, it retains advantages over generic lookups:</p>
+<ul>
+<li>The key is treated as an integer primitive immediately, avoiding
+type-checking switches.</li>
+<li>Metamethod resolution remains bypassed.</li>
+<li>No stack allocation occurs for the key.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

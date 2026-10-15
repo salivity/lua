@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua&#39;s Write Barrier Preserves GC Invariants - lua</title>
+    <meta name="description" content="In the Lua programming language, the incremental garbage collector (GC) relies on a write barrier to maintain tri-color marking invariants during execution. Because Lua mutates object references while the GC is actively running, an already-scanned object">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-s-write-barrier-preserves-gc-invariants">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua&#39;s Write Barrier Preserves GC Invariants - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-s-write-barrier-preserves-gc-invariants" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the incremental garbage collector (GC) relies on a write barrier to maintain tri-color marking invariants during execution. Because Lua mutates object references while the GC is actively running, an already-scanned object" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-luas-write-barrier-preserves-gc-invariants">How Lua's Write
+Barrier Preserves GC Invariants</h1>
+<p>In the Lua programming language, the incremental garbage collector
+(GC) relies on a write barrier to maintain tri-color marking invariants
+during execution. Because Lua mutates object references while the GC is
+actively running, an already-scanned object could inadvertently point to
+an unvisited object, risking premature memory deallocation. This article
+explains how Lua's tri-color marking abstraction operates, the specific
+invariants required to prevent dangling references, and how the forward
+and backward write barriers enforce these rules when linking
+objects.</p>
+<h3 id="the-tri-color-abstraction-and-gc-invariants">The Tri-Color
+Abstraction and GC Invariants</h3>
+<p>Lua utilizes an incremental mark-and-sweep collector based on
+Dijkstra's tri-color marking algorithm. Objects in memory are
+categorized into three states:</p>
+<ul>
+<li><strong>White:</strong> Unvisited objects that are candidates for
+collection. During collection cycles, Lua differentiates between two
+shades of white to distinguish between newly allocated objects and those
+pending reclamation.</li>
+<li><strong>Gray:</strong> Objects that have been visited by the
+collector, but whose referenced objects (such as table keys, values, or
+closures) have not yet been fully inspected.</li>
+<li><strong>Black:</strong> Objects that have been fully visited along
+with all their immediate references. Black objects are considered
+reachable and cannot be collected in the current cycle.</li>
+</ul>
+<p>The fundamental invariant required by the incremental collector is
+that <strong>a black object must never directly point to a white
+object</strong> without an intermediate gray object tracking the
+reference path. If a running program (the mutator) creates a link from a
+black object directly to a white object and removes any existing link
+from a gray object to that same white object, the collector will never
+traverse the white object. Consequently, the collector assumes the white
+object is garbage and frees it, leading to memory corruption.</p>
+<h3 id="the-mechanism-of-the-write-barrier">The Mechanism of the Write
+Barrier</h3>
+<p>Because Lua executes user code concurrently with the incremental
+phases of collection, table assignments, upvalue updates, and object
+linking occur dynamically. Whenever a field assignment occurs (for
+instance, setting <code>table[key] = value</code>), the Lua runtime
+checks if the assignment violates the tri-color invariant. If a black
+parent object is assigned a reference to a white child object, a write
+barrier is executed.</p>
+<p>The write barrier intervenes using one of two strategies: moving
+forward or moving backward.</p>
+<h4 id="1-forward-barrier-luac_barrier">1. Forward Barrier
+(<code>luaC_barrier</code>)</h4>
+<p>The forward barrier focuses on the child (the white object). When a
+black container links to a white object, the barrier immediately changes
+the color of the white object:</p>
+<ul>
+<li>The white object is shifted to <strong>gray</strong>.</li>
+<li>The object is added to the collector's gray list for future
+traversal.</li>
+</ul>
+<p>By graying the child, the invariant is restored because the black
+object now points to a gray object instead of a white one. This ensures
+that the newly linked object and its downstream graph are preserved and
+scanned before the sweep phase begins.</p>
+<h4 id="2-backward-barrier-luac_barrierback">2. Backward Barrier
+(<code>luaC_barrierback</code>)</h4>
+<p>Certain structures, notably tables, are modified frequently. If a
+forward barrier were used on every table modification, high-frequency
+writes would constantly push individual objects to the gray list,
+leading to high overhead and overhead in tracking.</p>
+<p>To optimize for this access pattern, Lua employs a backward barrier
+on tables:</p>
+<ul>
+<li>Instead of graying the white child object, the barrier resets the
+parent container from <strong>black to gray</strong>.</li>
+<li>The parent object is placed back onto the gray list
+(<code>grayagain</code> list in the Lua C source).</li>
+</ul>
+<p>By turning the black parent back into a gray object, the invariant is
+instantly satisfied—the link is now between gray and white, which is
+fully legal. The collector will re-scan the entire table later in an
+atomic traversal step before entering the sweep phase, capturing all
+newly added keys and values at once.</p>
+<h3 id="preserving-memory-safety-during-object-linking">Preserving
+Memory Safety During Object Linking</h3>
+<p>When a program performs an operation such as
+<code>a.b = c</code>:</p>
+<ol type="1">
+<li><strong>Check:</strong> Lua evaluates the GC state. If the collector
+is in the mark phase, it evaluates whether object <code>a</code> is
+marked black and object <code>c</code> is marked white.</li>
+<li><strong>Execution:</strong> If the condition evaluates to true, the
+relevant barrier function (<code>luaC_barrier</code> or
+<code>luaC_barrierback</code>) is triggered.</li>
+<li><strong>State Transition:</strong> Depending on the parent object
+type, either <code>c</code> is promoted to gray or <code>a</code> is
+demoted to gray.</li>
+</ol>
+<p>Through this conditional intervention, Lua's write barrier allows the
+mutator to execute with minimal overhead while strictly maintaining the
+tri-color invariant, ensuring that reachable objects are never reclaimed
+during incremental garbage collection cycles.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

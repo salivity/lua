@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Closures Share and Mutate Upvalues - lua</title>
+    <meta name="description" content="In the Lua programming language, multiple closures observe and mutate shared external local variables accurately through a specialized reference mechanism called an upvalue. By using an internal UpVal structure that transitions between an &quot;open&quot; state on">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-closures-share-and-mutate-upvalues">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Closures Share and Mutate Upvalues - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-closures-share-and-mutate-upvalues" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, multiple closures observe and mutate shared external local variables accurately through a specialized reference mechanism called an upvalue. By using an internal UpVal structure that transitions between an &quot;open&quot; state on" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-closures-share-and-mutate-upvalues">How Lua Closures
+Share and Mutate Upvalues</h1>
+<p>In the Lua programming language, multiple closures observe and mutate
+shared external local variables accurately through a specialized
+reference mechanism called an upvalue. By using an internal
+<code>UpVal</code> structure that transitions between an "open" state on
+the execution stack and a "closed" state on the garbage-collected heap,
+the Lua virtual machine (VM) ensures that every closure accessing the
+same local variable points to the exact same reference. This
+architecture avoids value desynchronization and maintains lexical
+scoping integrity across the life cycle of any function.</p>
+<h3 id="the-upval-structure-open-vs-closed-states">The UpVal Structure:
+Open vs. Closed States</h3>
+<p>An upvalue is represented internally in the Lua runtime by the
+<code>UpVal</code> object. This structure contains a pointer, typically
+named <code>v</code>, which points to the actual data value
+(<code>TValue</code>). The upvalue exists in one of two distinct
+states:</p>
+<ol type="1">
+<li><strong>Open State:</strong> While the enclosing function that
+created the local variable is still running, the variable lives on Lua’s
+call stack. In this state, the upvalue’s pointer <code>v</code> points
+directly to that variable’s slot on the stack.</li>
+<li><strong>Closed State:</strong> When the enclosing function
+terminates and its stack frame is cleared, the variable can no longer
+reside on the stack. The VM copies the data into a storage field within
+the <code>UpVal</code> structure itself and repoints <code>v</code> to
+this internal field. The <code>UpVal</code> object then lives on the
+garbage-collected heap.</li>
+</ol>
+<h3 id="de-duplication-via-the-open-upvalue-list">De-duplication via the
+Open Upvalue List</h3>
+<p>When a closure is instantiated, the Lua VM must determine how to bind
+each captured variable. To prevent creating multiple redundant upvalues
+for the same stack address, Lua maintains a per-thread singly linked
+list of all currently open upvalues, ordered by stack level.</p>
+<p>When a new closure captures a local variable:</p>
+<ul>
+<li>Lua traverses the <code>openupval</code> list looking for an
+existing open <code>UpVal</code> whose pointer <code>v</code> matches
+the stack address of that variable.</li>
+<li>If a match is found, the VM assigns the existing <code>UpVal</code>
+reference directly to the new closure's upvalue array, incrementing its
+reference count.</li>
+<li>If no match is found, Lua instantiates a new <code>UpVal</code>,
+sets its pointer <code>v</code> to the stack slot, and inserts it into
+the sorted list.</li>
+</ul>
+<p>Because every closure capturing the same variable receives a
+reference to the exact same <code>UpVal</code> object, any read or write
+operation resolves to the identical memory location.</p>
+<h3 id="preserving-state-when-exiting-scope">Preserving State When
+Exiting Scope</h3>
+<p>When an enclosing function returns, or when a block ends where local
+variables go out of scope, the VM executes an internal operation
+(specifically <code>luaF_close</code>).</p>
+<p>This operation:</p>
+<ol type="1">
+<li>Traverses the <code>openupval</code> list down to the stack level
+being closed.</li>
+<li>Unlinks each relevant <code>UpVal</code> from the open list.</li>
+<li>Copies the current value from the stack slot into the
+<code>UpVal</code>’s own memory.</li>
+<li>Updates the internal pointer <code>v</code> to point to this
+embedded copy.</li>
+</ol>
+<p>Because the closures hold references to the <code>UpVal</code>
+container rather than directly to the stack, this transition from open
+to closed is completely transparent to them. Subsequent reads or writes
+from any closure mutate the value held directly inside the shared
+<code>UpVal</code> container on the heap, ensuring that state changes
+remain synchronized across all referencing functions for the remainder
+of their lifecycles.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

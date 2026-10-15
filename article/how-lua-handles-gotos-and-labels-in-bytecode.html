@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Handles Gotos and Labels in Bytecode - lua</title>
+    <meta name="description" content="This article explores how the Lua compiler processes goto statements and labels during its single-pass bytecode translation. It details the underlying data structures used to track identifiers, how forward and backward jumps are generated and patched, and">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-handles-gotos-and-labels-in-bytecode">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Handles Gotos and Labels in Bytecode - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-handles-gotos-and-labels-in-bytecode" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how the Lua compiler processes goto statements and labels during its single-pass bytecode translation. It details the underlying data structures used to track identifiers, how forward and backward jumps are generated and patched, and" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-handles-gotos-and-labels-in-bytecode">How Lua Handles
+Gotos and Labels in Bytecode</h1>
+<p>This article explores how the Lua compiler processes
+<code>goto</code> statements and labels during its single-pass bytecode
+translation. It details the underlying data structures used to track
+identifiers, how forward and backward jumps are generated and patched,
+and the scope validation rules enforced to maintain the integrity of
+local variables and upvalues.</p>
+<h3 id="the-single-pass-compilation-model">The Single-Pass Compilation
+Model</h3>
+<p>Lua compiles source code into bytecode in a single pass without
+constructing an explicit Abstract Syntax Tree (AST). Because of this
+design, the compiler encounters jumps to labels that may not yet have
+been defined (forward jumps) or jumps to labels that are already
+established in memory (backward jumps).</p>
+<p>To manage these jumps, the parser tracks state using internal
+dynamically sized arrays stored in the <code>Dyndata</code>
+structure:</p>
+<ul>
+<li><code>actvar</code>: Active local variables in scope.</li>
+<li><code>gt</code>: A list of unresolved <code>goto</code> statements
+awaiting a target label.</li>
+<li><code>label</code>: A list of declared labels visible within the
+current function.</li>
+</ul>
+<p>Each entry in these lists records the identifier's name, the program
+counter (<code>pc</code>) index of the associated instruction, the
+lexical block nesting level, and the count of active local variables at
+the point of declaration.</p>
+<h3 id="backward-jumps">Backward Jumps</h3>
+<p>When the parser encounters a <code>goto</code> statement whose target
+label has already been defined within an accessible scope, the
+translation is straightforward:</p>
+<ol type="1">
+<li>The compiler searches the existing labels in
+<code>Dyndata.label</code> from innermost to outermost scope.</li>
+<li>It verifies that the jump does not violate scoping rules (such as
+jumping into the scope of a local variable).</li>
+<li>The compiler emits an unconditional jump instruction
+(<code>OP_JMP</code>).</li>
+<li>Because the target label's bytecode offset is already known, the
+displacement offset of the <code>OP_JMP</code> is calculated immediately
+and written directly into the instruction.</li>
+<li>If the jump exits the scope of any local variables that have been
+captured as upvalues or marked with the <code>&lt;close&gt;</code>
+attribute, the compiler adjusts the instruction or emits an
+<code>OP_CLOSE</code> to ensure proper resource cleanup.</li>
+</ol>
+<h3 id="forward-jumps-and-backpatching">Forward Jumps and
+Backpatching</h3>
+<p>When a <code>goto</code> refers to a label that has not yet been
+declared, the compiler cannot immediately determine the destination
+address. Instead, it defers resolution:</p>
+<ol type="1">
+<li>An <code>OP_JMP</code> instruction is emitted with an empty or
+placeholder jump offset.</li>
+<li>The compiler records a new pending jump entry in the
+<code>Dyndata.gt</code> list, capturing the label name, the instruction
+index of the placeholder <code>OP_JMP</code>, and the current local
+variable stack depth.</li>
+<li>Compilation continues sequentially.</li>
+</ol>
+<p>When the target label <code>::name::</code> is eventually parsed, the
+compiler registers it in <code>Dyndata.label</code> and initiates a
+backpatching routine. It iterates over the pending gotos in
+<code>Dyndata.gt</code>:</p>
+<ul>
+<li>For each unresolved jump matching the label's name, the compiler
+validates scoping boundaries.</li>
+<li>The instruction offset between the forward <code>OP_JMP</code> and
+the newly declared label's <code>pc</code> is computed.</li>
+<li>The offset field of the earlier <code>OP_JMP</code> instruction is
+updated (backpatched) in the function's bytecode array.</li>
+<li>The resolved entries are removed from the pending jump list.</li>
+</ul>
+<h3 id="scoping-and-variable-lifecycles">Scoping and Variable
+Lifecycles</h3>
+<p>Lua enforces strict rules regarding how <code>goto</code> interacts
+with local variables, preventing undefined states at runtime:</p>
+<ul>
+<li><strong>Jumping into variable scope:</strong> A program cannot jump
+from a point where a variable is not yet declared to a point where it is
+in scope. During label resolution, Lua compares the active variable
+count of the <code>goto</code> with that of the label. If the label
+requires more active variables than the <code>goto</code> had at its
+point of origin, the compiler halts and throws a syntax error.</li>
+<li><strong>Jumping out of variable scope:</strong> Jumping outward is
+valid, but leaving a scope may leave dangling upvalues or unclosed
+resources. When emitting the <code>OP_JMP</code> (or during
+backpatching), Lua inspects whether variables were closed between the
+source and target. Lua's <code>OP_JMP</code> instruction includes an
+operand indicating the register boundary above which all active upvalues
+must be closed, triggering automatic closure during the jump at
+runtime.</li>
+</ul>
+<h3 id="block-finalization-and-error-checking">Block Finalization and
+Error Checking</h3>
+<p>Whenever a lexical block exits (such as the end of a
+<code>do...end</code>, loop, or function body), Lua cleans up labels
+defined inside that block. Any label defined within the closing block is
+discarded, as it is no longer visible to outer code.</p>
+<p>At the close of a function body, the compiler checks the
+<code>Dyndata.gt</code> list for any remaining unresolved
+<code>goto</code> statements. If any entries persist, the compiler
+raises a compile-time syntax error stating that no visible label was
+found, ensuring no unlinked jump instructions ever reach the runtime
+virtual machine.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

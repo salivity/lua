@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua 5.1 to 5.2 Module System Breaking Changes - lua</title>
+    <meta name="description" content="The transition from Lua 5.1 to Lua 5.2 introduced significant architectural revisions to how code is packaged, isolated, and loaded. This article details the breaking changes made to Lua&#39;s module system between these two versions, focusing on the deprecat">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-5-1-to-5-2-module-system-breaking-changes">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua 5.1 to 5.2 Module System Breaking Changes - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-5-1-to-5-2-module-system-breaking-changes" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The transition from Lua 5.1 to Lua 5.2 introduced significant architectural revisions to how code is packaged, isolated, and loaded. This article details the breaking changes made to Lua&#39;s module system between these two versions, focusing on the deprecat" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-51-to-52-module-system-breaking-changes">Lua 5.1 to 5.2
+Module System Breaking Changes</h1>
+<p>The transition from Lua 5.1 to Lua 5.2 introduced significant
+architectural revisions to how code is packaged, isolated, and loaded.
+This article details the breaking changes made to Lua's module system
+between these two versions, focusing on the deprecation of the standard
+<code>module()</code> function, the replacement of
+<code>package.loaders</code> with <code>package.searchers</code>, the
+elimination of <code>setfenv</code> in favor of lexical
+<code>_ENV</code>, and the enforcement of explicit table-return
+conventions.</p>
+<h3 id="deprecation-of-the-module-function">Deprecation of the
+<code>module()</code> Function</h3>
+<p>In Lua 5.1, modules were typically defined using the built-in
+<code>module()</code> function (often with
+<code>package.seeall</code>):</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Lua 5.1 style</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>module<span class="op">(</span><span class="st">&quot;mymodule&quot;</span><span class="op">,</span> <span class="va">package</span><span class="op">.</span><span class="va">seeall</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> hello<span class="op">()</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Hello World&quot;</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>The <code>module()</code> function automatically registered the
+module table into the global environment, assigned it to
+<code>package.loaded["mymodule"]</code>, and mutated the calling
+function’s global environment.</p>
+<p>In Lua 5.2, <code>module()</code> was deprecated (and disabled by
+default in standard builds) because altering the environment implicitly
+was considered bad practice and created global namespace pollution.
+Instead, Lua 5.2 modules must be created as standard local tables and
+explicitly returned:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Lua 5.2 idiomatic style</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">mymodule</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">mymodule</span><span class="op">.</span>hello<span class="op">()</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Hello World&quot;</span><span class="op">)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">mymodule</span></span></code></pre></div>
+<h3 id="renaming-packageloaders-to-packagesearchers">Renaming
+<code>package.loaders</code> to <code>package.searchers</code></h3>
+<p>Lua uses an array of search functions to determine how to locate and
+load modules invoked by <code>require()</code>. In Lua 5.1, this table
+was named <code>package.loaders</code>.</p>
+<p>In Lua 5.2, this table was renamed to <code>package.searchers</code>
+to more accurately describe its role: searching for a loader rather than
+actually loading the chunk itself. Any legacy code or custom package
+managers that manipulated <code>package.loaders</code> directly fail
+with a <code>nil</code> indexing error in Lua 5.2 unless compatibility
+flags are compiled into the binary.</p>
+<h3
+id="overhaul-of-environments-removal-of-setfenv-and-introduction-of-_env">Overhaul
+of Environments: Removal of <code>setfenv</code> and Introduction of
+<code>_ENV</code></h3>
+<p>The underlying mechanism used by Lua 5.1 modules to maintain private
+scopes relied on <code>setfenv</code> and <code>getfenv</code>. A module
+could isolate its internal functions and variables by reassigning its
+environment table at runtime.</p>
+<p>Lua 5.2 completely removed <code>setfenv</code> and
+<code>getfenv</code>. Instead, Lua 5.2 introduced lexical scoping for
+environments through the pseudo-variable <code>_ENV</code>. Any code
+written for Lua 5.1 that relied on dynamically manipulating module
+environments via <code>setfenv</code> breaks in Lua 5.2. In 5.2, custom
+environments must be set lexically:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="cn">_ENV</span> <span class="op">=</span> <span class="op">{}</span> <span class="co">-- module scope is now bound to this local table</span></span></code></pre></div>
+<h3 id="obsolescence-of-packageseeall">Obsolescence of
+<code>package.seeall</code></h3>
+<p>Because <code>module()</code> was deprecated and <code>setfenv</code>
+was removed, the <code>package.seeall</code> function—which allowed a
+module’s environment to fall back to the global environment via a
+metatable—became obsolete and deprecated in Lua 5.2. Code relying on
+accessing standard libraries (<code>print</code>, <code>math</code>,
+etc.) through <code>package.seeall</code> inheritance fails in 5.2
+unless those libraries are explicitly localized or accessed via the
+global <code>_G</code> table.</p>
+<h3 id="return-value-requirement-for-require">Return Value Requirement
+for <code>require()</code></h3>
+<p>While Lua 5.1's <code>require()</code> returned
+<code>package.loaded[modname]</code> if a module did not explicitly
+return a value, it heavily encouraged reliance on the side effects of
+<code>module()</code>. In Lua 5.2, because modules no longer set global
+variables or implicitly alter <code>package.loaded</code>, scripts
+consuming modules are expected to assign the return value of
+<code>require()</code> directly:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">mymodule</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;mymodule&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>If a module in Lua 5.2 does not explicitly return a value,
+<code>require()</code> returns <code>true</code> (indicating success)
+rather than the module table itself, breaking code that relies on the
+old implicit table creation.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

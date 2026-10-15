@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Arithmetic Operators and String Coercion Rules - lua</title>
+    <meta name="description" content="In Lua, applying arithmetic operators to strings containing numerical representations triggers an automatic runtime conversion from string to number. This built-in coercion allows developers to perform mathematical calculations directly on strings without">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-arithmetic-operators-and-string-coercion-rules">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Arithmetic Operators and String Coercion Rules - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-arithmetic-operators-and-string-coercion-rules" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, applying arithmetic operators to strings containing numerical representations triggers an automatic runtime conversion from string to number. This built-in coercion allows developers to perform mathematical calculations directly on strings without" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-arithmetic-operators-and-string-coercion-rules">Lua
+Arithmetic Operators and String Coercion Rules</h1>
+<p>In Lua, applying arithmetic operators to strings containing numerical
+representations triggers an automatic runtime conversion from string to
+number. This built-in coercion allows developers to perform mathematical
+calculations directly on strings without explicitly invoking conversion
+functions. Understanding how Lua parses formats, differentiates between
+integers and floating-point values, and handles non-numeric data is
+essential for writing predictable code and avoiding runtime errors.</p>
+<h3 id="the-automatic-coercion-mechanism">The Automatic Coercion
+Mechanism</h3>
+<p>When an arithmetic operator (<code>+</code>, <code>-</code>,
+<code>*</code>, <code>/</code>, <code>//</code>, <code>%</code>,
+<code>^</code>, or unary <code>-</code>) encounters an operand that is a
+string, Lua attempts to convert that string into a number before
+executing the operation.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;10&quot;</span> <span class="op">+</span> <span class="dv">5</span><span class="op">)</span>    <span class="co">-- Output: 15</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;20&quot;</span> <span class="op">*</span> <span class="st">&quot;2&quot;</span><span class="op">)</span>   <span class="co">-- Output: 40</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(-</span><span class="st">&quot;5&quot;</span><span class="op">)</span>         <span class="co">-- Output: -5</span></span></code></pre></div>
+<p>This coercion is bidirectional depending on the operator: arithmetic
+operators coerce strings into numbers, whereas the concatenation
+operator (<code>..</code>) coerces numbers into strings.</p>
+<h3 id="accepted-string-formats">Accepted String Formats</h3>
+<p>Lua's coercion rules follow standard lexical conventions for numbers.
+When parsing a string operand during an arithmetic operation, Lua
+recognizes:</p>
+<ul>
+<li><strong>Standard Integers:</strong> <code>"42"</code>,
+<code>"-15"</code></li>
+<li><strong>Floating-Point Values:</strong> <code>"3.1415"</code>,
+<code>".5"</code></li>
+<li><strong>Scientific Notation:</strong> <code>"1e3"</code> (1000.0),
+<code>"2.5e-2"</code> (0.025)</li>
+<li><strong>Hexadecimal Literals:</strong> <code>"0x10"</code> (16),
+<code>"0xFF"</code> (255)</li>
+<li><strong>Hexadecimal Floating-Point (Lua 5.2+):</strong>
+<code>"0x1.8p3"</code> (12.0)</li>
+</ul>
+<p>Leading and trailing whitespace within the string is ignored during
+evaluation (e.g., <code>"  25  " + 5</code> evaluates to
+<code>30</code>).</p>
+<h3 id="integer-vs-float-subtypes-lua-53">Integer vs. Float Subtypes
+(Lua 5.3+)</h3>
+<p>Since Lua 5.3, the <code>number</code> type consists of two internal
+subtypes: <code>integer</code> and <code>float</code>. When a string is
+coerced into a number during an arithmetic operation:</p>
+<ol type="1">
+<li>If the string contains only whole digits (or a hexadecimal whole
+number) and falls within the platform's integer range, Lua coerces it
+into an <strong>integer</strong>.</li>
+<li>If the string contains a decimal point, an exponent, or exceeds the
+integer range, Lua coerces it into a <strong>float</strong>.</li>
+</ol>
+<p>The final result type follows standard Lua arithmetic rules:
+operations between integers produce integers (except for standard
+division <code>/</code> and exponentiation <code>^</code>, which always
+return floats).</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">(</span><span class="st">&quot;10&quot;</span> <span class="op">+</span> <span class="dv">2</span><span class="op">))</span>   <span class="co">-- integer</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">(</span><span class="st">&quot;10.0&quot;</span> <span class="op">+</span> <span class="dv">2</span><span class="op">))</span> <span class="co">-- float</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">(</span><span class="st">&quot;10&quot;</span> <span class="op">/</span> <span class="dv">2</span><span class="op">))</span>   <span class="co">-- float (division always produces a float)</span></span></code></pre></div>
+<h3 id="invalid-numerals-and-error-handling">Invalid Numerals and Error
+Handling</h3>
+<p>If an arithmetic operator is applied to a string that cannot be
+parsed as a valid number, coercion fails immediately. Lua does not
+evaluate invalid conversions to <code>nil</code> or <code>NaN</code>;
+instead, it raises a fatal runtime error.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;hello&quot;</span> <span class="op">+</span> <span class="dv">5</span><span class="op">)</span>   <span class="co">-- error: attempt to perform arithmetic on a string value</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;123a&quot;</span> <span class="op">*</span> <span class="dv">2</span><span class="op">)</span>    <span class="co">-- error: attempt to perform arithmetic on a string value</span></span></code></pre></div>
+<p>Strings containing trailing non-numeric characters (unlike functions
+such as C's <code>strtod</code>) will cause a total failure of the
+conversion.</p>
+<h3 id="arithmetic-operators-vs-bitwise-operators">Arithmetic Operators
+vs. Bitwise Operators</h3>
+<p>Automatic string coercion applies strictly to standard arithmetic
+operators. In Lua 5.3 and later, bitwise operators (<code>&amp;</code>,
+<code>|</code>, <code>~</code>, <code>&gt;&gt;</code>,
+<code>&lt;&lt;</code>) do <strong>not</strong> perform automatic string
+coercion. Passing a string to a bitwise operator will raise a runtime
+error, even if the string contains a valid integer numeral. To use
+bitwise operations on string values, the string must first be explicitly
+converted using <code>tonumber()</code>.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

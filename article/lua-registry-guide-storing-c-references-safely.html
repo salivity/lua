@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Registry Guide: Storing C References Safely - lua</title>
+    <meta name="description" content="This article provides an overview of the Lua registry and its role in C and Lua interoperability. You will learn what the registry is, why standard Lua globals are unsuitable for C modules, and how to utilize the registry alongside the auxiliary reference">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-registry-guide-storing-c-references-safely">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Registry Guide: Storing C References Safely - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-registry-guide-storing-c-references-safely" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of the Lua registry and its role in C and Lua interoperability. You will learn what the registry is, why standard Lua globals are unsuitable for C modules, and how to utilize the registry alongside the auxiliary reference" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-registry-guide-storing-c-references-safely">Lua Registry
+Guide: Storing C References Safely</h1>
+<p>This article provides an overview of the Lua registry and its role in
+C and Lua interoperability. You will learn what the registry is, why
+standard Lua globals are unsuitable for C modules, and how to utilize
+the registry alongside the auxiliary reference system
+(<code>luaL_ref</code> and <code>luaL_unref</code>) to safely anchor Lua
+objects against garbage collection.</p>
+<hr />
+<h3 id="what-is-the-lua-registry">What Is the Lua Registry?</h3>
+<p>The Lua registry is a regular Lua table that is accessible only to C
+code via the C API. It resides at a pseudo-index defined by the constant
+<code>LUA_REGISTRYINDEX</code>.</p>
+<p>Because pure Lua scripts cannot directly access
+<code>LUA_REGISTRYINDEX</code>, the registry serves as a private storage
+area. It allows C libraries to store values, share state across
+different C functions, and anchor Lua values in memory without polluting
+or conflicting with the global variable table (<code>_G</code>).</p>
+<h3 id="why-use-the-registry-instead-of-global-variables">Why Use the
+Registry Instead of Global Variables?</h3>
+<p>When interacting with Lua from C, developers often need to keep
+references to Lua objects (such as callbacks, tables, or coroutines)
+alive across multiple API calls. Storing these objects in the global
+environment (<code>_G</code>) introduces two major issues:</p>
+<ol type="1">
+<li><strong>Name Collisions:</strong> Different third-party C libraries
+might overwrite each other's global keys.</li>
+<li><strong>Accidental Modification:</strong> Lua scripts can alter,
+overwrite, or delete global variables, leading to crashes or undefined
+behavior in the C runtime.</li>
+</ol>
+<p>Additionally, keeping a raw C pointer to a Lua object is unsafe
+because Lua’s garbage collector (GC) cannot trace references stored in
+native C memory. If an object is not referenced anywhere inside Lua, the
+GC will collect it, leaving dangling pointers in your C code. The
+registry solves this by keeping the object rooted inside Lua's GC
+graph.</p>
+<h3 id="storing-references-with-lual_ref-and-lual_unref">Storing
+References with <code>luaL_ref</code> and <code>luaL_unref</code></h3>
+<p>The recommended and most common way to store values in the registry
+is using the reference system provided by Lua’s auxiliary library. This
+system creates unique integer keys for values, eliminating key-collision
+issues completely.</p>
+<h4 id="1-creating-a-reference-lual_ref">1. Creating a Reference
+(<code>luaL_ref</code>)</h4>
+<p>To anchor an object:</p>
+<ol type="1">
+<li>Push the target Lua object onto the stack.</li>
+<li>Call <code>luaL_ref(L, LUA_REGISTRYINDEX)</code>.</li>
+</ol>
+<p><code>luaL_ref</code> pops the top value from the stack, assigns it
+an integer key inside the registry, and returns that integer
+reference.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Assume a Lua callback function is at the top of the stack</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> callback_ref <span class="op">=</span> luaL_ref<span class="op">(</span>L<span class="op">,</span> LUA_REGISTRYINDEX<span class="op">);</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">// The callback is now safely stored in the registry, </span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co">// protected from garbage collection.</span></span></code></pre></div>
+<h4 id="2-retrieving-a-reference-lua_rawgeti">2. Retrieving a Reference
+(<code>lua_rawgeti</code>)</h4>
+<p>To retrieve the object later and push it back onto the Lua stack, use
+<code>lua_rawgeti</code> with the stored integer reference:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Push the referenced object onto the stack</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>lua_rawgeti<span class="op">(</span>L<span class="op">,</span> LUA_REGISTRYINDEX<span class="op">,</span> callback_ref<span class="op">);</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Verify and call the function if needed</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">(</span>lua_isfunction<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">1</span><span class="op">))</span> <span class="op">{</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    lua_pcall<span class="op">(</span>L<span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="dv">0</span><span class="op">);</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    lua_pop<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">);</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h4 id="3-releasing-a-reference-lual_unref">3. Releasing a Reference
+(<code>luaL_unref</code>)</h4>
+<p>When the reference is no longer needed, it must be freed to prevent
+memory leaks and allow the garbage collector to reclaim the object:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>luaL_unref<span class="op">(</span>L<span class="op">,</span> LUA_REGISTRYINDEX<span class="op">,</span> callback_ref<span class="op">);</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>callback_ref <span class="op">=</span> LUA_NOREF<span class="op">;</span> <span class="co">// Good practice to reset the variable</span></span></code></pre></div>
+<p><code>luaL_unref</code> frees the integer key in the registry and
+marks it for reuse by future <code>luaL_ref</code> calls.</p>
+<h3 id="alternative-using-static-memory-addresses-as-keys">Alternative:
+Using Static Memory Addresses as Keys</h3>
+<p>If you need to associate a single C library instance with registry
+data rather than dynamic references, you can use the address of a static
+C variable as a unique key:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">const</span> <span class="dt">char</span> my_unique_key <span class="op">=</span> <span class="ch">&#39;k&#39;</span><span class="op">;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">// Storing a value:</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>lua_pushlightuserdata<span class="op">(</span>L<span class="op">,</span> <span class="op">(</span><span class="dt">void</span><span class="op">*)&amp;</span>my_unique_key<span class="op">);</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>lua_pushvalue<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">2</span><span class="op">);</span> <span class="co">// The value you want to store</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>lua_rawset<span class="op">(</span>L<span class="op">,</span> LUA_REGISTRYINDEX<span class="op">);</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">// Retrieving the value:</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>lua_pushlightuserdata<span class="op">(</span>L<span class="op">,</span> <span class="op">(</span><span class="dt">void</span><span class="op">*)&amp;</span>my_unique_key<span class="op">);</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>lua_rawget<span class="op">(</span>L<span class="op">,</span> LUA_REGISTRYINDEX<span class="op">);</span></span></code></pre></div>
+<p>Because the memory address of <code>my_unique_key</code> is unique
+across the entire process address space, no other module can
+accidentally collide with your registry key.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

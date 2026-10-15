@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Is LuaVela: High-Performance Lua Explained - lua</title>
+    <meta name="description" content="LuaVela is an open-source, high-performance execution environment for the Lua programming language, engineered primarily as an optimized fork of LuaJIT. This article explores the origins of LuaVela, its core architectural design, the engineering technique">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/what-is-lua-vela-high-performance-lua-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What Is LuaVela: High-Performance Lua Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/what-is-lua-vela-high-performance-lua-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="LuaVela is an open-source, high-performance execution environment for the Lua programming language, engineered primarily as an optimized fork of LuaJIT. This article explores the origins of LuaVela, its core architectural design, the engineering technique" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="what-is-luavela-high-performance-lua-explained">What Is LuaVela:
+High-Performance Lua Explained</h1>
+<p>LuaVela is an open-source, high-performance execution environment for
+the Lua programming language, engineered primarily as an optimized fork
+of LuaJIT. This article explores the origins of LuaVela, its core
+architectural design, the engineering techniques it uses to accelerate
+execution speeds, and how its specialized profiling features position it
+as an enterprise-grade alternative to standard Lua implementations.</p>
+<h2 id="overview-and-origins-of-luavela">Overview and Origins of
+LuaVela</h2>
+<p>LuaVela was created by the engineering team at Mail.ru Group (now VK)
+to handle massive, latency-sensitive production workloads. While
+standard PUC-Rio Lua offers great portability and simplicity, its
+interpreted nature makes it insufficient for heavy computation.</p>
+<p>Rather than building a runtime from scratch, LuaVela was developed by
+forking LuaJIT 2.0, an established, high-speed implementation of Lua
+5.1. The objective behind LuaVela was not only to retain the raw
+execution speed of LuaJIT, but also to address production shortcomings
+regarding maintainability, debugging capabilities, internal code
+refactoring, and low-overhead profiling in live environments.</p>
+<h2 id="how-luavela-achieves-high-performance">How LuaVela Achieves High
+Performance</h2>
+<p>LuaVela achieves execution speeds far surpassing standard interpreted
+Lua through several key performance strategies:</p>
+<h3 id="tracing-just-in-time-jit-compilation">Tracing Just-In-Time (JIT)
+Compilation</h3>
+<p>At the heart of LuaVela is a tracing JIT compiler. Unlike traditional
+method-based JIT compilers that compile entire functions at once, a
+tracing JIT compiler monitors running code to identify "hot" loops or
+frequently executed linear paths (traces).</p>
+<p>Once a hot path is identified, LuaVela compiles that specific
+sequence of Lua bytecode into optimized native machine code. It assumes
+the path will repeat the same execution pattern, applying aggressive
+optimizations like loop unrolling, dead-code elimination, and constant
+folding. If an execution branch deviates from the recorded path, the
+runtime falls back gracefully to the interpreter via a side exit.</p>
+<h3 id="tailored-interpreter-loop">Tailored Interpreter Loop</h3>
+<p>For code that is not executed frequently enough to warrant JIT
+compilation, LuaVela features a fast, hand-tuned interpreter written
+largely in platform-specific assembly. This minimizes instruction
+overhead per bytecode dispatch, providing high baseline performance even
+when code remains uncompiled.</p>
+<h3 id="foreign-function-interface-ffi">Foreign Function Interface
+(FFI)</h3>
+<p>Like LuaJIT, LuaVela incorporates a high-performance Foreign Function
+Interface (FFI). This allows Lua code to call native C functions and
+directly manipulate C data structures with negligible overhead. By
+bypassing the traditional Lua C API—which requires pushing and popping
+values via a virtual stack—LuaVela minimizes data marshaling costs,
+enabling tight integration with high-speed C libraries.</p>
+<h2 id="enterprise-observability-and-profiling">Enterprise Observability
+and Profiling</h2>
+<p>One of the defining differentiators of LuaVela compared to vanilla
+LuaJIT is its built-in observability infrastructure. Running
+just-in-time compiled environments at scale often makes debugging and
+bottleneck identification difficult due to lack of visibility into JIT
+traces.</p>
+<p>LuaVela resolves this with a built-in statistical profiler designed
+to run in production with minimal overhead. It samples execution stacks
+at regular intervals, capturing details about both the interpreter state
+and JIT-compiled traces. This provides engineers with actionable data on
+CPU utilization, memory allocations, and trace aborts without causing
+performance degradation for active users.</p>
+<h2 id="compatibility-and-deployment">Compatibility and Deployment</h2>
+<p>LuaVela targets full semantic compatibility with Lua 5.1 and retains
+compatibility with the LuaJIT C API and bytecode. Consequently, existing
+applications running on Lua 5.1 or standard LuaJIT can generally migrate
+to LuaVela with minimal modifications.</p>
+<p>Because of its blend of aggressive trace compilation, optimized
+interpreter mechanics, and production-level diagnostic tooling, LuaVela
+serves as a viable drop-in replacement for high-throughput API gateways,
+web servers, and distributed backend services that have outgrown
+standard Lua runtimes.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

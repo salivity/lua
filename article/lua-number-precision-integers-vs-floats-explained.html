@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Number Precision: Integers vs Floats Explained - lua</title>
+    <meta name="description" content="This article examines the limits of numeric precision in the Lua programming language, comparing its 64-bit integer implementation against standard double-precision floating-point numbers. Since Lua 5.3, the language natively distinguishes between integer">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-number-precision-integers-vs-floats-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Number Precision: Integers vs Floats Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-number-precision-integers-vs-floats-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article examines the limits of numeric precision in the Lua programming language, comparing its 64-bit integer implementation against standard double-precision floating-point numbers. Since Lua 5.3, the language natively distinguishes between integer" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-number-precision-integers-vs-floats-explained">Lua Number
+Precision: Integers vs Floats Explained</h1>
+<p>This article examines the limits of numeric precision in the Lua
+programming language, comparing its 64-bit integer implementation
+against standard double-precision floating-point numbers. Since Lua 5.3,
+the language natively distinguishes between integers and floats,
+providing distinct operational boundaries for each. While floats are
+limited to 53 bits of safe integer precision, native integers allow
+exact representations across full 64-bit signed ranges.</p>
+<h3 id="luas-numeric-model">Lua's Numeric Model</h3>
+<p>Prior to Lua 5.3, all numbers were represented internally as
+double-precision floating-point values (IEEE 754 standard). Lua 5.3
+introduced a dual-representation system under a unified
+<code>number</code> type:</p>
+<ul>
+<li><strong>Integer</strong>: Typically a 64-bit signed integer.</li>
+<li><strong>Float</strong>: An IEEE 754 double-precision (64-bit)
+floating-point number.</li>
+</ul>
+<p>You can inspect the underlying representation of any value using
+<code>math.type(n)</code>, which returns either <code>"integer"</code>
+or <code>"float"</code>.</p>
+<h3 id="maximum-precision-for-lua-integers">Maximum Precision for Lua
+Integers</h3>
+<p>In standard builds of Lua 5.3 and later, integers are 64-bit signed
+values (<code>int64_t</code> in C).</p>
+<ul>
+<li><strong>Maximum Safe Value:</strong> <code>2^63 - 1</code> or
+<code>9,223,372,036,854,775,807</code></li>
+<li><strong>Minimum Safe Value:</strong> <code>-2^63</code> or
+<code>-9,223,372,036,854,775,808</code></li>
+<li><strong>Constants:</strong> Accessible directly via
+<code>math.maxinteger</code> and <code>math.mininteger</code>.</li>
+</ul>
+<p>Because integers use exact binary arithmetic, every single whole
+number within this interval is represented with 100% precision.
+Arithmetic operations that exceed these boundaries will silently wrap
+around according to two's complement rules rather than throwing an error
+or automatically coercing to a float.</p>
+<h3 id="maximum-precision-for-lua-floats">Maximum Precision for Lua
+Floats</h3>
+<p>Lua's floating-point numbers conform to standard IEEE 754 binary64
+format. A float divides its 64 bits into:</p>
+<ul>
+<li>1 sign bit</li>
+<li>11 exponent bits</li>
+<li>52 mantissa (significand) bits, offering 53 bits of effective
+precision due to an implicit leading bit.</li>
+</ul>
+<p>Because of the 53-bit mantissa, the maximum safe integer that can be
+continuously represented without loss of precision is:</p>
+<ul>
+<li><strong>Safe Continuous Limit:</strong> <code>2^53</code> or
+<code>9,007,199,254,740,992</code> (as well as <code>-2^53</code>).</li>
+</ul>
+<p>Beyond <code>2^53</code>, floating-point values can only represent
+every second integer, then every fourth integer at <code>2^54</code>,
+and so forth. Consequently, calculations involving whole numbers larger
+than <span class="math inline">\(9,007,199,254,740,992\)</span> will
+lose granularity when stored as floats.</p>
+<p>For fractional numbers, double precision provides roughly 15 to 17
+significant decimal digits of accuracy. Any fractional operations
+requiring more than 53 bits of significand will suffer from rounding
+errors inherent to binary representations of decimal fractions.</p>
+<h3 id="comparison-summary">Comparison Summary</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Metric</th>
+<th style="text-align: left;">Integer
+(<code>math.type() == "integer"</code>)</th>
+<th style="text-align: left;">Float
+(<code>math.type() == "float"</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Bit Width</strong></td>
+<td style="text-align: left;">64 bits</td>
+<td style="text-align: left;">64 bits (1 sign, 11 exp, 52 frac)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Exact Integer Range</strong></td>
+<td style="text-align: left;"><span
+class="math inline">\(-2^{63}\)</span> to <span
+class="math inline">\(2^{63} - 1\)</span></td>
+<td style="text-align: left;"><span
+class="math inline">\(-2^{53}\)</span> to <span
+class="math inline">\(2^{53}\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Max Safe Exact Value</strong></td>
+<td style="text-align: left;"><span
+class="math inline">\(9,223,372,036,854,775,807\)</span></td>
+<td style="text-align: left;"><span
+class="math inline">\(9,007,199,254,740,992\)</span></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Behavior at Limit</strong></td>
+<td style="text-align: left;">Wraps around (two's complement)</td>
+<td style="text-align: left;">Loses lower-order digits / precision</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Fractional
+Capability</strong></td>
+<td style="text-align: left;">None (whole numbers only)</td>
+<td style="text-align: left;">~15–17 decimal digits of precision</td>
+</tr>
+</tbody>
+</table>
+<p>To maintain maximum numeric fidelity in modern Lua, operations
+requiring exact whole values larger than <span
+class="math inline">\(9,007,199,254,740,992\)</span> (such as 64-bit
+database identifiers or file offsets) must strictly use integer
+arithmetic and avoid operators that force floating-point conversion,
+such as standard division (<code>/</code>) instead of integer division
+(<code>//</code>).</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Decodes Opcode and Operand Fields - lua</title>
+    <meta name="description" content="This article provides an overview of how the Lua virtual machine decodes its bytecode instructions. In Lua, every compiled virtual machine instruction is packed into a fixed 32-bit integer. The instruction decoder unpacks these 32-bit words into operation">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-decodes-opcode-and-operand-fields">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Decodes Opcode and Operand Fields - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-decodes-opcode-and-operand-fields" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of how the Lua virtual machine decodes its bytecode instructions. In Lua, every compiled virtual machine instruction is packed into a fixed 32-bit integer. The instruction decoder unpacks these 32-bit words into operation" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-decodes-opcode-and-operand-fields">How Lua Decodes
+Opcode and Operand Fields</h1>
+<p>This article provides an overview of how the Lua virtual machine
+decodes its bytecode instructions. In Lua, every compiled virtual
+machine instruction is packed into a fixed 32-bit integer. The
+instruction decoder unpacks these 32-bit words into operational codes
+(opcodes) and operational arguments (operands) at runtime by applying
+predefined bit-masking and bit-shifting macros defined in the Lua core
+engine.</p>
+<h3 id="the-32-bit-instruction-layout">The 32-Bit Instruction
+Layout</h3>
+<p>Lua utilizes a register-based virtual machine. To optimize
+performance and memory footprint, every instruction is stored as an
+unsigned 32-bit integer (<code>Instruction</code>, defined as a
+<code>uint32_t</code> in standard C).</p>
+<p>Depending on the instruction format, these 32 bits are divided into
+distinct segments. Across standard modern Lua versions (such as Lua 5.3
+and 5.4), instructions follow several primary formats:</p>
+<ul>
+<li><strong>iABC</strong>: Uses fields for an opcode, operand
+<code>A</code>, operand <code>B</code>, operand <code>C</code>, and
+sometimes a 1-bit flag (<code>k</code> in Lua 5.4).</li>
+<li><strong>iABx</strong>: Uses fields for an opcode, operand
+<code>A</code>, and an unsigned 18-bit combined operand
+<code>Bx</code>.</li>
+<li><strong>iAsBx</strong>: Uses fields for an opcode, operand
+<code>A</code>, and a signed 18-bit combined operand <code>sBx</code>
+(typically used for relative jump offsets).</li>
+<li><strong>iAx</strong>: Uses an opcode and a single large 26-bit
+operand <code>Ax</code> for operations that require larger immediate
+references.</li>
+</ul>
+<h3 id="bit-positions-and-sizes">Bit Positions and Sizes</h3>
+<p>In Lua's source code (primarily located in <code>lopcodes.h</code>),
+the structure of an instruction is defined by field sizes and bit
+positions.</p>
+<p>For example, in Lua 5.3:</p>
+<ul>
+<li><code>Opcode</code>: 6 bits (bits 0 to 5)</li>
+<li><code>Field A</code>: 8 bits (bits 6 to 13)</li>
+<li><code>Field C</code>: 9 bits (bits 14 to 22)</li>
+<li><code>Field B</code>: 9 bits (bits 23 to 31)</li>
+<li><code>Field Bx</code>: 18 bits (combines fields <code>C</code> and
+<code>B</code>, bits 14 to 31)</li>
+</ul>
+<p>In Lua 5.4, the layout was adjusted to accommodate an extra 1-bit
+operand flag (<code>k</code>) and a 7-bit opcode, changing the exact
+widths, but the underlying decoding principles remain identical.</p>
+<h3 id="extraction-via-bitwise-shifting-and-masking">Extraction via
+Bitwise Shifting and Masking</h3>
+<p>The instruction decoder extracts fields without performance overhead
+by using preprocessor macros that leverage two primary bitwise
+operations: right shifting (<code>&gt;&gt;</code>) and bitwise AND
+(<code>&amp;</code>).</p>
+<p>To extract an arbitrary field, the decoder performs two steps:</p>
+<ol type="1">
+<li><strong>Shift Right</strong>: Shift the 32-bit instruction to the
+right by the field's starting bit position, bringing the least
+significant bit of the target field to bit position 0.</li>
+<li><strong>Mask</strong>: Apply a bitwise AND with a bitmask
+corresponding to the width of the field, clearing any higher-order
+bits.</li>
+</ol>
+<p>A utility mask generator is typically constructed using:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define MASK1</span><span class="op">(</span><span class="pp">n</span><span class="op">,</span><span class="pp">p</span><span class="op">)</span><span class="pp">   </span><span class="op">((~((~(</span><span class="pp">Instruction</span><span class="op">)</span><span class="dv">0</span><span class="op">)&lt;&lt;(</span><span class="pp">n</span><span class="op">)))&lt;&lt;(</span><span class="pp">p</span><span class="op">))</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#define MASK0</span><span class="op">(</span><span class="pp">n</span><span class="op">,</span><span class="pp">p</span><span class="op">)</span><span class="pp">   </span><span class="op">(~</span><span class="pp">MASK1</span><span class="op">(</span><span class="pp">n</span><span class="op">,</span><span class="pp">p</span><span class="op">))</span></span></code></pre></div>
+<p>To extract values, Lua defines accessor macros such as:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define GET_OPCODE</span><span class="op">(</span><span class="pp">i</span><span class="op">)</span><span class="pp">   </span><span class="op">(</span><span class="pp">cast</span><span class="op">(</span><span class="pp">OpCode</span><span class="op">,</span><span class="pp"> </span><span class="op">((</span><span class="pp">i</span><span class="op">)</span><span class="pp"> </span><span class="op">&gt;&gt;</span><span class="pp"> POS_OP</span><span class="op">)</span><span class="pp"> </span><span class="op">&amp;</span><span class="pp"> MASK1</span><span class="op">(</span><span class="pp">SIZE_OP</span><span class="op">,</span><span class="pp"> </span><span class="dv">0</span><span class="op">))))</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#define GETARG_A</span><span class="op">(</span><span class="pp">i</span><span class="op">)</span><span class="pp">     </span><span class="op">(</span><span class="pp">cast_int</span><span class="op">(((</span><span class="pp">i</span><span class="op">)</span><span class="pp"> </span><span class="op">&gt;&gt;</span><span class="pp"> POS_A</span><span class="op">)</span><span class="pp"> </span><span class="op">&amp;</span><span class="pp"> MASK1</span><span class="op">(</span><span class="pp">SIZE_A</span><span class="op">,</span><span class="pp"> </span><span class="dv">0</span><span class="op">)))</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="pp">#define GETARG_B</span><span class="op">(</span><span class="pp">i</span><span class="op">)</span><span class="pp">     </span><span class="op">(</span><span class="pp">cast_int</span><span class="op">(((</span><span class="pp">i</span><span class="op">)</span><span class="pp"> </span><span class="op">&gt;&gt;</span><span class="pp"> POS_B</span><span class="op">)</span><span class="pp"> </span><span class="op">&amp;</span><span class="pp"> MASK1</span><span class="op">(</span><span class="pp">SIZE_B</span><span class="op">,</span><span class="pp"> </span><span class="dv">0</span><span class="op">)))</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="pp">#define GETARG_C</span><span class="op">(</span><span class="pp">i</span><span class="op">)</span><span class="pp">     </span><span class="op">(</span><span class="pp">cast_int</span><span class="op">(((</span><span class="pp">i</span><span class="op">)</span><span class="pp"> </span><span class="op">&gt;&gt;</span><span class="pp"> POS_C</span><span class="op">)</span><span class="pp"> </span><span class="op">&amp;</span><span class="pp"> MASK1</span><span class="op">(</span><span class="pp">SIZE_C</span><span class="op">,</span><span class="pp"> </span><span class="dv">0</span><span class="op">)))</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="pp">#define GETARG_Bx</span><span class="op">(</span><span class="pp">i</span><span class="op">)</span><span class="pp">    </span><span class="op">(</span><span class="pp">cast_int</span><span class="op">(((</span><span class="pp">i</span><span class="op">)</span><span class="pp"> </span><span class="op">&gt;&gt;</span><span class="pp"> POS_Bx</span><span class="op">)</span><span class="pp"> </span><span class="op">&amp;</span><span class="pp"> MASK1</span><span class="op">(</span><span class="pp">SIZE_Bx</span><span class="op">,</span><span class="pp"> </span><span class="dv">0</span><span class="op">)))</span></span></code></pre></div>
+<p>When fetching the opcode, <code>GET_OPCODE(i)</code> shifts the
+instruction by <code>POS_OP</code> (which is <code>0</code>) and masks
+the value to ensure only the lower 6 or 7 bits are preserved, casting
+the result directly to the internal <code>OpCode</code> enumeration.</p>
+<h3 id="decoding-signed-operands">Decoding Signed Operands</h3>
+<p>Signed operands like <code>sBx</code> are primarily used for relative
+jumps where an instruction pointer needs to move forward or backward.
+Because raw bit manipulation extracts an unsigned integer, the signed
+value cannot simply be masked directly.</p>
+<p>Lua handles this through excess-K (biased) representation rather than
+two's complement within the bitfield. The unsigned field <code>Bx</code>
+has a bias subtracted from it:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define OFFSET_sBx      </span><span class="op">(</span><span class="pp">MAXARG_Bx </span><span class="op">&gt;&gt;</span><span class="pp"> </span><span class="dv">1</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#define GETARG_sBx</span><span class="op">(</span><span class="pp">i</span><span class="op">)</span><span class="pp">   </span><span class="op">(</span><span class="pp">GETARG_Bx</span><span class="op">(</span><span class="pp">i</span><span class="op">)</span><span class="pp"> </span><span class="op">-</span><span class="pp"> OFFSET_sBx</span><span class="op">)</span></span></code></pre></div>
+<p>By subtracting half the maximum value of <code>Bx</code>, the
+unsigned value is mapped back to a centered range containing both
+negative and positive integers.</p>
+<h3 id="execution-in-the-virtual-machine-loop">Execution in the Virtual
+Machine Loop</h3>
+<p>The actual extraction occurs inside Lua's core execution loop in
+<code>lvm.c</code> (inside the <code>luaV_execute</code> function):</p>
+<ol type="1">
+<li><strong>Fetch</strong>: The engine reads the instruction pointed to
+by the virtual program counter:
+<code>Instruction i = *pc++;</code>.</li>
+<li><strong>Opcode Extraction</strong>: The engine evaluates
+<code>GET_OPCODE(i)</code>.</li>
+<li><strong>Dispatch</strong>: A large C <code>switch</code> statement
+receives the extracted opcode.</li>
+<li><strong>Operand Extraction</strong>: Within individual switch cases,
+macros like <code>GETARG_A(i)</code>, <code>GETARG_B(i)</code>, or
+<code>GETARG_C(i)</code> are invoked inline to retrieve register
+indices, constants table indexes, or jump offsets.</li>
+</ol>
+<p>By structuring decoding into inline bitwise macros, Lua extracts
+operational parameters directly in CPU registers without memory
+allocation or parsing overhead.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

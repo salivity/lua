@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua 5.2 to 5.3: Bitwise Operators and String Formatting - lua</title>
+    <meta name="description" content="The transition from Lua 5.2 to Lua 5.3 introduced significant enhancements to core data manipulation capabilities, most prominently the inclusion of native integer arithmetic. This architectural shift overhauled bitwise manipulation—moving from a separate">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-5-2-to-5-3-bitwise-operators-and-string-formatting">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua 5.2 to 5.3: Bitwise Operators and String Formatting - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-5-2-to-5-3-bitwise-operators-and-string-formatting" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The transition from Lua 5.2 to Lua 5.3 introduced significant enhancements to core data manipulation capabilities, most prominently the inclusion of native integer arithmetic. This architectural shift overhauled bitwise manipulation—moving from a separate" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-52-to-53-bitwise-operators-and-string-formatting">Lua 5.2 to
+5.3: Bitwise Operators and String Formatting</h1>
+<p>The transition from Lua 5.2 to Lua 5.3 introduced significant
+enhancements to core data manipulation capabilities, most prominently
+the inclusion of native integer arithmetic. This architectural shift
+overhauled bitwise manipulation—moving from a separate, library-driven
+model to first-class syntax operators—while fundamentally expanding the
+string library with native binary serialization tools and updated
+formatting specifiers.</p>
+<h2 id="bitwise-operators-from-library-calls-to-native-syntax">Bitwise
+Operators: From Library Calls to Native Syntax</h2>
+<p>The approach to bitwise logic represents one of the most substantial
+architectural differences between Lua 5.2 and 5.3.</p>
+<h3 id="lua-52-the-bit32-library">Lua 5.2: The <code>bit32</code>
+Library</h3>
+<p>In Lua 5.2, all numbers were represented internally as
+double-precision floating-point values by default. Because there was no
+dedicated integer type or syntax for bitwise manipulation, bitwise logic
+had to be executed through the built-in <code>bit32</code> library.</p>
+<p>Operations were function-based and strictly limited to 32-bit
+integers:</p>
+<ul>
+<li><code>bit32.band(...)</code> for bitwise AND</li>
+<li><code>bit32.bor(...)</code> for bitwise OR</li>
+<li><code>bit32.bxor(...)</code> for bitwise XOR</li>
+<li><code>bit32.bnot(x)</code> for bitwise NOT</li>
+<li><code>bit32.lshift(x, disp)</code> and
+<code>bit32.rshift(x, disp)</code> for logical shifts</li>
+<li><code>bit32.arshift(x, disp)</code> for arithmetic right shift</li>
+</ul>
+<p>Before performing an operation, Lua 5.2 converted floating-point
+inputs into unsigned 32-bit integers, returning a float value
+representing the result modulo <span
+class="math inline">\(2^{32}\)</span>.</p>
+<h3 id="lua-53-first-class-infix-operators">Lua 5.3: First-Class Infix
+Operators</h3>
+<p>Lua 5.3 introduced a dedicated integer subtype (typically standard
+64-bit signed integers) alongside floats under the broader
+<code>number</code> type. As a result, the <code>bit32</code> library
+was deprecated and removed from the default build in favor of native
+infix and unary operators:</p>
+<ul>
+<li><code>&amp;</code> for bitwise AND</li>
+<li><code>|</code> for bitwise OR</li>
+<li><code>~</code> for binary XOR and unary bitwise NOT</li>
+<li><code>&gt;&gt;</code> for logical right shift</li>
+<li><code>&lt;&lt;</code> for logical left shift</li>
+</ul>
+<p>Because integers in Lua 5.3 default to 64 bits, these operators
+manipulate full 64-bit words rather than being restricted to 32-bit
+limits. Shifts automatically handle zero-filling, and negative shift
+operands reverse the shift direction.</p>
+<hr />
+<h2 id="string-formatting-and-binary-serialization">String Formatting
+and Binary Serialization</h2>
+<p>String manipulation in Lua 5.3 evolved to complement the introduction
+of integers and to standardize the serialization of raw data.</p>
+<h3 id="binary-data-packing-stringpack-and-stringunpack">Binary Data
+Packing: <code>string.pack</code> and <code>string.unpack</code></h3>
+<p>In Lua 5.2, developers relied on external C modules (such as
+<code>lpack</code>) or custom pure-Lua routines to serialize and
+deserialize arbitrary binary structures.</p>
+<p>Lua 5.3 introduced native binary packing directly into the
+<code>string</code> library:</p>
+<ul>
+<li><strong><code>string.pack(fmt, v1, v2, ...)</code></strong>:
+Serializes values into a binary string according to the specified format
+string.</li>
+<li><strong><code>string.unpack(fmt, s [, pos])</code></strong>:
+Extracts values from a binary string based on the format string.</li>
+<li><strong><code>string.packsize(fmt)</code></strong>: Calculates the
+static byte size required by a given format string.</li>
+</ul>
+<p>The format string supports endianness specifiers (<code>&lt;</code>
+for little-endian, <code>&gt;</code> for big-endian, <code>=</code> for
+native), fixed-width signed and unsigned integers (<code>i1</code>
+through <code>i16</code>, <code>I1</code> through <code>I16</code>),
+floats, fixed-length strings (<code>c</code>), and length-prefixed
+strings (<code>s</code>).</p>
+<h3 id="enhancements-to-stringformat">Enhancements to
+<code>string.format</code></h3>
+<p>While Lua 5.2 provided a standard C-like <code>string.format</code>
+implementation, Lua 5.3 expanded its capabilities:</p>
+<ul>
+<li><strong>Native Integer Specifiers</strong>: Modifiers like
+<code>%d</code>, <code>%i</code>, <code>%o</code>, <code>%u</code>,
+<code>%x</code>, and <code>%X</code> work natively with 64-bit integers
+without precision loss that could occur when casting large integers via
+floating-point doubles.</li>
+<li><strong>Pointer Formatting (<code>%p</code>)</strong>: Lua 5.3 added
+the <code>%p</code> option to format values as pointer addresses,
+particularly useful for debugging tables, functions, and userdata.</li>
+<li><strong>Extended <code>%q</code> Specifier</strong>: In Lua 5.2,
+<code>%q</code> safely quoted strings for Lua consumption. Lua 5.3
+expanded <code>%q</code> to safely format booleans, <code>nil</code>,
+numbers (including hexadecimal float representation for exact
+precision), and strings, allowing reliable serialization of arbitrary
+primitive values into valid Lua source code.</li>
+<li><strong>Meta-method Awareness</strong>: The <code>%s</code> modifier
+in Lua 5.3 automatically honors the <code>__tostring</code> metamethod
+on tables or userdata passed as arguments.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

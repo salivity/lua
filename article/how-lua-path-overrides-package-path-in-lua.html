@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How LUA_PATH Overrides package.path in Lua - lua</title>
+    <meta name="description" content="This article explains how the LUAPATH environment variable controls module resolution in the Lua programming language by modifying or replacing the default package.path string. When Lua boots, it queries the environment to set up its module search templat">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-path-overrides-package-path-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How LUA_PATH Overrides package.path in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-path-overrides-package-path-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains how the LUAPATH environment variable controls module resolution in the Lua programming language by modifying or replacing the default package.path string. When Lua boots, it queries the environment to set up its module search templat" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua_path-overrides-packagepath-in-lua">How LUA_PATH
+Overrides package.path in Lua</h1>
+<p>This article explains how the <code>LUA_PATH</code> environment
+variable controls module resolution in the Lua programming language by
+modifying or replacing the default <code>package.path</code> string.
+When Lua boots, it queries the environment to set up its module search
+templates, allowing developers to extend, alter, or completely override
+where the <code>require</code> function searches for source files.
+Understanding the substitution rules—specifically the double semicolon
+syntax—is critical for managing dependencies across different
+development environments.</p>
+<h2 id="default-initialization-of-packagepath">Default Initialization of
+<code>package.path</code></h2>
+<p>When you load a module in Lua using
+<code>require("module_name")</code>, Lua traverses a series of file path
+templates stored in the global variable <code>package.path</code>.</p>
+<p>By default, <code>package.path</code> is initialized from a
+compile-time default configured in Lua's <code>luaconf.h</code> header
+file. This standard path usually includes common system directories such
+as <code>/usr/local/share/lua/5.x/?.lua</code> on Unix-like systems or
+relative paths to the Lua binary.</p>
+<h2 id="environment-variable-lookup-order">Environment Variable Lookup
+Order</h2>
+<p>Before falling back to the hardcoded defaults, the Lua interpreter
+checks the host operating system's environment variables. Lua checks for
+version-specific variables first, followed by the generic variable:</p>
+<ol type="1">
+<li><code>LUA_PATH_X_Y</code> (where <code>X_Y</code> matches the
+running version, such as <code>LUA_PATH_5_4</code>)</li>
+<li><code>LUA_PATH</code></li>
+<li>Compiled-in default path (if neither variable is set)</li>
+</ol>
+<p>If a version-specific variable like <code>LUA_PATH_5_4</code> is
+defined, it takes precedence and completely ignores
+<code>LUA_PATH</code>. If only <code>LUA_PATH</code> is defined, it
+applies across all Lua versions that do not have their version-specific
+variable set.</p>
+<h2 id="override-mechanics-complete-replacement-vs-appending">Override
+Mechanics: Complete Replacement vs. Appending</h2>
+<p>The replacement behavior depends strictly on whether the value of the
+environment variable includes two consecutive semicolons
+(<code>;;</code>).</p>
+<h3 id="1-complete-replacement">1. Complete Replacement</h3>
+<p>If <code>LUA_PATH</code> contains path templates separated only by
+single semicolons, the default compiled-in search paths are discarded
+entirely.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">LUA_PATH</span><span class="op">=</span><span class="st">&quot;./src/?.lua;./modules/?.lua&quot;</span></span></code></pre></div>
+<p>In this case, <code>package.path</code> becomes exactly:</p>
+<pre><code>./src/?.lua;./modules/?.lua</code></pre>
+<p>Lua will only search those two locations. System-wide installed
+modules will no longer be found unless explicitly defined in the
+variable.</p>
+<h3 id="2-splicing-with-the-double-semicolon-">2. Splicing with the
+Double Semicolon (<code>;;</code>)</h3>
+<p>Lua uses <code>;;</code> as a placeholder token representing the
+default <code>package.path</code>. When Lua detects <code>;;</code>
+within the environment variable, it expands that token into the
+compiled-in default string.</p>
+<ul>
+<li><p><strong>Prepending custom directories:</strong></p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">LUA_PATH</span><span class="op">=</span><span class="st">&quot;./custom/?.lua;;&quot;</span></span></code></pre></div>
+<p>Lua searches <code>./custom/?.lua</code> first. If the file is not
+found, it continues searching the standard system paths.</p></li>
+<li><p><strong>Appending custom directories:</strong></p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">LUA_PATH</span><span class="op">=</span><span class="st">&quot;;;./fallback/?.lua&quot;</span></span></code></pre></div>
+<p>Lua searches all default system paths first, only checking
+<code>./fallback/?.lua</code> if standard locations fail.</p></li>
+<li><p><strong>Sandwiching default paths:</strong></p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">LUA_PATH</span><span class="op">=</span><span class="st">&quot;./override/?.lua;;./fallback/?.lua&quot;</span></span></code></pre></div>
+<p>Lua checks <code>./override/?.lua</code>, followed by all default
+system paths, followed finally by
+<code>./fallback/?.lua</code>.</p></li>
+</ul>
+<h2 id="path-template-syntax">Path Template Syntax</h2>
+<p><code>package.path</code> strings adhere to these formatting
+rules:</p>
+<ul>
+<li><strong>Templates:</strong> Semicolons (<code>;</code>) delimit
+individual search templates.</li>
+<li><strong>Wildcards:</strong> The question mark (<code>?</code>) is
+replaced by the module name passed to <code>require()</code>.</li>
+<li><strong>Submodules:</strong> Periods in module names denote
+subdirectories. Calling <code>require("a.b")</code> causes Lua to
+transform the query into <code>a/b</code> and substitute it for
+<code>?</code>, checking paths like <code>./src/a/b.lua</code>.</li>
+</ul>
+<h2 id="inspecting-the-active-path">Inspecting the Active Path</h2>
+<p>You can verify how <code>LUA_PATH</code> affects your runtime
+environment by running Lua directly from the command line:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-e</span> <span class="st">&#39;print(package.path)&#39;</span></span></code></pre></div>
+<p>This prints the finalized template string that Lua constructed after
+reading and evaluating the environment variables.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

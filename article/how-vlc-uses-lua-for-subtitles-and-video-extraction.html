@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How VLC Uses Lua for Subtitles and Video Extraction - lua</title>
+    <meta name="description" content="VLC Media Player integrates the Lua scripting language to provide a flexible, lightweight extension system that handles dynamic web-based tasks without requiring recompilation of its core C codebase. By embedding a Lua interpreter, VLC enables developers">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-vlc-uses-lua-for-subtitles-and-video-extraction">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How VLC Uses Lua for Subtitles and Video Extraction - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-vlc-uses-lua-for-subtitles-and-video-extraction" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="VLC Media Player integrates the Lua scripting language to provide a flexible, lightweight extension system that handles dynamic web-based tasks without requiring recompilation of its core C codebase. By embedding a Lua interpreter, VLC enables developers" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-vlc-uses-lua-for-subtitles-and-video-extraction">How VLC
+Uses Lua for Subtitles and Video Extraction</h1>
+<p>VLC Media Player integrates the Lua scripting language to provide a
+flexible, lightweight extension system that handles dynamic web-based
+tasks without requiring recompilation of its core C codebase. By
+embedding a Lua interpreter, VLC enables developers to write scripts
+that fetch external subtitles from online databases and parse streaming
+video websites to extract direct playback links. This modular
+architecture allows VLC to adapt rapidly to changes in web page layouts,
+APIs, and media hosting protocols while keeping the core application
+secure and lean.</p>
+<h2 id="the-lua-architecture-in-vlc">The Lua Architecture in VLC</h2>
+<p>VLC embeds a lightweight Lua runtime that exposes specific
+application programming interfaces (APIs) to sandboxed scripts. Instead
+of writing platform-dependent C plugins for tasks that change
+frequently, VLC delegates network requests, HTML parsing, and metadata
+scraping to Lua scripts located in user or system directories (such as
+<code>lua/extensions/</code> and <code>lua/playlist/</code>).</p>
+<p>The VLC core provides predefined Lua modules, such as:</p>
+<ul>
+<li><code>vlc.net</code>: Handles low-level network operations,
+including HTTP and HTTPS queries.</li>
+<li><code>vlc.stream</code>: Reads remote or local streams of data.</li>
+<li><code>vlc.strings</code>: Provides URL encoding/decoding and string
+manipulation utilities.</li>
+<li><code>vlc.input</code>: Accesses metadata about the currently
+playing media, such as title, file size, duration, and cryptographic
+hashes.</li>
+</ul>
+<h2 id="subtitle-fetching-plugins">Subtitle Fetching Plugins</h2>
+<p>Subtitle extensions, such as the built-in VLSub extension, operate
+within VLC's extensions subsystem (<code>lua/extensions/</code>). When a
+user requests subtitles for an active media item, the Lua script
+executes the following sequence:</p>
+<ol type="1">
+<li><strong>Hash and Metadata Calculation:</strong> The script reads the
+media file via VLC's input API. For video files, it calculates a hash
+based on the file size and specific byte segments (the OpenSubtitles
+hashing algorithm), avoiding the need to process the entire file.</li>
+<li><strong>API Communication:</strong> Using <code>vlc.net.get()</code>
+or custom socket implementations, the script sends an HTTP request
+containing the hash, filename, and preferred language to subtitle
+databases via REST or XML-RPC endpoints.</li>
+<li><strong>Data Parsing:</strong> The script parses the server response
+(typically formatted in JSON or XML), extracts download URLs for
+matching <code>.srt</code> or <code>.vtt</code> files, and presents a
+list in a VLC-rendered GUI dialog.</li>
+<li><strong>Injection into Playback:</strong> Once a subtitle file is
+selected and downloaded, the script calls
+<code>vlc.input.add_subtitle()</code>, which loads the subtitle directly
+into the active playback pipeline without interrupting the video.</li>
+</ol>
+<h2 id="video-extraction-and-parser-plugins">Video Extraction and Parser
+Plugins</h2>
+<p>Video extractors operate as playlist parsers
+(<code>lua/playlist/</code>). These scripts enable VLC to accept a
+standard webpage URL—such as a link to YouTube, Vimeo, or
+DailyMotion—and convert it into a direct media stream.</p>
+<p>Because web platforms do not host media directly at standard HTML
+URLs, the parser bridges the gap:</p>
+<ol type="1">
+<li><strong>URL Interception:</strong> When an input URL is provided to
+VLC, the player queries its parser scripts sequentially. Each script
+defines a <code>probe()</code> function that evaluates whether the URL
+matches specific patterns or domains.</li>
+<li><strong>Page Scraping and Demuxing:</strong> When a match occurs,
+the script's <code>parse()</code> function fetches the HTML or JSON
+payload using <code>vlc.stream()</code>.</li>
+<li><strong>URL Resolution:</strong> Modern video platforms often
+obscure stream URLs within JavaScript variables, manifest files (such as
+HLS <code>.m3u8</code> or DASH <code>.mpd</code>), or encrypted
+signature parameters. The Lua script executes regular expressions and
+string manipulations to extract the raw audio and video stream addresses
+and decipher any required access tokens.</li>
+<li><strong>Handover to Core:</strong> The script returns the direct
+media URL and associated metadata (title, artist, artwork) back to VLC.
+The core player then bypasses the original webpage entirely and connects
+directly to the media stream.</li>
+</ol>
+<p>By delegating these unstable, web-facing tasks to plain-text Lua
+scripts, VLC can be updated with single-file patches whenever a video
+provider alters its API or front-end structure.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

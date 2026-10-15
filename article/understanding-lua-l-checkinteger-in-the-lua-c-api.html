@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding luaL_checkinteger in the Lua C API - lua</title>
+    <meta name="description" content="The luaLcheckinteger function is a core utility in the Lua C API designed to validate and extract integer arguments passed from Lua scripts into C functions. It inspects a specified stack index, verifies whether the value is an integer or can be converted">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/understanding-lua-l-checkinteger-in-the-lua-c-api">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding luaL_checkinteger in the Lua C API - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/understanding-lua-l-checkinteger-in-the-lua-c-api" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The luaLcheckinteger function is a core utility in the Lua C API designed to validate and extract integer arguments passed from Lua scripts into C functions. It inspects a specified stack index, verifies whether the value is an integer or can be converted" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="understanding-lual_checkinteger-in-the-lua-c-api">Understanding
+luaL_checkinteger in the Lua C API</h1>
+<p>The <code>luaL_checkinteger</code> function is a core utility in the
+Lua C API designed to validate and extract integer arguments passed from
+Lua scripts into C functions. It inspects a specified stack index,
+verifies whether the value is an integer or can be converted to one, and
+returns it as a C <code>lua_Integer</code>. If the argument is missing,
+of the wrong type, or cannot be safely converted, the function
+automatically halts execution and throws a formatted Lua error, ensuring
+that C extensions do not operate on invalid or undefined numerical
+data.</p>
+<h3 id="enforcing-strict-type-safety">Enforcing Strict Type Safety</h3>
+<p>In the Lua C API, numerical values can be either standard
+floating-point numbers or distinct integers (introduced natively in Lua
+5.3). When a C function requires an integer—such as an array index, a
+buffer size, or a bitmask—processing a floating-point number with a
+fractional part can lead to undefined behavior or memory corruption.</p>
+<p>The primary purpose of <code>luaL_checkinteger</code> is to enforce
+that the value at the given stack index safely corresponds to a valid
+integer. In modern Lua versions, if a floating-point number has a
+fractional component (e.g., <code>3.14</code>),
+<code>luaL_checkinteger</code> rejects the input because it cannot be
+converted to an integer without data loss. If the float represents an
+exact integer (e.g., <code>3.0</code>), the function safely casts and
+returns it as a <code>lua_Integer</code>.</p>
+<h3 id="automated-error-handling">Automated Error Handling</h3>
+<p>Without helper functions from the auxiliary library
+(<code>luaL_*</code>), developers must manually inspect the stack using
+lower-level routines. This standard manual approach requires multiple
+steps:</p>
+<ol type="1">
+<li>Checking if the value exists and is an integer using
+<code>lua_isinteger</code>.</li>
+<li>Converting the value using <code>lua_tointeger</code> or
+<code>lua_tointegerx</code>.</li>
+<li>Generating and throwing a custom error message via
+<code>luaL_error</code> if validation fails.</li>
+</ol>
+<p><code>luaL_checkinteger</code> combines all three steps into a single
+call. If validation fails, it triggers a standard Lua runtime error with
+a precise, consistent diagnostic message, such as:</p>
+<pre class="text"><code>bad argument #1 to &#39;my_function&#39; (number has no integer representation)</code></pre>
+<p>Because it automatically handles the error through Lua's
+longjmp-based exception mechanism, control flow immediately exits the C
+function, eliminating the boilerplate code required to safely handle
+invalid input.</p>
+<h3 id="comparison-with-alternative-api-functions">Comparison with
+Alternative API Functions</h3>
+<p>Understanding when to use <code>luaL_checkinteger</code> involves
+comparing it to related API calls:</p>
+<ul>
+<li><strong><code>lua_tointeger</code></strong>: Converts the value at
+the given index to a <code>lua_Integer</code> without raising an error.
+If the argument is invalid, non-numeric, or missing, it silently returns
+<code>0</code>. This silent failure can disguise bugs or lead to
+unintended behavior in C routines.</li>
+<li><strong><code>lua_tointegerx</code></strong>: Converts the value and
+returns a boolean status flag to indicate success or failure. While
+safer than <code>lua_tointeger</code>, it still requires manual
+branching and error generation.</li>
+<li><strong><code>luaL_optinteger</code></strong>: Functions similarly
+to <code>luaL_checkinteger</code>, but allows the argument to be
+<code>nil</code> or absent, returning a programmer-defined default value
+instead of raising an error.</li>
+</ul>
+<h3 id="summary-of-purpose">Summary of Purpose</h3>
+<p>The purpose of <code>luaL_checkinteger</code> is to provide robust
+defensive programming at the boundary between Lua and C. By verifying
+that numerical arguments strictly adhere to integer representations and
+automatically handling type mismatches with standardized error messages,
+it prevents corrupted state and crashes while minimizing boilerplate
+code in native modules.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

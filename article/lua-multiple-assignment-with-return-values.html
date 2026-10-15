@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Multiple Assignment with Return Values - lua</title>
+    <meta name="description" content="In Lua, multiple assignment allows you to bind several variables to multiple values in a single statement. When combined with functions that return multiple results, Lua dynamically aligns the list of variables on the left with the values returned on the">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-multiple-assignment-with-return-values">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Multiple Assignment with Return Values - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-multiple-assignment-with-return-values" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, multiple assignment allows you to bind several variables to multiple values in a single statement. When combined with functions that return multiple results, Lua dynamically aligns the list of variables on the left with the values returned on the" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-multiple-assignment-with-return-values">Lua Multiple
+Assignment with Return Values</h1>
+<p>In Lua, multiple assignment allows you to bind several variables to
+multiple values in a single statement. When combined with functions that
+return multiple results, Lua dynamically aligns the list of variables on
+the left with the values returned on the right. This article explains
+how Lua maps return values to variables, how it handles mismatches in
+count, and how expression positioning alters the number of values
+retained.</p>
+<h3 id="basic-syntax-and-value-mapping">Basic Syntax and Value
+Mapping</h3>
+<p>Lua functions can natively return multiple values separated by
+commas. In a multiple assignment statement, Lua evaluates the function
+on the right-hand side and assigns each returned value sequentially to
+the corresponding variable on the left-hand side.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> getCoordinates<span class="op">()</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">10</span><span class="op">,</span> <span class="dv">20</span><span class="op">,</span> <span class="dv">30</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">x</span><span class="op">,</span> <span class="va">y</span><span class="op">,</span> <span class="va">z</span> <span class="op">=</span> getCoordinates<span class="op">()</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- x = 10, y = 20, z = 30</span></span></code></pre></div>
+<h3 id="handling-mismatched-counts">Handling Mismatched Counts</h3>
+<p>When the number of variables does not match the number of return
+values, Lua adjusts the list using straightforward truncation and
+padding rules:</p>
+<ul>
+<li><strong>More variables than return values:</strong> Any variable
+that does not receive a corresponding return value is assigned
+<code>nil</code>.</li>
+<li><strong>More return values than variables:</strong> Any extra values
+returned by the function are discarded.</li>
+</ul>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Discarding extra values</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">a</span><span class="op">,</span> <span class="va">b</span> <span class="op">=</span> getCoordinates<span class="op">()</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- a = 10, b = 20 (30 is discarded)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- Padding with nil</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">p</span><span class="op">,</span> <span class="va">q</span><span class="op">,</span> <span class="va">r</span><span class="op">,</span> <span class="va">s</span> <span class="op">=</span> getCoordinates<span class="op">()</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- p = 10, q = 20, r = 30, s = nil</span></span></code></pre></div>
+<h3 id="the-position-rule-for-multi-return-expressions">The Position
+Rule for Multi-Return Expressions</h3>
+<p>How many values a function provides depends strictly on where the
+function call appears in the assignment list:</p>
+<ol type="1">
+<li><strong>At the end of the list:</strong> If a function call is the
+last (or only) expression in the assignment list, it produces as many
+return values as needed to fulfill the remaining variables.</li>
+<li><strong>Not at the end of the list:</strong> If a function call is
+followed by another expression, Lua adjusts its return values to exactly
+<strong>one</strong>, discarding the rest.</li>
+</ol>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> pair<span class="op">()</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">&quot;first&quot;</span><span class="op">,</span> <span class="st">&quot;second&quot;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- &#39;pair()&#39; is not last: its returns are truncated to 1</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">,</span> <span class="va">c</span> <span class="op">=</span> pair<span class="op">(),</span> <span class="st">&quot;extra&quot;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- a = &quot;first&quot;, b = &quot;extra&quot;, c = nil</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- &#39;pair()&#39; is last: it provides all its return values</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">x</span><span class="op">,</span> <span class="va">y</span><span class="op">,</span> <span class="va">z</span> <span class="op">=</span> <span class="st">&quot;extra&quot;</span><span class="op">,</span> pair<span class="op">()</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co">-- x = &quot;extra&quot;, y = &quot;first&quot;, z = &quot;second&quot;</span></span></code></pre></div>
+<h3 id="forcing-a-single-return-value">Forcing a Single Return
+Value</h3>
+<p>You can explicitly limit a function call to return only its first
+result by wrapping the call in parentheses. The enclosing parentheses
+turn the multi-value return into a single-value expression.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">x</span><span class="op">,</span> <span class="va">y</span> <span class="op">=</span> <span class="op">(</span>getCoordinates<span class="op">())</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- x = 10, y = nil (parentheses force only the first value to be used)</span></span></code></pre></div>
+<h3 id="common-applications">Common Applications</h3>
+<p>Multiple assignment with return values is heavily leveraged across
+standard Lua idioms:</p>
+<ul>
+<li><strong>Error handling:</strong> Many functions return the result on
+success, or <code>nil</code> followed by an error message on failure
+(e.g., <code>local file, err = io.open("missing.txt", "r")</code>).</li>
+<li><strong>Protected calls:</strong> <code>pcall</code> returns a
+boolean status flag as the first value, followed by either the returned
+results or an error object (e.g.,
+<code>local success, result = pcall(riskyFunction)</code>).</li>
+<li><strong>Pattern matching:</strong> Functions such as
+<code>string.find</code> return starting and ending indices
+simultaneously (e.g.,
+<code>local startIdx, endIdx = string.find("hello", "ll")</code>).</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

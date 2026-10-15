@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Many Lines of Code Is the Lua Interpreter? - lua</title>
+    <meta name="description" content="The Lua programming language is widely celebrated for its efficiency, portability, and remarkably small footprint. This article provides a clear breakdown of approximately how many lines of source code comprise the core Lua interpreter, how the codebase i">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-many-lines-of-code-is-the-lua-interpreter">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Many Lines of Code Is the Lua Interpreter? - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-many-lines-of-code-is-the-lua-interpreter" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The Lua programming language is widely celebrated for its efficiency, portability, and remarkably small footprint. This article provides a clear breakdown of approximately how many lines of source code comprise the core Lua interpreter, how the codebase i" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-many-lines-of-code-is-the-lua-interpreter">How Many Lines of
+Code Is the Lua Interpreter?</h1>
+<p>The Lua programming language is widely celebrated for its efficiency,
+portability, and remarkably small footprint. This article provides a
+clear breakdown of approximately how many lines of source code comprise
+the core Lua interpreter, how the codebase is structured between the
+virtual machine and standard libraries, and how its compact design
+compares across modern versions.</p>
+<h3 id="the-short-answer">The Short Answer</h3>
+<p>The core interpreter of the Lua programming language comprises
+approximately <strong>15,000 to 20,000 lines of C code</strong>
+(excluding standard libraries and comments).</p>
+<p>When you count the entire official source distribution—which includes
+the core runtime, compiler, garbage collector, standard libraries, and
+the standalone executable wrapper—the total size hovers around
+<strong>25,000 to 33,000 lines</strong> of ANSI C, including comments
+and blank lines. Stripping out whitespace and comments leaves roughly
+<strong>18,000 to 22,000 lines of physical code</strong>.</p>
+<hr />
+<h3 id="codebase-breakdown-lua-54">Codebase Breakdown (Lua 5.4)</h3>
+<p>In the modern release of Lua (version 5.4), the entire
+<code>src/</code> directory contains roughly 33,000 total lines across
+all <code>.c</code> and <code>.h</code> files. The distribution is split
+into three main components:</p>
+<ol type="1">
+<li><p><strong>The Core Engine (~18,000 to 20,000 total lines)</strong>
+The core contains the parser (<code>lparser.c</code>), the lexical
+analyzer (<code>llex.c</code>), the virtual machine execution loop
+(<code>lvm.c</code>), the table implementation (<code>ltable.c</code>),
+memory management, and the incremental garbage collector
+(<code>lgc.c</code>).</p></li>
+<li><p><strong>The Standard Libraries (~8,000 to 9,000 total
+lines)</strong> Lua includes standard libraries for operations such as
+string manipulation (<code>lstrlib.c</code>), math
+(<code>lmathlib.c</code>), operating system facilities
+(<code>loslib.c</code>), table algorithms (<code>ltablib.c</code>), and
+input/output (<code>liolib.c</code>).</p></li>
+<li><p><strong>Standalone Applications (~1,500 total lines)</strong> The
+command-line interpreter (<code>lua.c</code>) and the bytecode compiler
+(<code>luac.c</code>) are small frontends that tie the library and core
+together.</p></li>
+</ol>
+<hr />
+<h3 id="line-count-across-major-versions">Line Count Across Major
+Versions</h3>
+<p>As Lua has added features like 64-bit integers, generational garbage
+collection, and bitwise operators, its code size has grown modestly
+while remaining exceptionally compact:</p>
+<ul>
+<li><strong>Lua 4.0:</strong> ~12,000 total lines</li>
+<li><strong>Lua 5.1:</strong> ~17,000 total lines (~12,000 lines of
+actual code)</li>
+<li><strong>Lua 5.2:</strong> ~24,000 total lines (~16,000 lines of
+actual code)</li>
+<li><strong>Lua 5.3:</strong> ~28,000 total lines (~19,000 lines of
+actual code)</li>
+<li><strong>Lua 5.4:</strong> ~33,000 total lines (~22,000 lines of
+actual code)</li>
+</ul>
+<hr />
+<h3 id="why-the-lua-codebase-is-so-compact">Why the Lua Codebase Is So
+Compact</h3>
+<p>Several intentional architectural decisions keep Lua's line count far
+lower than interpreters like Python (CPython) or Ruby (CRuby), which
+routinely exceed hundreds of thousands of lines of code:</p>
+<ul>
+<li><strong>Strict Adherence to ANSI C:</strong> Lua avoids
+platform-specific system calls in its core, relying strictly on standard
+C library capabilities.</li>
+<li><strong>Unified Data Structure:</strong> Lua utilizes associative
+tables as its sole primary data structuring mechanism, eliminating the
+need for distinct codebases for arrays, hashes, sets, and objects.</li>
+<li><strong>Single-Pass Compilation:</strong> Lua parses code directly
+into register-based virtual machine bytecode in a single pass without
+building an explicit abstract syntax tree (AST), substantially reducing
+parsing logic.</li>
+<li><strong>Embedding Focus:</strong> Lua is designed as an embedded
+extension language, delegating platform-heavy tasks, complex GUI
+components, and external networking to the host application.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

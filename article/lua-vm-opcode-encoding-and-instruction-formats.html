@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua VM Opcode Encoding and Instruction Formats - lua</title>
+    <meta name="description" content="The Lua virtual machine relies on a register-based architecture that utilizes fixed-size 32-bit instructions to execute compiled bytecode. Within each 32-bit instruction word, Lua packs an opcode along with its associated register targets, immediate value">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-vm-opcode-encoding-and-instruction-formats">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua VM Opcode Encoding and Instruction Formats - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-vm-opcode-encoding-and-instruction-formats" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The Lua virtual machine relies on a register-based architecture that utilizes fixed-size 32-bit instructions to execute compiled bytecode. Within each 32-bit instruction word, Lua packs an opcode along with its associated register targets, immediate value" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-vm-opcode-encoding-and-instruction-formats">Lua VM Opcode
+Encoding and Instruction Formats</h1>
+<p>The Lua virtual machine relies on a register-based architecture that
+utilizes fixed-size 32-bit instructions to execute compiled bytecode.
+Within each 32-bit instruction word, Lua packs an opcode along with its
+associated register targets, immediate values, or table indices. This
+article explains how the Lua virtual machine encodes opcodes, the
+primary instruction formats it uses to partition the 32-bit space, and
+how operands and constants are addressed at the bit level.</p>
+<h3 id="the-32-bit-instruction-layout">The 32-Bit Instruction
+Layout</h3>
+<p>Every instruction in Lua bytecode is represented by the C type
+<code>Instruction</code>, which is typically defined as a 32-bit
+unsigned integer (<code>uint32_t</code>). Using a fixed 32-bit width
+simplifies instruction decoding, avoids variable-length instruction
+alignment issues, and maximizes CPU cache efficiency during bytecode
+dispatch.</p>
+<p>The allocation of bits within the 32-bit word is defined in the Lua
+source header <code>lopcodes.h</code>. The opcode itself consistently
+occupies the lowest-order bits of the instruction word:</p>
+<ul>
+<li><strong>Lua 5.1 through 5.3:</strong> 6 bits allocated for the
+opcode (bits 0–5), allowing for up to 64 distinct VM instructions.</li>
+<li><strong>Lua 5.4:</strong> 7 bits allocated for the opcode (bits
+0–6), accommodating an expanded set of instructions (up to 128).</li>
+</ul>
+<p>The remaining 25 to 26 bits are distributed among operands depending
+on the instruction's designated layout format.</p>
+<h3 id="standard-instruction-formats">Standard Instruction Formats</h3>
+<p>Lua categorizes instructions into specific formats to handle
+different operational needs, such as arithmetic, jumps, constant
+loading, and function calls.</p>
+<h4 id="1-the-iabc-format">1. The iABC Format</h4>
+<p>The <code>iABC</code> format is the most common layout, used for
+operations involving multiple registers or operands (such as
+<code>ADD</code>, <code>SUB</code>, or <code>GETTABLE</code>).</p>
+<ul>
+<li><strong>Opcode:</strong> Bits 0–6 (7 bits in Lua 5.4)</li>
+<li><strong>A:</strong> Bits 7–14 (8 bits). Typically designates the
+destination register.</li>
+<li><strong>B:</strong> Bits 16–23 (8 bits in Lua 5.4). Usually holds a
+source register or constant.</li>
+<li><strong>C:</strong> Bits 24–31 (8 bits in Lua 5.4). Holds a second
+source register or immediate value.</li>
+<li><strong>k:</strong> Bit 15 (1 bit in Lua 5.4). A flag indicating
+whether operand <code>B</code> or <code>C</code> refers to a register or
+a constant pool index.</li>
+</ul>
+<p><em>(Note: In Lua 5.1–5.3, <code>B</code> and <code>C</code> were 9
+bits each, directly preceding the 8-bit <code>A</code> field and 6-bit
+opcode without the explicit <code>k</code> flag).</em></p>
+<h4 id="2-the-iabx-format">2. The iABx Format</h4>
+<p>The <code>iABx</code> format combines the space of the <code>B</code>
+and <code>C</code> fields into a single, larger unsigned operand
+(<code>Bx</code>). This format is used for operations like
+<code>LOADK</code> (loading a constant) or <code>CLOSURE</code>
+(instantiating a function prototype) that need to reference larger
+indices.</p>
+<ul>
+<li><strong>Opcode:</strong> 6–7 bits</li>
+<li><strong>A:</strong> 8 bits (destination register)</li>
+<li><strong>Bx:</strong> 17–18 bits (unsigned integer representing a
+constant table index or proto index)</li>
+</ul>
+<h4 id="3-the-iasbx-format">3. The iAsBx Format</h4>
+<p>The <code>iAsBx</code> format is identical in field width to
+<code>iABx</code>, but the combined operand <code>sBx</code> represents
+a signed integer. This format is historically used for conditional jumps
+and numeric <code>for</code> loops.</p>
+<p>Because it is encoded in unsigned 32-bit fields, Lua stores
+<code>sBx</code> using excess-K (biased) notation:</p>
+<pre class="text"><code>sBx = Bx - MAXARG_sBx</code></pre>
+<p>An encoded value of <code>MAXARG_sBx</code> corresponds to zero,
+values above it are positive jumps, and values below it are negative
+jumps.</p>
+<h4 id="4-the-iax-format-lua-52">4. The iAx Format (Lua 5.2+)</h4>
+<p>Introduced to expand the constant table address space beyond the
+18-bit limit of <code>Bx</code>, the <code>iAx</code> format eliminates
+the <code>A</code> field entirely.</p>
+<ul>
+<li><strong>Opcode:</strong> 6–7 bits</li>
+<li><strong>Ax:</strong> 25–26 bits (large unsigned integer)</li>
+</ul>
+<p>Instructions like <code>EXTRAARG</code> use this format to provide
+supplementary operand data for preceding instructions that exceed
+standard limits.</p>
+<h4 id="5-the-isj-format-lua-54">5. The isJ Format (Lua 5.4)</h4>
+<p>Lua 5.4 introduced the <code>isJ</code> format specifically for jump
+instructions (<code>JMP</code>). It reserves 7 bits for the opcode and
+devotes the remaining 25 bits to a signed jump offset (<code>sJ</code>),
+eliminating the unused register <code>A</code> operand previously
+present in jump instructions.</p>
+<h3 id="differentiating-registers-and-constants">Differentiating
+Registers and Constants</h3>
+<p>In Lua bytecode, an operand may reference either a virtual register
+(a stack slot) or an entry in the constant table (<span
+class="math inline">\(K\)</span>).</p>
+<ul>
+<li><strong>Lua 5.1–5.3:</strong> Used the highest bit (the 9th bit) of
+the 9-bit <code>B</code> or <code>C</code> field as a discriminator. If
+the MSB was set, the lower 8 bits indexed the constant table
+(<code>k = 1</code>). If cleared, the field indicated a register index
+(<code>k = 0</code>).</li>
+<li><strong>Lua 5.4:</strong> Uses an explicit 1-bit <code>k</code>
+field in the <code>iABC</code> format. If <code>k</code> is set, operand
+<code>B</code> (or <code>C</code>, depending on the instruction) is
+treated as a constant index rather than a register.</li>
+</ul>
+<h3 id="bit-manipulation-in-the-lua-source">Bit Manipulation in the Lua
+Source</h3>
+<p>The extraction and insertion of fields are handled via C preprocessor
+macros in <code>lopcodes.h</code>. These macros use bitwise shifts and
+masks:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define MASK1</span><span class="op">(</span><span class="pp">n</span><span class="op">,</span><span class="pp">p</span><span class="op">)</span><span class="pp">   </span><span class="op">((~((~(</span><span class="pp">Instruction</span><span class="op">)</span><span class="dv">0</span><span class="op">)&lt;&lt;(</span><span class="pp">n</span><span class="op">)))&lt;&lt;(</span><span class="pp">p</span><span class="op">))</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#define GET_OPCODE</span><span class="op">(</span><span class="pp">i</span><span class="op">)</span><span class="pp"> </span><span class="op">(</span><span class="pp">cast</span><span class="op">(</span><span class="pp">OpCode</span><span class="op">,</span><span class="pp"> </span><span class="op">((</span><span class="pp">i</span><span class="op">)</span><span class="pp"> </span><span class="op">&gt;&gt;</span><span class="pp"> POS_OP</span><span class="op">)</span><span class="pp"> </span><span class="op">&amp;</span><span class="pp"> MASK1</span><span class="op">(</span><span class="pp">SIZE_OP</span><span class="op">,</span><span class="pp"> </span><span class="dv">0</span><span class="op">)))</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="pp">#define GETARG_A</span><span class="op">(</span><span class="pp">i</span><span class="op">)</span><span class="pp">   </span><span class="op">(</span><span class="pp">cast</span><span class="op">(</span><span class="dt">int</span><span class="op">,</span><span class="pp"> </span><span class="op">((</span><span class="pp">i</span><span class="op">)</span><span class="pp"> </span><span class="op">&gt;&gt;</span><span class="pp"> POS_A</span><span class="op">)</span><span class="pp"> </span><span class="op">&amp;</span><span class="pp"> MASK1</span><span class="op">(</span><span class="pp">SIZE_A</span><span class="op">,</span><span class="pp"> </span><span class="dv">0</span><span class="op">)))</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="pp">#define GETARG_B</span><span class="op">(</span><span class="pp">i</span><span class="op">)</span><span class="pp">   </span><span class="op">(</span><span class="pp">cast</span><span class="op">(</span><span class="dt">int</span><span class="op">,</span><span class="pp"> </span><span class="op">((</span><span class="pp">i</span><span class="op">)</span><span class="pp"> </span><span class="op">&gt;&gt;</span><span class="pp"> POS_B</span><span class="op">)</span><span class="pp"> </span><span class="op">&amp;</span><span class="pp"> MASK1</span><span class="op">(</span><span class="pp">SIZE_B</span><span class="op">,</span><span class="pp"> </span><span class="dv">0</span><span class="op">)))</span></span></code></pre></div>
+<p>When the virtual machine loop executes (<code>luaV_execute</code> in
+<code>lvm.c</code>), it fetches the next 32-bit instruction, extracts
+the opcode using <code>GET_OPCODE(i)</code>, and uses a large
+<code>switch</code> statement to decode and process the corresponding
+operands.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

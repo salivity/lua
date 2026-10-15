@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua TValue Internals and Data Representation - lua</title>
+    <meta name="description" content="In the Lua virtual machine, the TValue (Tagged Value) structure serves as the fundamental container for all dynamic runtime values. This article explores how the standard PUC-Rio Lua virtual machine implements TValue as a tagged union, how it separates pr">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-t-value-internals-and-data-representation">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua TValue Internals and Data Representation - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-t-value-internals-and-data-representation" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua virtual machine, the TValue (Tagged Value) structure serves as the fundamental container for all dynamic runtime values. This article explores how the standard PUC-Rio Lua virtual machine implements TValue as a tagged union, how it separates pr" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-tvalue-internals-and-data-representation">Lua TValue
+Internals and Data Representation</h1>
+<p>In the Lua virtual machine, the <code>TValue</code> (Tagged Value)
+structure serves as the fundamental container for all dynamic runtime
+values. This article explores how the standard PUC-Rio Lua virtual
+machine implements <code>TValue</code> as a tagged union, how it
+separates primitive immediate types from heap-allocated objects, the
+structural changes introduced to support distinct integer and
+floating-point representations, and how implementations like LuaJIT
+diverge from PUC-Rio by utilizing NaN-tagging.</p>
+<h3 id="the-tagged-union-architecture">The Tagged Union
+Architecture</h3>
+<p>PUC-Rio Lua avoids expensive dynamic allocations for every single
+variable by wrapping values inside a tagged union known as
+<code>TValue</code>. In the C source code, this structure typically
+consists of two main fields:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">struct</span> TValue <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  Value value_<span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  lu_byte tt_<span class="op">;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>The <code>tt_</code> field is an integer tag defining the data type
+(such as <code>LUA_TNIL</code>, <code>LUA_TBOOLEAN</code>,
+<code>LUA_TNUMBER</code>, or <code>LUA_TSTRING</code>), while the
+<code>value_</code> field is a C <code>union</code> capable of holding
+different representations in the same shared memory space:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">union</span> Value <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  GCObject <span class="op">*</span>gc<span class="op">;</span>    <span class="co">/* Collectible objects */</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">void</span> <span class="op">*</span>p<span class="op">;</span>         <span class="co">/* Light userdata */</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  lua_CFunction f<span class="op">;</span> <span class="co">/* Light C functions */</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  lua_Integer i<span class="op">;</span>   <span class="co">/* Integer numbers */</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  lua_Number n<span class="op">;</span>    <span class="co">/* Floating-point numbers */</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<p>On a 64-bit architecture, <code>Value</code> requires 8 bytes.
+Although <code>tt_</code> only requires 1 byte (or an <code>int</code>
+depending on compiler options and Lua version), memory alignment rules
+typically pad <code>struct TValue</code> to 16 bytes.</p>
+<h3 id="immediate-values-vs-garbage-collected-references">Immediate
+Values vs. Garbage-Collected References</h3>
+<p>The primary structural divide inside <code>TValue</code> is between
+types that store their payloads inline and types that point to
+dynamically allocated memory tracked by Lua's garbage collector.</p>
+<ol type="1">
+<li><strong>Immediate (Inline) Types:</strong>
+<ul>
+<li><strong>Nil and Booleans:</strong> Nil requires no payload; its
+existence is completely defined by its type tag. Booleans store their
+state either directly in an integer field in the union or, in newer Lua
+versions, directly within variant bits of the <code>tt_</code> tag
+itself to save operations.</li>
+<li><strong>Numbers:</strong> Both floating-point and integer types fit
+directly into the union (<code>lua_Number n</code> or
+<code>lua_Integer i</code>).</li>
+<li><strong>Light Userdata:</strong> This represents raw C pointers
+(<code>void *p</code>) managed outside Lua’s runtime. Because Lua does
+not manage the memory behind these pointers, they are stored directly in
+the union without garbage collection overhead.</li>
+</ul></li>
+<li><strong>Collectable (Pointer) Types:</strong>
+<ul>
+<li><strong>Strings, Tables, Functions, Threads, and Full
+Userdata:</strong> These data structures cannot fit inside an 8-byte
+scalar. Instead, their <code>TValue</code> stores a pointer
+(<code>GCObject *gc</code>). The object itself lives on the heap and
+begins with a common header (<code>CommonHeader</code>) that contains
+the pointers and color bits required by the incremental mark-and-sweep
+garbage collector.</li>
+</ul></li>
+</ol>
+<h3 id="number-subtyping-in-lua-53">Number Subtyping in Lua 5.3+</h3>
+<p>Prior to Lua 5.3, all numbers were represented uniformly using a
+single double-precision floating-point type (<code>lua_Number</code>).
+Lua 5.3 introduced an internal distinction between integers and floats
+without breaking dynamic typing at the language level.</p>
+<p>Within <code>TValue</code>, this distinction is managed through
+sub-tags encoded in <code>tt_</code>:</p>
+<ul>
+<li><code>LUA_VNUMINT</code>: Designates that <code>value_.i</code>
+holds a signed 64-bit integer (<code>lua_Integer</code>). Bitwise
+operations and integer arithmetic read and write directly to this
+field.</li>
+<li><code>LUA_VNUMFLT</code>: Designates that <code>value_.n</code>
+holds an IEEE 754 double-precision float (<code>lua_Number</code>).</li>
+</ul>
+<p>The VM checks the sub-type tag before execution to dispatch the
+appropriate hardware instructions (integer ALU instructions versus
+floating-point FPU/SIMD instructions), preventing truncation errors and
+improving execution speed for integer indexing.</p>
+<h3 id="short-strings-vs-long-strings">Short Strings vs. Long
+Strings</h3>
+<p>Lua divides strings into two distinct internal categories, which are
+reflected in the type tag and underlying object:</p>
+<ul>
+<li><strong>Short Strings (<code>LUA_VSHRSTR</code>):</strong> Strings
+up to a specific length (typically 40 bytes) are internalized via
+hash-consing. The VM ensures that only one copy of any unique short
+string exists in a global string table. Equality comparisons between
+short strings evaluate in <span class="math inline">\(O(1)\)</span> time
+by simply checking if their pointer values in <code>value_.gc</code> are
+identical.</li>
+<li><strong>Long Strings (<code>LUA_VLNGSTR</code>):</strong> Longer
+strings are not automatically internalized upon creation to prevent high
+hashing overhead for large payloads. They compute their hash lazily only
+when used as table keys, and equality comparisons require a full
+byte-by-byte comparison if their pointers differ.</li>
+</ul>
+<h3 id="puc-rio-lua-vs-luajit-tagged-union-vs-nan-tagging">PUC-Rio Lua
+vs. LuaJIT: Tagged Union vs. NaN-Tagging</h3>
+<p>While PUC-Rio Lua uses the traditional tagged union that expands to
+16 bytes on 64-bit platforms, LuaJIT utilizes an optimization known as
+<strong>NaN-tagging</strong> to reduce the size of <code>TValue</code>
+down to 8 bytes.</p>
+<p>An IEEE 754 double-precision float uses 64 bits: 1 sign bit, 11
+exponent bits, and 52 mantissa bits. When all exponent bits are set to
+<code>1</code>, the value represents a Not-a-Number (NaN). The remaining
+52 mantissa bits are essentially unused by standard hardware
+calculations.</p>
+<p>LuaJIT takes advantage of this unused space:</p>
+<ul>
+<li>Any valid floating-point number is stored directly as its native
+64-bit representation.</li>
+<li>If the bits match a specific quiet NaN pattern, the upper bits
+encode the dynamic type tag (such as string, table, boolean, or
+integer), while the lower 48 bits store the pointer or integer
+payload.</li>
+</ul>
+<p>Because 64-bit pointers on modern architectures only use the lower 48
+bits of the address space, an entire pointer and its type tag fit
+comfortably inside a single 64-bit double. This halves the memory
+footprint of Lua tables and the VM register stack compared to PUC-Rio,
+significantly improving CPU cache utilization.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

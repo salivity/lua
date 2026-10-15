@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Embedding Lua in Multi-Threaded Game Engines - lua</title>
+    <meta name="description" content="This article explores the primary architectural models used to integrate the Lua scripting language into multi-threaded game engines. Because the standard Lua virtual machine (luaState) is inherently single-threaded and not thread-safe, game engine archit">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/embedding-lua-in-multi-threaded-game-engines">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Embedding Lua in Multi-Threaded Game Engines - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/embedding-lua-in-multi-threaded-game-engines" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores the primary architectural models used to integrate the Lua scripting language into multi-threaded game engines. Because the standard Lua virtual machine (luaState) is inherently single-threaded and not thread-safe, game engine archit" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="embedding-lua-in-multi-threaded-game-engines">Embedding Lua in
+Multi-Threaded Game Engines</h1>
+<p>This article explores the primary architectural models used to
+integrate the Lua scripting language into multi-threaded game engines.
+Because the standard Lua virtual machine (<code>lua_State</code>) is
+inherently single-threaded and not thread-safe, game engine architects
+must choose specific patterns to execute scripts across multiple CPU
+cores without introducing race conditions, deadlocks, or excessive
+synchronization overhead. Below are the foundational architectural
+strategies used in modern game development to solve this concurrency
+challenge.</p>
+<h2 id="the-concurrency-challenge-with-lua">The Concurrency Challenge
+with Lua</h2>
+<p>The standard Lua runtime holds execution context, global variables,
+and garbage collection mechanisms inside a single <code>lua_State</code>
+pointer. Concurrently calling Lua C API functions on the same
+<code>lua_State</code> from multiple operating system threads results in
+undefined behavior and memory corruption. As a result, concurrency must
+be orchestrated at the engine boundary using one of several
+architectural approaches.</p>
+<h2 id="1-dedicated-script-thread-with-asynchronous-job-offloading">1.
+Dedicated Script Thread with Asynchronous Job Offloading</h2>
+<p>In this model, Lua execution is confined entirely to a single
+thread—typically the engine's main game-logic thread or a dedicated
+scripting worker thread.</p>
+<ul>
+<li><strong>Mechanism</strong>: Lua scripts execute sequentially. When a
+script requires an intensive calculation (such as pathfinding,
+raycasting, or procedural generation), it dispatches an asynchronous
+task to the engine's native C++ job system.</li>
+<li><strong>Synchronization</strong>: Lua receives a handle or future.
+Once the native worker thread completes the work, the results are posted
+to a thread-safe completion queue, which the Lua thread drains at a
+deterministic point in the frame loop.</li>
+<li><strong>Trade-offs</strong>: This is the simplest and safest model
+to implement, eliminating race conditions inside the scripting
+environment entirely. However, it means script execution itself cannot
+scale across multiple CPU cores; if game logic scripts become CPU-bound,
+the entire thread stalls.</li>
+</ul>
+<h2 id="2-state-per-thread-the-actor-model">2. State-per-Thread (The
+Actor Model)</h2>
+<p>The state-per-thread architecture treats each thread or subsystem as
+an isolated actor that owns an independent <code>lua_State</code>.</p>
+<ul>
+<li><strong>Mechanism</strong>: Multiple <code>lua_State</code>
+instances exist simultaneously, each assigned to a separate thread
+without shared VM memory. For example, the animation system, AI system,
+and UI system might each run their own Lua environment.</li>
+<li><strong>Communication</strong>: States communicate strictly through
+message passing. Data transferred between states is serialized into
+native structures, passed across lock-free thread-safe queues, and
+deserialized into the target Lua environment.</li>
+<li><strong>Trade-offs</strong>: This model scales linearly across CPU
+cores and avoids mutex contention. The disadvantage is higher baseline
+memory usage due to duplicated scripts and libraries, along with the
+serialization overhead required to pass complex data between independent
+states.</li>
+</ul>
+<h2 id="3-worker-bound-state-pools-with-command-buffers">3. Worker-Bound
+State Pools with Command Buffers</h2>
+<p>Common in Entity Component System (ECS) architectures, this design
+allows parallel execution of scripts across large sets of entities.</p>
+<ul>
+<li><strong>Mechanism</strong>: The engine maintains a pool of worker
+threads and an associated pool of <code>lua_State</code> instances. When
+processing an entity update pass, components running Lua scripts are
+batched and scheduled across the worker threads.</li>
+<li><strong>Write Deferral</strong>: To prevent data races when
+modifying shared world state, scripts are forbidden from writing
+directly to game components. Instead, scripts emit structural changes
+and mutations to a thread-local <strong>Command Buffer</strong>.</li>
+<li><strong>Synchronization</strong>: At the end of the update phase,
+the main thread collects all command buffers and flushes them
+sequentially back into the canonical game state before the next frame
+stage begins.</li>
+</ul>
+<h2
+id="4-read-only-shared-state-with-local-contexts-parallel-luau-approach">4.
+Read-Only Shared State with Local Contexts (Parallel Luau Approach)</h2>
+<p>Popularized by modern Lua derivatives such as Luau, this model
+enables true multi-threaded parallel script execution through strict
+memory-access controls.</p>
+<ul>
+<li><strong>Mechanism</strong>: Multiple VM instances run in parallel
+while sharing access to global, read-only definitions, modules, and
+C-functions.</li>
+<li><strong>Synchronization</strong>: During the parallel phase of a
+frame, scripts can concurrently read shared data. If a script needs to
+write to an actor's state, it can only write to memory isolated to its
+own actor boundary.</li>
+<li><strong>State Transition</strong>: The engine alternates between
+parallel phases (concurrent reads, local writes) and synchronization
+phases (where scripts safely invoke cross-actor interactions or
+engine-wide updates).</li>
+</ul>
+<h2 id="5-mutex-synchronized-shared-state">5. Mutex-Synchronized Shared
+State</h2>
+<p>The coarse-grained locking approach allows multiple threads to access
+a single <code>lua_State</code>, but wraps every interaction in
+synchronization primitives.</p>
+<ul>
+<li><strong>Mechanism</strong>: Every entry point into the Lua API from
+C++ acquires a global mutex or critical section associated with that
+<code>lua_State</code>.</li>
+<li><strong>Trade-offs</strong>: While technically simple to retrofit
+into older codebases, this architecture is generally considered an
+anti-pattern for high-performance game engines. Lock contention quickly
+degrades multi-core performance, turning parallel execution into
+serialized execution with added locking overhead.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

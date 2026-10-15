@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryEngine Lua Scripting for Game Logic and Entities - lua</title>
+    <meta name="description" content="CryEngine incorporates the Lua scripting language to bridge low-level engine architecture with accessible, high-level game design. By delegating entity behaviors, interactive mechanics, and game flow to Lua scripts, developers can rapidly iterate on gamep">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/cry-engine-lua-scripting-for-game-logic-and-entities">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="CryEngine Lua Scripting for Game Logic and Entities - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/cry-engine-lua-scripting-for-game-logic-and-entities" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="CryEngine incorporates the Lua scripting language to bridge low-level engine architecture with accessible, high-level game design. By delegating entity behaviors, interactive mechanics, and game flow to Lua scripts, developers can rapidly iterate on gamep" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="cryengine-lua-scripting-for-game-logic-and-entities">CryEngine
+Lua Scripting for Game Logic and Entities</h1>
+<p>CryEngine incorporates the Lua scripting language to bridge low-level
+engine architecture with accessible, high-level game design. By
+delegating entity behaviors, interactive mechanics, and game flow to Lua
+scripts, developers can rapidly iterate on gameplay without the need to
+recompile the native C++ codebase. This article explores how CryEngine
+implements Lua to define entity states, process gameplay events, expose
+custom properties to level designers, and maintain a seamless balance
+between runtime performance and development agility.</p>
+<h2 id="the-c-and-lua-entity-architecture">The C++ and Lua Entity
+Architecture</h2>
+<p>CryEngine uses a hybrid architecture where core engine
+subsystems—such as rendering, physics, and low-level memory
+management—are built in high-performance C++, while gameplay logic and
+entity definitions can be scripted in Lua.</p>
+<p>Entities in CryEngine are essentially C++ objects reflected into the
+Lua runtime as tables. When an entity is spawned, the engine
+instantiates a C++ entity proxy that establishes bidirectional
+communication with its associated Lua script. This setup provides script
+access to low-level engine capabilities, like manipulating rigid bodies,
+playing animations, querying spatial data, and managing audio triggers,
+directly via exposed API bindings.</p>
+<h2 id="script-structure-and-exposed-properties">Script Structure and
+Exposed Properties</h2>
+<p>Every Lua-driven entity in CryEngine relies on a standardized table
+structure. At its core, an entity script defines default behaviors,
+state tables, and a specific <code>Properties</code> table.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">MyEntity</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">Properties</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>        <span class="va">fHealth</span> <span class="op">=</span> <span class="dv">100.0</span><span class="op">,</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">bIsActive</span> <span class="op">=</span> <span class="kw">true</span><span class="op">,</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">sModel</span> <span class="op">=</span> <span class="st">&quot;objects/props/crate.cgf&quot;</span><span class="op">,</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The <code>Properties</code> table acts as a bridge to the CryEngine
+Sandbox Editor. Any variable defined within this table is automatically
+parsed by the editor and exposed in the entity inspector UI. This allows
+level designers to tweak values—such as movement speeds, health pools,
+mesh paths, and light intensities—on an instance-by-instance basis
+without modifying code.</p>
+<h2 id="state-machines-and-lifecycle-callbacks">State Machines and
+Lifecycle Callbacks</h2>
+<p>CryEngine’s entity system supports built-in hierarchical finite state
+machines managed directly through Lua. Entities can define multiple
+operational states (e.g., <code>Idle</code>, <code>Combat</code>,
+<code>Destroyed</code>), each containing its own isolated event
+handlers.</p>
+<p>The engine drives entity behavior via predefined lifecycle callbacks
+executed at key moments:</p>
+<ul>
+<li><strong><code>OnInit</code> / <code>OnSpawn</code>:</strong> Called
+when the entity enters the game world, used to set initial variables,
+spawn physical representations, and preload assets.</li>
+<li><strong><code>OnReset</code>:</strong> Triggered when the designer
+enters or exits game mode in the Sandbox Editor, allowing the entity to
+restore its default state.</li>
+<li><strong><code>OnUpdate</code>:</strong> Executed on frame ticks when
+continuous logic is required, though best practices minimize tick-based
+Lua logic to preserve performance.</li>
+<li><strong><code>OnShutDown</code> / <code>OnDestroy</code>:</strong>
+Manages the cleanup of temporary objects, timers, and references before
+the entity is garbage-collected.</li>
+</ul>
+<h2 id="event-handling-and-physics-interaction">Event Handling and
+Physics Interaction</h2>
+<p>Gameplay logic often depends on reacting to environmental changes and
+player input. CryEngine dispatches engine-level events directly to
+designated Lua callback functions.</p>
+<p>Common physics and game events handled in Lua include:</p>
+<ul>
+<li><strong>Collisions and Triggers:</strong> Functions like
+<code>OnCollision</code> and <code>OnEnterArea</code> provide collision
+context, including impact velocity, hit normal, and the interacting
+entity's ID.</li>
+<li><strong>Damage Systems:</strong> The engine routes weapon impacts to
+an entity's <code>OnDamage</code> function, allowing Lua to calculate
+health deductions, initiate particle effects, or trigger ragdoll
+states.</li>
+<li><strong>Timers:</strong> Developers can schedule non-blocking Lua
+timers using <code>Script.SetTimer</code>, enabling delayed actions such
+as timed explosions or patrol pauses without halting game
+execution.</li>
+</ul>
+<h2 id="performance-optimization-in-gameplay-logic">Performance
+Optimization in Gameplay Logic</h2>
+<p>While Lua offers rapid prototyping and iteration, running script code
+entails execution overhead compared to native compiled code. CryEngine
+balances this by relying on an event-driven model. Rather than polling
+conditions every frame within <code>OnUpdate</code>, entities register
+listeners or utilize engine-level triggers. The heavy mathematical
+calculations, pathfinding routines, and collision sweeps remain executed
+within native C++ modules, calling into Lua only when a
+gameplay-relevant state transition or action must occur.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

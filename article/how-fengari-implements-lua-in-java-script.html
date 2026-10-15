@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Fengari Implements Lua in JavaScript - lua</title>
+    <meta name="description" content="Fengari is an implementation of the Lua 5.3 programming language written entirely in JavaScript. Unlike projects that compile the standard C Lua codebase to WebAssembly using Emscripten, Fengari is a direct, hand-crafted port of Lua’s C implementation int">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-fengari-implements-lua-in-java-script">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Fengari Implements Lua in JavaScript - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-fengari-implements-lua-in-java-script" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Fengari is an implementation of the Lua 5.3 programming language written entirely in JavaScript. Unlike projects that compile the standard C Lua codebase to WebAssembly using Emscripten, Fengari is a direct, hand-crafted port of Lua’s C implementation int" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-fengari-implements-lua-in-javascript">How Fengari Implements
+Lua in JavaScript</h1>
+<p>Fengari is an implementation of the Lua 5.3 programming language
+written entirely in JavaScript. Unlike projects that compile the
+standard C Lua codebase to WebAssembly using Emscripten, Fengari is a
+direct, hand-crafted port of Lua’s C implementation into ECMAScript.
+This article explains how Fengari achieves this by recreating Lua’s
+internal virtual machine, memory architecture, execution stack, and
+parser to execute Lua natively within JavaScript runtimes like web
+browsers and Node.js.</p>
+<h3 id="direct-port-of-the-lua-53-architecture">Direct Port of the Lua
+5.3 Architecture</h3>
+<p>Fengari reproduces the modular architecture of the standard PUC-Rio
+Lua 5.3 codebase. Rather than compiling Lua syntax into JavaScript code
+(transpilation), Fengari ports the core C components of the interpreter
+into JavaScript modules:</p>
+<ul>
+<li><strong>Lexer and Parser (<code>llex.js</code>,
+<code>lparser.js</code>):</strong> Ingests raw Lua source code,
+tokenizes it, and constructs an abstract syntax tree (AST).</li>
+<li><strong>Code Generator (<code>lcode.js</code>):</strong> Emits
+register-based Lua bytecode instructions directly in memory.</li>
+<li><strong>Virtual Machine (<code>lvm.js</code>):</strong> Executes
+bytecode instructions via an internal interpreter loop.</li>
+<li><strong>Lua State and C API (<code>lstate.js</code>,
+<code>lua.js</code>, <code>lapi.js</code>):</strong> Recreates Lua's
+stack-based C API for interacting with the VM.</li>
+</ul>
+<p>Because the parser and compiler are included in the JavaScript
+codebase, Fengari can dynamically parse, compile, and execute Lua code
+at runtime using functions like <code>luaL_dostring</code>.</p>
+<h3 id="emulating-c-data-types-and-the-lua-value-system">Emulating C
+Data Types and the Lua Value System</h3>
+<p>Lua represents internal variables using a tagged union called
+<code>TValue</code>, which associates a type tag (such as
+<code>LUA_TNIL</code>, <code>LUA_TNUMBER</code>, or
+<code>LUA_TTABLE</code>) with a raw value.</p>
+<p>In Fengari, this structure is implemented as JavaScript objects:</p>
+<ul>
+<li><strong>TValue Representation:</strong> Each Lua value in Fengari is
+an instance of a <code>TValue</code> class. The class retains fields for
+the type tag and the underlying JavaScript reference or numeric
+primitive.</li>
+<li><strong>Numbers:</strong> Fengari handles Lua integers and floats by
+mapping them directly to JavaScript's IEEE 754 standard 64-bit
+floating-point numbers, while implementing integer-specific operations
+(bitwise ops and integer division) using JavaScript's 32-bit bitwise
+operators or custom 64-bit integer emulations.</li>
+<li><strong>Byte Buffers:</strong> C pointers and raw byte buffers used
+in Lua’s internal string manipulation and I/O are handled using standard
+JavaScript <code>Uint8Array</code> typed arrays.</li>
+</ul>
+<h3 id="the-virtual-machine-dispatch-loop">The Virtual Machine Dispatch
+Loop</h3>
+<p>Lua is a register-based virtual machine, meaning instructions access
+virtual registers instead of relying on a push/pop evaluation stack.</p>
+<p>Fengari's execution engine (<code>luaV_execute</code>) is a large
+switch-statement dispatch loop running inside a JavaScript function.
+When executing bytecode:</p>
+<ol type="1">
+<li>The VM reads an instruction encoded as a 32-bit integer.</li>
+<li>It extracts the opcode and operands (such as <code>OP_ADD</code>,
+<code>OP_GETTABLE</code>, or <code>OP_CALL</code>) using bitmask
+operations.</li>
+<li>The internal pointer within the current activation frame's register
+array is updated.</li>
+<li>The requested operation is applied to the corresponding
+<code>TValue</code> instances in the register set.</li>
+</ol>
+<p>To avoid hitting JavaScript call stack limits during deeply nested
+calls or coroutine yields, Fengari uses trampoline patterns and tracks
+call frames (<code>CallInfo</code>) manually on an internal structure
+rather than relying solely on JavaScript's native call stack.</p>
+<h3 id="stack-manipulation-and-the-pseudo-c-api">Stack Manipulation and
+the Pseudo-C API</h3>
+<p>A cornerstone of Lua is its virtual stack, used to pass values
+between the host environment and Lua functions. Fengari implements this
+virtual stack identically to the Lua C API.</p>
+<p>Developers interact with Fengari using familiar C API conventions
+mapped to JavaScript:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode javascript"><code class="sourceCode javascript"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> fengari <span class="op">=</span> <span class="pp">require</span>(<span class="st">&quot;fengari&quot;</span>)<span class="op">;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> lua <span class="op">=</span> fengari<span class="op">.</span><span class="at">lua</span><span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> lauxlib <span class="op">=</span> fengari<span class="op">.</span><span class="at">lauxlib</span><span class="op">;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> lualib <span class="op">=</span> fengari<span class="op">.</span><span class="at">lualib</span><span class="op">;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> L <span class="op">=</span> lauxlib<span class="op">.</span><span class="fu">luaL_newstate</span>()<span class="op">;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>lualib<span class="op">.</span><span class="fu">luaL_openlibs</span>(L)<span class="op">;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>lua<span class="op">.</span><span class="fu">lua_pushstring</span>(L<span class="op">,</span> <span class="st">&quot;Hello from JS&quot;</span>)<span class="op">;</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>lua<span class="op">.</span><span class="fu">lua_setglobal</span>(L<span class="op">,</span> <span class="st">&quot;greeting&quot;</span>)<span class="op">;</span></span></code></pre></div>
+<p>Internal functions push, pop, and index values on a custom array
+acting as the <code>lua_State</code> stack. This ensures high
+compatibility with native Lua behaviors, including error handling (using
+<code>pcall</code>/<code>lua_pcall</code>), protected environments, and
+coroutines.</p>
+<h3 id="interoperability-with-javascript">Interoperability with
+JavaScript</h3>
+<p>Fengari provides a dedicated interop library
+(<code>fengari-interop</code>) that bridges Lua and the JavaScript
+runtime.</p>
+<ul>
+<li><strong>JS Objects in Lua:</strong> JavaScript objects passed into
+Lua are wrapped in a Lua <code>userdata</code> type equipped with a
+custom metatable. This metatable implements the <code>__index</code> and
+<code>__newindex</code> metamethods, routing property accesses in Lua
+(like <code>js_obj.property</code>) directly to JavaScript property
+lookups.</li>
+<li><strong>Function Calls:</strong> When a JavaScript function is
+invoked from Lua, the interop layer converts the Lua arguments from the
+virtual stack into native JavaScript arguments, executes the JavaScript
+function, and wraps the return value back into a <code>TValue</code> on
+the stack.</li>
+</ul>
+<h3 id="garbage-collection">Garbage Collection</h3>
+<p>Lua implements its own incremental mark-and-sweep garbage collector
+(<code>lgc.js</code>). Fengari preserves this internal collector to
+maintain accurate Lua lifecycle semantics, such as <code>__gc</code>
+metamethod execution and weak table handling.</p>
+<p>While the JavaScript engine handles low-level memory allocation and
+deallocates abandoned JavaScript objects, Fengari’s internal GC manages
+the lifecycle and references of Lua-specific entities (tables, closures,
+threads), preventing Lua objects from being prematurely collected by
+JavaScript until Lua dereferences them.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

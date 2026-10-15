@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debugging Lua with ZeroBrane Studio IDE - lua</title>
+    <meta name="description" content="ZeroBrane Studio is a lightweight, open-source integrated development environment designed specifically for Lua, offering out-of-the-box, dedicated debugging capabilities that set it apart from general-purpose editors. This article explores how ZeroBrane">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/debugging-lua-with-zero-brane-studio-ide">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Debugging Lua with ZeroBrane Studio IDE - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/debugging-lua-with-zero-brane-studio-ide" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="ZeroBrane Studio is a lightweight, open-source integrated development environment designed specifically for Lua, offering out-of-the-box, dedicated debugging capabilities that set it apart from general-purpose editors. This article explores how ZeroBrane" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="debugging-lua-with-zerobrane-studio-ide">Debugging Lua with
+ZeroBrane Studio IDE</h1>
+<p>ZeroBrane Studio is a lightweight, open-source integrated development
+environment designed specifically for Lua, offering out-of-the-box,
+dedicated debugging capabilities that set it apart from general-purpose
+editors. This article explores how ZeroBrane Studio achieves seamless
+Lua debugging through its integrated MobDebug engine, broad support for
+diverse Lua runtimes and game frameworks, remote debugging architecture,
+and interactive live-coding features.</p>
+<h3 id="native-integration-with-mobdebug">Native Integration with
+MobDebug</h3>
+<p>At the core of ZeroBrane Studio's debugging workflow is MobDebug, an
+open-source remote debugger for Lua developed by the same creator as the
+IDE. Because MobDebug is built directly into the software, developers do
+not need to install complex third-party plugins, compile native C
+extensions, or manually configure debug bridges. The IDE communicates
+directly with the Lua runtime over standard TCP sockets, enabling
+non-blocking, asynchronous control over execution states.</p>
+<h3 id="broad-support-for-lua-engines-and-runtimes">Broad Support for
+Lua Engines and Runtimes</h3>
+<p>ZeroBrane Studio provides specialized interpreter profiles tailored
+to virtually every major Lua execution environment. Rather than treating
+Lua as a single monolithic language, the IDE understands the operational
+nuances of:</p>
+<ul>
+<li>Standard Lua versions (Lua 5.1, 5.2, 5.3, and 5.4)</li>
+<li>LuaJIT (Just-In-Time compiler)</li>
+<li>Game engines and creative frameworks such as LÖVE (Love2D), Solar2D
+(formerly Corona SDK), Gideros, and Defold</li>
+<li>Web and embedded platforms such as OpenResty/Nginx, Wireshark, and
+Redis</li>
+</ul>
+<p>Selecting an interpreter automatically reconfigures the debugger's
+launch parameters, environment variables, and module paths to match the
+target environment's specific runtime requirements.</p>
+<h3 id="full-featured-debugging-toolkit">Full-Featured Debugging
+Toolkit</h3>
+<p>ZeroBrane Studio provides standard debugging facilities natively
+mapped to Lua data structures:</p>
+<ul>
+<li><strong>Execution Stepping:</strong> Full support for Step Into,
+Step Over, and Step Out commands.</li>
+<li><strong>Breakpoint Management:</strong> Standard line breakpoints
+and conditional breakpoints that trigger only when specific Lua
+expressions evaluate to true.</li>
+<li><strong>Inspection of Data Types:</strong> The Stack and Watch
+windows dynamically map Lua tables, metatables, closures, and upvalues,
+allowing deep inspection of complex nested data structures without
+crashing or freezing the runtime.</li>
+</ul>
+<h3 id="remote-and-cross-platform-debugging">Remote and Cross-Platform
+Debugging</h3>
+<p>Because the MobDebug protocol operates over TCP/IP, ZeroBrane Studio
+can easily debug applications that are not running locally on the host
+machine. By including a single line of code
+(<code>require('mobdebug').start('HOST_IP')</code>) in the target
+script, developers can debug Lua scripts running inside:</p>
+<ul>
+<li>Mobile applications deployed to Android or iOS devices</li>
+<li>Embedded Linux systems or Raspberry Pi installations</li>
+<li>Virtual machines, Docker containers, and remote web servers</li>
+</ul>
+<p>The IDE automatically accepts incoming debugging connections, maps
+the remote file paths to local source files, and halts execution on
+trigger points without requiring physical access to the target host.</p>
+<h3 id="interactive-console-and-scratchpad-live-coding">Interactive
+Console and Scratchpad Live Coding</h3>
+<p>During an active debugging session, ZeroBrane Studio transforms its
+Output window into an interactive Lua prompt. Developers can execute
+arbitrary Lua code within the active stack frame, modify variables in
+real time, invoke functions, and evaluate expressions against current
+local and global scopes.</p>
+<p>Additionally, the IDE includes a "Scratchpad" feature for supported
+frameworks (like LÖVE). Scratchpad mode allows developers to write and
+alter Lua code while the application runs continuously, instantly
+updating game logic and visual states without forcing a restart of the
+debugging session.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

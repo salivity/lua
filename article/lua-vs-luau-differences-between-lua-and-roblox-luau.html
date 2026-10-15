@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua vs Luau: Differences Between Lua and Roblox Luau - lua</title>
+    <meta name="description" content="Luau is an open-source, embeddable scripting language derived from Lua 5.1, engineered by Roblox to meet the demands of large-scale game development. While retaining foundational Lua idioms and backwards compatibility with most Lua 5.1 code, Luau introduc">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-vs-luau-differences-between-lua-and-roblox-luau">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua vs Luau: Differences Between Lua and Roblox Luau - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-vs-luau-differences-between-lua-and-roblox-luau" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Luau is an open-source, embeddable scripting language derived from Lua 5.1, engineered by Roblox to meet the demands of large-scale game development. While retaining foundational Lua idioms and backwards compatibility with most Lua 5.1 code, Luau introduc" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-vs-luau-differences-between-lua-and-roblox-luau">Lua vs
+Luau: Differences Between Lua and Roblox Luau</h1>
+<p>Luau is an open-source, embeddable scripting language derived from
+Lua 5.1, engineered by Roblox to meet the demands of large-scale game
+development. While retaining foundational Lua idioms and backwards
+compatibility with most Lua 5.1 code, Luau introduces significant
+architectural and syntactic changes. This guide highlights the core
+differences between standard Lua and Luau, focusing on static typing,
+syntactic modernizations, execution performance, and sandboxed
+security.</p>
+<h3 id="gradual-typing-system">Gradual Typing System</h3>
+<p>The most significant distinction between the two languages is Luau's
+gradual type system. Standard Lua is strictly dynamically typed, meaning
+variables do not hold types—only values do. Luau introduces optional
+static typing with type inference, allowing developers to write
+type-annotated code to catch errors at compile time rather than
+runtime.</p>
+<p>Luau provides distinct type modes (<code>--!strict</code>,
+<code>--!nonstrict</code>, and <code>--!nocheck</code>) and
+supports:</p>
+<ul>
+<li>Primitive types (<code>number</code>, <code>string</code>,
+<code>boolean</code>, etc.)</li>
+<li>Custom type aliases and union/intersection types
+(<code>type StringOrNumber = string | number</code>)</li>
+<li>Generic types and functions</li>
+<li>Type checking for object-oriented designs and table shapes</li>
+</ul>
+<h3 id="syntactic-enhancements">Syntactic Enhancements</h3>
+<p>Luau adds several quality-of-life syntax additions that are absent in
+standard Lua 5.1:</p>
+<ul>
+<li><strong>Compound Assignment Operators:</strong> Luau supports
+shorthand assignment operators such as <code>+=</code>, <code>-=</code>,
+<code>*=</code>, <code>/=</code>, <code>%=</code>, <code>^=</code>, and
+<code>..=</code>.</li>
+<li><strong>The <code>continue</code> Statement:</strong> Standard Lua
+lacks a native <code>continue</code> keyword in loops, requiring
+workarounds like nested conditionals or <code>goto</code> (in Lua 5.2+).
+Luau natively supports <code>continue</code> inside <code>for</code>,
+<code>while</code>, and <code>repeat</code> loops.</li>
+<li><strong>String Interpolation:</strong> Luau allows embedded
+expressions within strings using backticks (e.g.,
+<code>`Hello, {name}!`</code>), eliminating repetitive concatenation or
+<code>string.format</code> calls.</li>
+<li><strong>If-Then-Else Expressions:</strong> Luau supports
+ternary-like inline conditional expressions
+(<code>local value = if condition then a else b</code>).</li>
+<li><strong>Generalized Iteration:</strong> In Luau, iterating over
+tables does not strictly require <code>pairs()</code> or
+<code>ipairs()</code>; developers can write
+<code>for k, v in table do</code>.</li>
+</ul>
+<h3 id="performance-and-execution-architecture">Performance and
+Execution Architecture</h3>
+<p>Standard Lua relies on a virtual machine running interpreted bytecode
+(with LuaJIT serving as a separate, third-party JIT implementation).
+Luau replaces the standard Lua 5.1 virtual machine entirely with a
+rewritten, highly optimized interpreter and custom bytecode format.</p>
+<p>Key performance divergence areas include:</p>
+<ul>
+<li><strong>Interpreter Speed:</strong> Luau’s interpreter is heavily
+optimized and often outperforms standard interpreted Lua by significant
+margins.</li>
+<li><strong>Native Code Generation:</strong> Luau features an optional
+native code generation component (ahead-of-time/just-in-time hybrid)
+designed to compile performance-critical code directly to machine code
+on supported architectures.</li>
+<li><strong>Vector Math Support:</strong> Luau includes native types and
+compiler optimizations for 3D/4D vectors, directly addressing the
+mathematical overhead common in game development environments.</li>
+</ul>
+<h3 id="security-and-sandboxing">Security and Sandboxing</h3>
+<p>Standard Lua includes standard libraries for direct operating system
+access, including the <code>io</code> library for file management and
+the <code>os</code> library for system-level calls.</p>
+<p>Because Luau was built to run untrusted user-generated code safely
+inside the Roblox client and server, the language architecture enforces
+strict sandboxing:</p>
+<ul>
+<li>Unsafe modules such as <code>io</code>, <code>package</code>, and
+standard <code>debug</code> facilities are removed or heavily
+restricted.</li>
+<li>The execution environment limits resource consumption to mitigate
+denial-of-service vulnerabilities.</li>
+<li>Luau provides a fully memory-safe runtime to prevent memory
+corruption or unauthorized memory access across scripts.</li>
+</ul>
+<h3 id="expanded-standard-library">Expanded Standard Library</h3>
+<p>While cutting unsafe standard Lua libraries, Luau expands functional
+utility for safe scripting. It adds helper methods to existing tables,
+such as <code>table.find</code>, <code>table.create</code>,
+<code>table.freeze</code>, and <code>table.clear</code>. It also
+modernizes bitwise manipulation by incorporating a built-in
+<code>bit32</code> library, which standard Lua only formalized in
+version 5.2.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

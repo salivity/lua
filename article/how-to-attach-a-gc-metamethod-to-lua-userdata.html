@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Attach a __gc Metamethod to Lua Userdata - lua</title>
+    <meta name="description" content="In the Lua programming language, attaching a gc finalizer metamethod to a full userdata object ensures that associated system resources, such as memory buffers or file handles, are safely cleaned up when the object is collected. This article provides a st">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-attach-a-gc-metamethod-to-lua-userdata">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Attach a __gc Metamethod to Lua Userdata - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-attach-a-gc-metamethod-to-lua-userdata" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, attaching a gc finalizer metamethod to a full userdata object ensures that associated system resources, such as memory buffers or file handles, are safely cleaned up when the object is collected. This article provides a st" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-attach-a-__gc-metamethod-to-lua-userdata">How to Attach a
+__gc Metamethod to Lua Userdata</h1>
+<p>In the Lua programming language, attaching a <code>__gc</code>
+finalizer metamethod to a full userdata object ensures that associated
+system resources, such as memory buffers or file handles, are safely
+cleaned up when the object is collected. This article provides a
+straightforward guide to registering and associating the
+<code>__gc</code> metamethod with userdata via the Lua C API, detailing
+the metatable setup and execution lifecycle across standard Lua
+versions.</p>
+<h3 id="the-role-of-the-__gc-metamethod">The Role of the
+<code>__gc</code> Metamethod</h3>
+<p>Full userdata represents C data blocks managed directly by Lua's
+garbage collector. While the memory allocated for the userdata itself is
+automatically reclaimed, external resources referenced within that
+struct (such as pointers allocated via <code>malloc</code>, OS file
+descriptors, or sockets) require explicit deallocation. The
+<code>__gc</code> metamethod acts as a finalizer or destructor that the
+garbage collector automatically executes immediately before the userdata
+object is freed.</p>
+<h3 id="step-by-step-implementation-via-the-c-api">Step-by-Step
+Implementation via the C API</h3>
+<p>Attaching a finalizer to userdata requires creating a metatable,
+placing a C cleanup function into its <code>__gc</code> field, and
+setting this metatable on the newly allocated userdata.</p>
+<h4 id="1-define-the-finalizer-function">1. Define the Finalizer
+Function</h4>
+<p>The finalizer must be a C function adhering to the
+<code>lua_CFunction</code> signature. It receives the userdata being
+collected as its single argument.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">int</span> mydata_gc<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    MyStruct <span class="op">*</span>data <span class="op">=</span> <span class="op">(</span>MyStruct <span class="op">*)</span>luaL_checkudata<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="st">&quot;MyDataMeta&quot;</span><span class="op">);</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">/* Clean up external resources */</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">(</span>data<span class="op">-&gt;</span>buffer<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>        free<span class="op">(</span>data<span class="op">-&gt;</span>buffer<span class="op">);</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>        data<span class="op">-&gt;</span>buffer <span class="op">=</span> NULL<span class="op">;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h4 id="2-register-the-metatable">2. Register the Metatable</h4>
+<p>When initializing your C module, register a metatable in the Lua
+registry using <code>luaL_newmetatable</code>, then add the
+<code>__gc</code> function to it:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> luaopen_mymodule<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">/* Create unique metatable in the registry */</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">(</span>luaL_newmetatable<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;MyDataMeta&quot;</span><span class="op">))</span> <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>        <span class="co">/* Set the __gc field */</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        lua_pushcfunction<span class="op">(</span>L<span class="op">,</span> mydata_gc<span class="op">);</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        lua_setfield<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">2</span><span class="op">,</span> <span class="st">&quot;__gc&quot;</span><span class="op">);</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">/* Register module functions */</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">1</span><span class="op">;</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h4 id="3-allocate-userdata-and-bind-the-metatable">3. Allocate Userdata
+and Bind the Metatable</h4>
+<p>When instantiating the object, use <code>lua_newuserdata</code> (or
+<code>lua_newuserdatauv</code> in Lua 5.4+) to allocate the memory,
+followed by <code>luaL_setmetatable</code> to assign the registered
+metatable:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">int</span> mydata_create<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    MyStruct <span class="op">*</span>data <span class="op">=</span> <span class="op">(</span>MyStruct <span class="op">*)</span>lua_newuserdata<span class="op">(</span>L<span class="op">,</span> <span class="kw">sizeof</span><span class="op">(</span>MyStruct<span class="op">));</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    data<span class="op">-&gt;</span>buffer <span class="op">=</span> malloc<span class="op">(</span><span class="dv">1024</span><span class="op">);</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">/* Associate the metatable containing the __gc metamethod */</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    luaL_setmetatable<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;MyDataMeta&quot;</span><span class="op">);</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">1</span><span class="op">;</span> <span class="co">/* Return userdata to Lua */</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="important-version-differences">Important Version
+Differences</h3>
+<ul>
+<li><strong>Lua 5.1:</strong> The <code>__gc</code> metamethod is
+strictly reserved for userdata. Setting <code>__gc</code> on standard
+Lua tables has no effect unless using LuaJIT or custom extensions.</li>
+<li><strong>Lua 5.2 and Later:</strong> Tables also support
+<code>__gc</code>, but for userdata, the metatable must contain the
+<code>__gc</code> field at the exact moment the metatable is bound.
+Modifying or adding <code>__gc</code> to a metatable <em>after</em> it
+has already been attached to a userdata instance will not register the
+finalizer in earlier Lua 5.2 implementations.</li>
+<li><strong>Lua 5.4:</strong> Userdata creation uses
+<code>lua_newuserdatauv</code> to support user values. Memory cleanup
+and finalization semantics for <code>__gc</code> remain consistent with
+prior versions.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

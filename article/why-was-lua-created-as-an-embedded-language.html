@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why Was Lua Created as an Embedded Language? - lua</title>
+    <meta name="description" content="Lua was intentionally designed in 1993 at PUC-Rio as a lightweight, embeddable extension language rather than a standalone general-purpose tool. Faced with strict trade barriers in Brazil, high commercial software costs, and the clunky syntax of existing">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-was-lua-created-as-an-embedded-language">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why Was Lua Created as an Embedded Language? - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-was-lua-created-as-an-embedded-language" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua was intentionally designed in 1993 at PUC-Rio as a lightweight, embeddable extension language rather than a standalone general-purpose tool. Faced with strict trade barriers in Brazil, high commercial software costs, and the clunky syntax of existing" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-was-lua-created-as-an-embedded-language">Why Was Lua Created
+as an Embedded Language?</h1>
+<p>Lua was intentionally designed in 1993 at PUC-Rio as a lightweight,
+embeddable extension language rather than a standalone general-purpose
+tool. Faced with strict trade barriers in Brazil, high commercial
+software costs, and the clunky syntax of existing configuration tools,
+its creators needed an agile, highly portable scripting language that
+could integrate directly into larger C programs. By prioritizing a
+minimal memory footprint, an ANSI C implementation, and a clean C API,
+the team solved their immediate engineering bottlenecks while creating
+one of computing's most enduring embedded scripting engines.</p>
+<h2 id="the-brazilian-trade-barrier-context">The Brazilian Trade Barrier
+Context</h2>
+<p>In the early 1990s, Brazil operated under a strict protectionist
+policy known as the "Market Reserve" for computer hardware and software.
+Importing foreign software and specialized hardware was legally
+restricted, heavily taxed, and prohibitively expensive.</p>
+<p>At the Pontifical Catholic University of Rio de Janeiro (PUC-Rio),
+the TeCGraf laboratory was developing specialized graphical software for
+clients such as Petrobras, Brazil's state-owned oil enterprise. The team
+needed tools to configure complex engineering applications and visualize
+massive datasets. Because buying off-the-shelf commercial tools from
+North America or Europe was financially and logistically unfeasible,
+writing custom in-house software became the only practical route
+forward.</p>
+<h2 id="the-failure-of-existing-scripting-options">The Failure of
+Existing Scripting Options</h2>
+<p>Before Lua, TeCGraf had developed two separate domain-specific
+languages:</p>
+<ul>
+<li><strong>Simple Object Language (SOL):</strong> Used for describing
+declarative scene layouts and data configuration.</li>
+<li><strong>Data-Entry Language (DEL):</strong> Used to bind graphical
+user interfaces to interactive data entry.</li>
+</ul>
+<p>By 1993, users demanded more power from both tools. They needed
+conditionals, loops, basic arithmetic, and dynamic control structures
+within their configuration files. TeCGraf initially considered using
+existing scripting alternatives such as Tcl. However, Tcl at the time
+had an unconventional syntax that did not resemble familiar procedural
+languages, offered weak support for nested data descriptions, and was
+difficult to run across heterogeneous Unix and DOS environments.</p>
+<p>Rather than continually patching DEL and SOL with ad-hoc flow-control
+features or forcing an awkward third-party interpreter into their
+pipeline, Roberto Ierusalimschy, Luiz Henrique de Figueiredo, and
+Waldemar Celes decided to build a single, unified language.</p>
+<h2 id="why-an-embedded-extension-architecture-won">Why an Embedded
+Extension Architecture Won</h2>
+<p>The primary goal of the new language was not to replace system-level
+programming in C, but to complement it. Petrobras and TeCGraf already
+had large, high-performance C codebases handling graphics rendering,
+numeric modeling, and hardware communication. Rewriting these systems in
+an interpreted language was out of the question due to performance
+penalties.</p>
+<p>Instead, the team wanted a language that could serve as "glue." The
+core application would remain in C, providing speed and low-level
+control, while the scripting language would allow engineers to modify
+behaviors, adjust parameters, design user interfaces, and format data
+without recompiling the entire binary.</p>
+<p>An embedded design provided several crucial technical advantages:</p>
+<ul>
+<li><strong>Extreme Portability:</strong> By implementing the
+interpreter in strictly compliant ANSI C, Lua could compile out of the
+box on any platform that possessed a standard C compiler, from
+workstations to microcomputers.</li>
+<li><strong>Minimal Footprint:</strong> Because Lua was built as a
+runtime library rather than an independent runtime environment, its
+compiled interpreter added only a few hundred kilobytes to the host
+binary.</li>
+<li><strong>Transparent Two-Way Stack API:</strong> The host program
+retained complete ownership of the execution loop. C code could call Lua
+functions, inspect Lua tables, and expose native C functions directly
+into the Lua runtime via a simple virtual stack interface.</li>
+</ul>
+<h2 id="the-architectural-legacy-of-lua">The Architectural Legacy of
+Lua</h2>
+<p>Choosing an embedded extension model fundamentally shaped Lua's
+design philosophy. Features that might bloat the interpreter core—such
+as extensive standard libraries, complex class systems, or
+platform-specific runtime hooks—were deliberately omitted. The core
+language provided first-class functions, associative arrays (tables),
+and clean closures, leaving the host application free to expose only the
+exact services and libraries required.</p>
+<p>This deliberate architectural choice allowed Lua to expand far beyond
+Brazilian engineering software. Decades later, the same properties that
+made Lua ideal for embedding into C graphics programs made it the
+dominant scripting solution across game engines, network routers,
+database extensions, and operating system tooling worldwide.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

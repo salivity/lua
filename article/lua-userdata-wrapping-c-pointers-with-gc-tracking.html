@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Userdata: Wrapping C Pointers with GC Tracking - lua</title>
+    <meta name="description" content="In the Lua programming language, interfacing with external C libraries requires a mechanism to manage external memory allocations safely across two distinct runtime environments. Full userdata is the only native Lua data type engineered to encapsulate arb">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-userdata-wrapping-c-pointers-with-gc-tracking">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Userdata: Wrapping C Pointers with GC Tracking - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-userdata-wrapping-c-pointers-with-gc-tracking" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, interfacing with external C libraries requires a mechanism to manage external memory allocations safely across two distinct runtime environments. Full userdata is the only native Lua data type engineered to encapsulate arb" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-userdata-wrapping-c-pointers-with-gc-tracking">Lua Userdata:
+Wrapping C Pointers with GC Tracking</h1>
+<p>In the Lua programming language, interfacing with external C
+libraries requires a mechanism to manage external memory allocations
+safely across two distinct runtime environments. Full userdata is the
+only native Lua data type engineered to encapsulate arbitrary C pointers
+within a garbage-collected object while binding them to automatic
+finalizers. By providing internal storage on the Lua heap, support for
+individual metatables, and the invocation of the <code>__gc</code>
+metamethod upon collection, userdata ensures that external C resources
+are freed deterministically without creating memory leaks or dangling
+pointers.</p>
+<h3 id="the-separation-between-lua-and-c-memory">The Separation Between
+Lua and C Memory</h3>
+<p>Lua operates on an automatic, trace-based garbage collector that
+tracks the lifecycle of all internal objects such as strings, tables,
+and functions. In contrast, C relies on manual memory management,
+requiring explicit calls to functions like <code>malloc()</code> and
+<code>free()</code>.</p>
+<p>When bridging C and Lua, an application needs a way to pass a pointer
+to a C-managed struct into the Lua state. If that pointer were
+represented simply as a primitive value, Lua's garbage collector would
+have no visibility into the allocation size, origin, or destruction
+requirements of the underlying memory. Userdata resolves this
+fundamental disconnect by acting as a bridge managed by the Lua garbage
+collector.</p>
+<h3 id="full-userdata-vs-light-userdata">Full Userdata vs. Light
+Userdata</h3>
+<p>Lua provides two variants of userdata: light userdata and full
+userdata. Understanding the distinction clarifies why only full userdata
+can track lifecycles automatically:</p>
+<ul>
+<li><strong>Light Userdata:</strong> A light userdata is simply a raw C
+<code>void*</code> pointer pushed onto the Lua stack. It is treated as a
+value type, similar to a number or a boolean. It does not possess its
+own metatable, is not managed by the garbage collector, and cannot
+trigger finalizer code. If the pointer points to dynamically allocated
+memory, Lua cannot know when scripts stop referencing it.</li>
+<li><strong>Full Userdata:</strong> A full userdata represents a block
+of raw memory allocated directly through Lua via
+<code>lua_newuserdata()</code> (or <code>lua_newuserdatauv()</code> in
+Lua 5.4). Lua treats this memory block as a fully managed
+garbage-collection object. It allocates, tracks, and frees the block
+alongside native Lua objects.</li>
+</ul>
+<h3 id="the-role-of-the-__gc-metamethod">The Role of the
+<code>__gc</code> Metamethod</h3>
+<p>The primary mechanism enabling automatic lifecycle tracking is the
+<code>__gc</code> metamethod. When an object managed by the Lua garbage
+collector has no remaining references, the collector flags it for
+destruction.</p>
+<p>For a full userdata, developers can assign a metatable containing a
+<code>__gc</code> field that points to a C function. When the garbage
+collector sweeps the unreachable userdata, it executes this function
+before reclaiming the memory block. Inside this finalizer, the developer
+can cleanly release associated external C resources—such as closing file
+descriptors, terminating network handles, or calling <code>free()</code>
+on secondary allocations.</p>
+<p>Because light userdata cannot have individual metatables, it cannot
+define a <code>__gc</code> metamethod, rendering automatic finalization
+impossible without full userdata.</p>
+<h3 id="memory-encapsulation-and-type-safety">Memory Encapsulation and
+Type Safety</h3>
+<p>Beyond lifecycle tracking, userdata provides encapsulation. The
+internal byte array of a full userdata is opaque to Lua code; scripts
+cannot directly read, write, or forge arbitrary memory addresses inside
+it unless explicitly exposed via functions or accessors in its
+metatable.</p>
+<p>The Lua C API enforces type safety through utility functions like
+<code>luaL_checkudata()</code>. This function verifies that an argument
+passed from Lua is not only a full userdata, but specifically one
+sharing the expected metatable associated with that C type. This
+prevents accidental type confusion or intentional exploits that could
+pass invalid pointers into the C runtime.</p>
+<h3 id="why-tables-cannot-replace-userdata">Why Tables Cannot Replace
+Userdata</h3>
+<p>Lua 5.2 introduced support for the <code>__gc</code> metamethod on
+tables, leading to the question of why tables cannot simply be used
+instead of userdata.</p>
+<p>While a table can have a finalizer, it cannot natively hold an
+unboxed C pointer as an internal payload. Storing a pointer inside a
+table requires either encoding the address into a string, casting it to
+an integer, or storing it as a light userdata. In all these cases, the
+pointer itself is decoupled from the container's integrity:</p>
+<ol type="1">
+<li><strong>Tampering Risk:</strong> Table fields can be reassigned,
+deleted, or overwritten by Lua scripts, creating scenarios where the
+pointer is lost or replaced with an invalid value before the finalizer
+runs.</li>
+<li><strong>Safety Guarantees:</strong> A table does not offer the
+native type-checking guarantees provided by
+<code>luaL_checkudata</code>.</li>
+<li><strong>Atomic Lifetime:</strong> A full userdata holds the pointer
+(or the entire C struct) directly inside its own contiguous memory
+allocation on the Lua heap. The data and its garbage-collection wrapper
+are bound atomically; the pointer cannot be detached from its metadata
+or finalizer.</li>
+</ol>
+<p>Full userdata remains the sole mechanism in Lua that simultaneously
+provides garbage-collector integration, non-forgeable memory
+encapsulation, distinct C-level type safety, and guaranteed execution of
+cleanup hooks.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

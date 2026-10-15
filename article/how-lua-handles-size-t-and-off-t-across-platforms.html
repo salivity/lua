@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Handles size_t and off_t Across Platforms - lua</title>
+    <meta name="description" content="The Lua programming language achieves cross-platform portability by pairing strict compliance with ANSI/ISO C with a centralized configuration system that isolates platform-dependent types. Handling system-specific types like sizet (used for memory alloca">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-handles-size-t-and-off-t-across-platforms">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Handles size_t and off_t Across Platforms - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-handles-size-t-and-off-t-across-platforms" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The Lua programming language achieves cross-platform portability by pairing strict compliance with ANSI/ISO C with a centralized configuration system that isolates platform-dependent types. Handling system-specific types like sizet (used for memory alloca" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-handles-size_t-and-off_t-across-platforms">How Lua
+Handles size_t and off_t Across Platforms</h1>
+<p>The Lua programming language achieves cross-platform portability by
+pairing strict compliance with ANSI/ISO C with a centralized
+configuration system that isolates platform-dependent types. Handling
+system-specific types like <code>size_t</code> (used for memory
+allocation and object sizes) and <code>off_t</code> (used for file
+system offsets) is a common hurdle when moving between 32-bit, 64-bit,
+POSIX, and Windows environments. Lua resolves these discrepancies by
+abstracting system calls and primitive types within its configuration
+headers, mapping native types onto broad internal integer formats, and
+deploying preprocessor macros that leverage OS-specific APIs.</p>
+<h3 id="the-central-role-of-luaconfh">The Central Role of
+<code>luaconf.h</code></h3>
+<p>All architectural adaptations in Lua flow through
+<code>luaconf.h</code>. Rather than scattering conditional compilation
+checks throughout the core runtime, Lua delegates platform-specific
+behaviors to macro definitions inside this single configuration
+file.</p>
+<p>When building Lua on a target system, <code>luaconf.h</code>
+evaluates compiler capabilities, available standards (such as C99,
+POSIX, or Windows APIs), and target architectures. It defines generic
+internal primitives that alias whichever native mechanisms the host
+operating system provides for handling object capacities and file
+offsets.</p>
+<h3 id="managing-size_t-for-memory-and-strings">Managing
+<code>size_t</code> for Memory and Strings</h3>
+<p>In C, <code>size_t</code> represents the size of any object in bytes
+and naturally scales to match the addressing capability of the target
+processor—typically 32 bits on 32-bit systems and 64 bits on 64-bit
+systems. Lua uses native <code>size_t</code> directly within its memory
+allocator and string implementation:</p>
+<ol type="1">
+<li><strong>Native Mapping:</strong> Lua string representations and
+buffer managers rely on <code>size_t</code> to store length fields.
+Because it relies on the compiler's definition of <code>size_t</code>,
+Lua automatically scales its string and buffer capacities to the maximum
+contiguous memory block the host OS can address.</li>
+<li><strong>Type Interoperability via <code>lua_Integer</code>:</strong>
+Since Lua 5.3, the default numeric integer type
+(<code>lua_Integer</code>) is typically configured as a signed 64-bit
+integer (<code>long long</code> or <code>int64_t</code>). Because a
+64-bit signed integer can safely hold the full range of a 32-bit
+<code>size_t</code> and the practical range of a 64-bit
+<code>size_t</code>, Lua avoids sign mismatch and truncation errors
+during user-space calculations.</li>
+<li><strong>Boundary Validation:</strong> When bridging internal
+<code>size_t</code> values with Lua APIs, the runtime includes explicit
+casting and boundary checks (such as <code>luaL_checkinteger</code> and
+range assertions) to detect potential overflows when converting unsigned
+<code>size_t</code> structures into signed Lua types.</li>
+</ol>
+<h3 id="handling-off_t-in-the-io-library">Handling <code>off_t</code> in
+the I/O Library</h3>
+<p>Standard C file I/O operations (<code>fseek</code> and
+<code>ftell</code>) use <code>long</code>, which is limited to 32 bits
+on 32-bit platforms as well as on 64-bit Windows environments. This
+restriction caps file addressing at 2 GiB. POSIX systems solve this with
+<code>off_t</code> and the <code>fseeko</code>/<code>ftello</code>
+interfaces, while Windows provides 64-bit alternatives such as
+<code>_fseeki64</code> and <code>_ftelli64</code>.</p>
+<p>Lua overcomes these discrepancies in the <code>liolib.c</code> file
+using abstraction macros defined in <code>luaconf.h</code>:</p>
+<ul>
+<li><strong><code>l_seek</code> and <code>l_ftell</code>:</strong> Lua
+encapsulates positioning functions behind these two macros. On
+POSIX-compliant systems where <code>_FILE_OFFSET_BITS=64</code> or POSIX
+standards are detected, <code>l_seek</code> resolves to
+<code>fseeko</code> and handles <code>off_t</code>. On Windows systems,
+<code>l_seek</code> maps to <code>_fseeki64</code>. On bare-metal or
+strictly ISO C89 environments without large file extensions, it falls
+back safely to standard <code>fseek</code>.</li>
+<li><strong>Abstraction of the Offset Type:</strong> Lua introduces an
+internal representation for file positions, often aliased to
+<code>lua_Integer</code> or a system-specific type such as
+<code>l_offset</code>. This guarantees that file pointers in the Lua
+standard library (<code>file:seek()</code>) communicate directly with
+user scripts using 64-bit integers, shielding the programmer from the
+underlying operating system's specific definition of
+<code>off_t</code>.</li>
+</ul>
+<h3 id="fallback-strategies-for-constrained-targets">Fallback Strategies
+for Constrained Targets</h3>
+<p>On embedded microcontrollers or non-standard architectures, Lua does
+not assume the presence of a POSIX-compliant <code>off_t</code> or
+64-bit registers. Developers can configure <code>luaconf.h</code> to run
+Lua in "small-integer" mode, redefining <code>lua_Integer</code> as a
+32-bit <code>int</code> or <code>long</code>.</p>
+<p>Even in these restricted environments, the contract between the
+engine and the OS remains unbroken: memory buffers scale down to the
+platform's smaller <code>size_t</code>, file pointers adapt to 32-bit
+limits, and Lua continues to compile cleanly without code modifications
+to the virtual machine core.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

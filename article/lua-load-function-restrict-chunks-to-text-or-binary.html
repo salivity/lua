@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua load Function: Restrict Chunks to Text or Binary - lua</title>
+    <meta name="description" content="In the Lua programming language, the load function incorporates an optional mode parameter to control whether an incoming chunk is treated as plain source text, precompiled binary bytecode, or either format. By explicitly defining this parameter, develope">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-load-function-restrict-chunks-to-text-or-binary">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua load Function: Restrict Chunks to Text or Binary - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-load-function-restrict-chunks-to-text-or-binary" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the load function incorporates an optional mode parameter to control whether an incoming chunk is treated as plain source text, precompiled binary bytecode, or either format. By explicitly defining this parameter, develope" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-load-function-restrict-chunks-to-text-or-binary">Lua load
+Function: Restrict Chunks to Text or Binary</h1>
+<p>In the Lua programming language, the <code>load</code> function
+incorporates an optional <code>mode</code> parameter to control whether
+an incoming chunk is treated as plain source text, precompiled binary
+bytecode, or either format. By explicitly defining this parameter,
+developers can enforce strict input requirements and protect
+applications from security vulnerabilities associated with untrusted
+bytecode execution.</p>
+<h3 id="the-syntax-of-load">The Syntax of <code>load</code></h3>
+<p>The standard signature of the <code>load</code> function in Lua 5.2
+and later is:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">load</span><span class="op">(</span><span class="va">chunk</span> <span class="op">[,</span> <span class="va">chunkname</span> <span class="op">[,</span> <span class="va">mode</span> <span class="op">[,</span> <span class="va">env</span><span class="op">]]])</span></span></code></pre></div>
+<p>The third argument, <code>mode</code>, is a string that determines
+the acceptable formats for the chunk being loaded.</p>
+<h3 id="available-values-for-the-mode-parameter">Available Values for
+the <code>mode</code> Parameter</h3>
+<p>The <code>mode</code> string accepts three distinct options:</p>
+<ul>
+<li><strong><code>"t"</code> (Text only):</strong> Restricts the input
+strictly to source code text. If the chunk begins with the Lua bytecode
+signature, <code>load</code> will reject it and return <code>nil</code>
+followed by an error message indicating that precompiled chunks are not
+allowed.</li>
+<li><strong><code>"b"</code> (Binary only):</strong> Restricts the input
+strictly to precompiled bytecode. If the chunk is standard source text
+rather than precompiled binary data, <code>load</code> will fail and
+report an error stating that text chunks are disallowed.</li>
+<li><strong><code>"bt"</code> (Binary or Text):</strong> Allows Lua to
+automatically detect whether the chunk is source code or bytecode. This
+is the default setting when the <code>mode</code> argument is omitted or
+set to <code>nil</code>.</li>
+</ul>
+<h3 id="how-lua-enforces-the-restriction">How Lua Enforces the
+Restriction</h3>
+<p>When Lua receives a chunk, it inspects the initial bytes to identify
+the data format. Precompiled bytecode always begins with a standard
+binary signature (the escape byte <code>\x1b</code> followed by
+<code>"Lua"</code>).</p>
+<p>When <code>mode</code> is set to <code>"t"</code>, Lua validates that
+the initial bytes do not match the bytecode signature. If the signature
+is detected, parsing halts immediately before any instructions are
+processed. Conversely, when <code>mode</code> is set to
+<code>"b"</code>, Lua demands the presence of the signature and
+validates the header metadata against the host environment. If the
+signature is missing, parsing terminates without executing code.</p>
+<h3 id="code-examples">Code Examples</h3>
+<p>Restricting input to source code text:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Attempting to load binary bytecode with mode set to &quot;t&quot;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">bytecode</span> <span class="op">=</span> <span class="fu">string.dump</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span> <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Hello&quot;</span><span class="op">)</span> <span class="kw">end</span><span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">fn</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">load</span><span class="op">(</span><span class="va">bytecode</span><span class="op">,</span> <span class="st">&quot;chunk&quot;</span><span class="op">,</span> <span class="st">&quot;t&quot;</span><span class="op">)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">fn</span><span class="op">)</span>  <span class="co">-- Output: nil</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">err</span><span class="op">)</span> <span class="co">-- Output: attempt to load a precompiled chunk</span></span></code></pre></div>
+<p>Restricting input to precompiled bytecode:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Attempting to load plain text with mode set to &quot;b&quot;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">source</span> <span class="op">=</span> <span class="st">&quot;print(&#39;Hello&#39;)&quot;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">fn</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">load</span><span class="op">(</span><span class="va">source</span><span class="op">,</span> <span class="st">&quot;chunk&quot;</span><span class="op">,</span> <span class="st">&quot;b&quot;</span><span class="op">)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">fn</span><span class="op">)</span>  <span class="co">-- Output: nil</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">err</span><span class="op">)</span> <span class="co">-- Output: attempt to load a text chunk</span></span></code></pre></div>
+<h3 id="security-considerations">Security Considerations</h3>
+<p>The primary use case for setting <code>mode = "t"</code> is security.
+Lua 5.2 removed the internal bytecode verifier because full verification
+of arbitrary bytecode is complex and prone to edge-case bugs.
+Consequently, loading malformed or intentionally corrupted bytecode can
+lead to memory corruption, arbitrary code execution, or host process
+crashes.</p>
+<p>Whenever an application loads code from untrusted sources, such as
+user submissions or external network sockets, developers should
+explicitly pass <code>"t"</code> to the <code>mode</code> parameter to
+prevent the execution of malicious precompiled payloads.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

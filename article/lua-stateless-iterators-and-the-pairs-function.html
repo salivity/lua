@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Stateless Iterators and the Pairs Function - lua</title>
+    <meta name="description" content="This article explores how stateless iterators operate in the Lua programming language, focusing specifically on the standard pairs function. You will learn the underlying mechanics of Lua&#39;s generic for loop, how pairs utilizes the built-in next function t">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-stateless-iterators-and-the-pairs-function">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Stateless Iterators and the Pairs Function - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-stateless-iterators-and-the-pairs-function" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how stateless iterators operate in the Lua programming language, focusing specifically on the standard pairs function. You will learn the underlying mechanics of Lua&#39;s generic for loop, how pairs utilizes the built-in next function t" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-stateless-iterators-and-the-pairs-function">Lua Stateless
+Iterators and the Pairs Function</h1>
+<p>This article explores how stateless iterators operate in the Lua
+programming language, focusing specifically on the standard
+<code>pairs</code> function. You will learn the underlying mechanics of
+Lua's generic <code>for</code> loop, how <code>pairs</code> utilizes the
+built-in <code>next</code> function to traverse tables without
+generating memory overhead from closures, and how to implement your own
+custom stateless iterators.</p>
+<p>In Lua, a stateless iterator is an iterator that does not maintain
+its own state across iterations. Instead, the generic <code>for</code>
+loop maintains the iteration state entirely on the runtime stack. A
+generic <code>for</code> loop manages this using three values returned
+by an iterator generator expression: an iterator function, an invariant
+state (typically the data structure being traversed), and a control
+variable (the current index or key).</p>
+<p>The built-in <code>pairs</code> function is the primary example of a
+stateless iterator constructor. When you call <code>pairs(t)</code> on a
+table <code>t</code>, it does not create a stateful closure. Instead, it
+returns three distinct values:</p>
+<ol type="1">
+<li>The built-in <code>next</code> function, which acts as the iterator
+function.</li>
+<li>The table <code>t</code> itself, which serves as the invariant
+state.</li>
+<li><code>nil</code>, representing the initial value of the control
+variable.</li>
+</ol>
+<p>Under the hood, implementing a function identical to
+<code>pairs</code> looks like this:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> custom_pairs<span class="op">(</span><span class="va">t</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">next</span><span class="op">,</span> <span class="va">t</span><span class="op">,</span> <span class="kw">nil</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>The iteration lifecycle follows a strict sequence executed by the Lua
+runtime:</p>
+<ol type="1">
+<li><strong>Initialization:</strong> The generic <code>for</code> loop
+calls <code>custom_pairs(t)</code> once to obtain the iterator function
+(<code>next</code>), the invariant state (<code>t</code>), and the
+initial control variable (<code>nil</code>).</li>
+<li><strong>First Call:</strong> The loop invokes
+<code>next(t, nil)</code>. The <code>next</code> function finds the
+first key-value pair in the table and returns
+<code>first_key, first_value</code>.</li>
+<li><strong>Loop Execution:</strong> The loop assigns these returned
+values to the declared loop variables and executes the loop body.</li>
+<li><strong>Subsequent Calls:</strong> At the end of each iteration, the
+loop automatically calls <code>next(t, current_key)</code>. The
+<code>next</code> function uses the current key to locate the subsequent
+entry in the internal hash table or array part of <code>t</code>.</li>
+<li><strong>Termination:</strong> When <code>next</code> reaches the end
+of the table, it returns <code>nil</code>. Upon receiving
+<code>nil</code> as the first return value, the <code>for</code> loop
+terminates.</li>
+</ol>
+<p>You can also implement custom stateless iterators that process data
+structures without relying directly on <code>next</code>. For example, a
+stateless iterator that traverses array-like sequences can be written by
+defining a dedicated stepping function:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> array_next<span class="op">(</span><span class="va">array</span><span class="op">,</span> <span class="va">index</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">index</span> <span class="op">=</span> <span class="va">index</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">value</span> <span class="op">=</span> <span class="va">array</span><span class="op">[</span><span class="va">index</span><span class="op">]</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">value</span> <span class="op">~=</span> <span class="kw">nil</span> <span class="cf">then</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">index</span><span class="op">,</span> <span class="va">value</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> custom_ipairs<span class="op">(</span><span class="va">array</span><span class="op">)</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">array_next</span><span class="op">,</span> <span class="va">array</span><span class="op">,</span> <span class="dv">0</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>In this implementation, <code>array_next</code> remains stateless
+because it receives the target array (invariant state) and the prior
+index (control variable) on every call. It simply increments the control
+variable and fetches the corresponding value.</p>
+<p>Stateless iterators are preferred in performance-critical Lua code.
+Because the state is passed via function parameters rather than captured
+variables, the interpreter avoids allocating new closure objects or
+triggering garbage collection cycles when starting a loop.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

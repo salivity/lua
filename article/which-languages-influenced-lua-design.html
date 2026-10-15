@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Which Languages Influenced Lua Design? - lua</title>
+    <meta name="description" content="Lua was created in 1993 at the Pontifical Catholic University of Rio de Janeiro (PUC-Rio) to solve software customization and data configuration challenges. Rather than emerging from traditional general-purpose languages, Lua’s foundational architecture w">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/which-languages-influenced-lua-design">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Which Languages Influenced Lua Design? - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/which-languages-influenced-lua-design" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua was created in 1993 at the Pontifical Catholic University of Rio de Janeiro (PUC-Rio) to solve software customization and data configuration challenges. Rather than emerging from traditional general-purpose languages, Lua’s foundational architecture w" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="which-languages-influenced-lua-design">Which Languages
+Influenced Lua Design?</h1>
+<p>Lua was created in 1993 at the Pontifical Catholic University of Rio
+de Janeiro (PUC-Rio) to solve software customization and data
+configuration challenges. Rather than emerging from traditional
+general-purpose languages, Lua’s foundational architecture was directly
+shaped by two earlier, in-house data description languages: SOL (Simple
+Object Language) and DEL (Data Entry Language). Understanding these
+predecessors explains why Lua emphasizes data description, lightweight
+syntax, and extensible associative tables as core design principles.</p>
+<h2 id="the-industrial-needs-at-telegroas-and-petrobras">The Industrial
+Needs at Telegroas and Petrobras</h2>
+<p>Between 1992 and 1993, the Computer Graphics Technology Group
+(Tecgraf) at PUC-Rio developed software tools for Brazilian engineering
+clients, notably the state oil company Petrobras. The engineers required
+flexible graphical user interfaces and customized data entry systems. At
+the time, Brazil’s restrictive trade policies made importing commercial
+software prohibitively expensive, compelling Tecgraf to design
+customized tools from scratch.</p>
+<p>The development team, led by Roberto Ierusalimschy, Luiz Henrique de
+Figueiredo, and Waldemar Celes, discovered that hardcoding configuration
+parameters in compiled C code slowed down development cycles. They
+needed declarative, user-friendly ways for non-programmers to define
+engineering data and interface layouts.</p>
+<h2 id="del-the-data-entry-language">DEL: The Data Entry Language</h2>
+<p>The first language developed to meet this demand was DEL (Data Entry
+Language). DEL was a declarative language designed specifically for
+describing data entry forms and validating user input for engineering
+simulations.</p>
+<p>DEL allowed users to specify entity attributes, form controls, and
+validation rules declaratively. However, it had noticeable
+limitations:</p>
+<ul>
+<li>It lacked procedural control flow, meaning conditional logic or
+complex validation required external C routines.</li>
+<li>It was tightly coupled to specific engineering applications, making
+it difficult to adapt for broader configuration needs.</li>
+<li>The syntax became cumbersome as the data models grew in
+complexity.</li>
+</ul>
+<p>As Tecgraf began developing larger graphical applications, the team
+recognized that DEL was not versatile enough to serve as a universal
+configuration tool.</p>
+<h2 id="sol-the-simple-object-language">SOL: The Simple Object
+Language</h2>
+<p>To overcome the rigid nature of DEL, the team developed SOL (Simple
+Object Language) around 1992. SOL was heavily inspired by the syntax of
+declarative data formats like BibTeX and the procedural language
+Modula.</p>
+<p>SOL introduced several structural concepts that later formed the
+identity of Lua:</p>
+<ul>
+<li><strong>Object Constructors:</strong> SOL allowed nested,
+record-like data definitions using clear declarative syntax, which
+removed the need for custom parsers for every new data type.</li>
+<li><strong>Type Definition Support:</strong> Users could define
+structured records and lists cleanly, separating data declaration from
+business logic.</li>
+<li><strong>Lightweight Footprint:</strong> The parser was small, fast,
+and easily embeddable into host C programs.</li>
+</ul>
+<p>Despite these improvements, SOL revealed another critical constraint.
+While it excelled at defining static configurations and data
+hierarchies, it lacked procedural programming capabilities such as
+loops, conditionals, and user-defined functions. Whenever an application
+required dynamic behavior, developers had to write custom glue code in
+C.</p>
+<h2 id="unifying-declarative-and-procedural-features-into-lua">Unifying
+Declarative and Procedural Features into Lua</h2>
+<p>Faced with the dilemma of either adding control structures to SOL or
+grafting data description capabilities onto an existing procedural
+language like Tcl, the designers chose to create a unified solution.</p>
+<p>In 1993, they synthesized the strengths of DEL and SOL into a single
+language named Lua (meaning "Moon" in Portuguese, serving as a play on
+SOL, which means "Sun"). Lua incorporated:</p>
+<ul>
+<li><strong>Declarative constructors from SOL:</strong> The table syntax
+in Lua directly evolved from SOL’s object definition format, allowing
+data structures to be represented naturally without separate
+serialization formats.</li>
+<li><strong>Validation and custom behavior from DEL:</strong> Procedural
+features, first-class functions, and meta-mechanisms were introduced so
+that data validation and event handling could run directly within the
+script rather than requiring recompilation of C modules.</li>
+<li><strong>A unified data construct:</strong> Instead of separate
+representations for records, arrays, and objects, Lua introduced the
+associative table, a single versatile primitive capable of handling all
+data storage paradigms.</li>
+</ul>
+<p>By fusing the declarative clarity of SOL and DEL with a small,
+efficient procedural runtime, Lua solved the configuration and scripting
+challenges of its creators and evolved into an embeddable language
+widely adopted across software engineering and game development.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

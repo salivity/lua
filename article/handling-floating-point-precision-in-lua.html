@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handling Floating-Point Precision in Lua - lua</title>
+    <meta name="description" content="Floating-point precision limits in Lua stem from its reliance on standard IEEE 754 double-precision representations, which can introduce rounding errors during everyday arithmetic. This article explores the root causes of these inaccuracies and provides d">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/handling-floating-point-precision-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Handling Floating-Point Precision in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/handling-floating-point-precision-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Floating-point precision limits in Lua stem from its reliance on standard IEEE 754 double-precision representations, which can introduce rounding errors during everyday arithmetic. This article explores the root causes of these inaccuracies and provides d" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="handling-floating-point-precision-in-lua">Handling
+Floating-Point Precision in Lua</h1>
+<p>Floating-point precision limits in Lua stem from its reliance on
+standard IEEE 754 double-precision representations, which can introduce
+rounding errors during everyday arithmetic. This article explores the
+root causes of these inaccuracies and provides direct, practical
+strategies to handle them, including epsilon comparisons, integer
+arithmetic, explicit rounding techniques, and external
+arbitrary-precision libraries.</p>
+<h3 id="understanding-the-floating-point-limitation">Understanding the
+Floating-Point Limitation</h3>
+<p>By default, Lua represents floating-point numbers using 64-bit IEEE
+754 doubles. Because binary systems cannot precisely represent certain
+decimal fractions—such as 0.1 or 0.2—operations like
+<code>0.1 + 0.2</code> yield <code>0.30000000000000004</code> rather
+than <code>0.3</code>. Directly comparing these results with equality
+operators (<code>==</code>) leads to unexpected logical failures in code
+execution.</p>
+<h3 id="tolerant-comparison-using-epsilon">Tolerant Comparison Using
+Epsilon</h3>
+<p>The standard method for comparing two floating-point numbers in Lua
+is to verify whether the absolute difference between them falls within a
+tiny, acceptable threshold known as epsilon:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> nearly_equal<span class="op">(</span><span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">,</span> <span class="va">epsilon</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">epsilon</span> <span class="op">=</span> <span class="va">epsilon</span> <span class="kw">or</span> <span class="dv">1e-9</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">math.abs</span><span class="op">(</span><span class="va">a</span> <span class="op">-</span> <span class="va">b</span><span class="op">)</span> <span class="op">&lt;</span> <span class="va">epsilon</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> <span class="dv">0.1</span> <span class="op">+</span> <span class="dv">0.2</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">result</span> <span class="op">==</span> <span class="dv">0.3</span><span class="op">)</span>              <span class="co">-- false</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>nearly_equal<span class="op">(</span><span class="va">result</span><span class="op">,</span> <span class="dv">0.3</span><span class="op">))</span>   <span class="co">-- true</span></span></code></pre></div>
+<p>Using an absolute difference works well for numbers close to zero.
+For values spanning vastly different magnitudes, consider a relative
+epsilon comparison that scales with the magnitude of the inputs:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> relative_equal<span class="op">(</span><span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">,</span> <span class="va">epsilon</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">epsilon</span> <span class="op">=</span> <span class="va">epsilon</span> <span class="kw">or</span> <span class="dv">1e-9</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">diff</span> <span class="op">=</span> <span class="fu">math.abs</span><span class="op">(</span><span class="va">a</span> <span class="op">-</span> <span class="va">b</span><span class="op">)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">largest</span> <span class="op">=</span> <span class="fu">math.max</span><span class="op">(</span><span class="fu">math.abs</span><span class="op">(</span><span class="va">a</span><span class="op">),</span> <span class="fu">math.abs</span><span class="op">(</span><span class="va">b</span><span class="op">))</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">diff</span> <span class="op">&lt;=</span> <span class="va">largest</span> <span class="op">*</span> <span class="va">epsilon</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="leveraging-native-integers-lua-53">Leveraging Native Integers
+(Lua 5.3+)</h3>
+<p>Lua 5.3 introduced a distinct 64-bit integer subtype alongside
+floats. Integers avoid binary fraction rounding issues entirely. When
+working with domain values like currency, store numbers as their
+smallest discrete units (e.g., cents instead of dollars):</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Representing $19.99 and $0.01 as integer cents</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">price</span> <span class="op">=</span> <span class="dv">1999</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">fee</span> <span class="op">=</span> <span class="dv">1</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">total</span> <span class="op">=</span> <span class="va">price</span> <span class="op">+</span> <span class="va">fee</span> <span class="co">-- 2000 cents ($20.00)</span></span></code></pre></div>
+<p>To maintain integer types during arithmetic, use integer division
+(<code>//</code>) instead of standard division (<code>/</code>), as
+standard division converts results to floating-point numbers.</p>
+<h3 id="rounding-and-formatting-for-output">Rounding and Formatting for
+Output</h3>
+<p>When fractional calculations must be displayed or normalized,
+formatting functions can truncate noise introduced by precision
+limits:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Rounding via string formatting</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">val</span> <span class="op">=</span> <span class="dv">0.1</span> <span class="op">+</span> <span class="dv">0.2</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">formatted</span> <span class="op">=</span> <span class="fu">tonumber</span><span class="op">(</span><span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;%.2f&quot;</span><span class="op">,</span> <span class="va">val</span><span class="op">))</span> <span class="co">-- 0.3</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- Mathematical rounding to N decimal places</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> round<span class="op">(</span><span class="va">num</span><span class="op">,</span> <span class="va">decimals</span><span class="op">)</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">mult</span> <span class="op">=</span> <span class="dv">10</span><span class="op">^(</span><span class="va">decimals</span> <span class="kw">or</span> <span class="dv">0</span><span class="op">)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">math.floor</span><span class="op">(</span><span class="va">num</span> <span class="op">*</span> <span class="va">mult</span> <span class="op">+</span> <span class="dv">0.5</span><span class="op">)</span> <span class="op">/</span> <span class="va">mult</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>round<span class="op">(</span><span class="dv">0.1</span> <span class="op">+</span> <span class="dv">0.2</span><span class="op">,</span> <span class="dv">2</span><span class="op">))</span> <span class="co">-- 0.3</span></span></code></pre></div>
+<h3 id="using-arbitrary-precision-libraries">Using Arbitrary-Precision
+Libraries</h3>
+<p>When applications require exact accuracy beyond standard 64-bit
+limits (such as cryptography, scientific calculations, or strict
+accounting systems), built-in types are insufficient. In these
+scenarios, integrate arbitrary-precision libraries:</p>
+<ul>
+<li><strong>lbc</strong>: A Lua binding to the GNU BC library,
+supporting arbitrary-precision decimal arithmetic.</li>
+<li><strong>Lua-DecNumber</strong>: A binding to IBM’s decNumber
+library, implementing General Decimal Arithmetic.</li>
+<li><strong>Pure Lua BigNum modules</strong>: Self-contained Lua modules
+that store numbers as arrays of digits or smaller integer chunks,
+trading execution speed for arbitrary precision without external C
+dependencies.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

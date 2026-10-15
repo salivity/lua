@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding the Lua -i Command Line Flag - lua</title>
+    <meta name="description" content="The -i command-line flag in the standalone Lua executable instructs the interpreter to enter interactive mode immediately after executing a specified script. This article explains how the -i option alters standard execution behavior, preserves script stat">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/understanding-the-lua-i-command-line-flag">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding the Lua -i Command Line Flag - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/understanding-the-lua-i-command-line-flag" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The -i command-line flag in the standalone Lua executable instructs the interpreter to enter interactive mode immediately after executing a specified script. This article explains how the -i option alters standard execution behavior, preserves script stat" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="understanding-the-lua--i-command-line-flag">Understanding the
+Lua -i Command Line Flag</h1>
+<p>The <code>-i</code> command-line flag in the standalone Lua
+executable instructs the interpreter to enter interactive mode
+immediately after executing a specified script. This article explains
+how the <code>-i</code> option alters standard execution behavior,
+preserves script state for runtime inspection, and serves as an
+effective tool for debugging and exploratory testing.</p>
+<p>When executing a script using the standard command
+<code>lua script.lua</code>, Lua compiles the file, runs its code to
+completion, and terminates the process, returning control back to the
+operating system shell. Any variables, functions, and state created
+during execution are discarded upon exit.</p>
+<p>Using the <code>-i</code> flag changes this behavior:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-i</span> script.lua</span></code></pre></div>
+<p>With this command, Lua executes <code>script.lua</code> in its
+entirety. Instead of exiting when the script finishes, the interpreter
+presents an interactive prompt (the standard Lua REPL, typically
+indicated by <code>&gt;</code>).</p>
+<h3 id="state-preservation-and-inspection">State Preservation and
+Inspection</h3>
+<p>The primary benefit of entering interactive mode via <code>-i</code>
+is that the entire global environment of the executed script remains in
+memory. Developers can:</p>
+<ul>
+<li><strong>Inspect Variables:</strong> Query global variables, tables,
+or configuration values defined in the script to verify their end-of-run
+state.</li>
+<li><strong>Invoke Functions:</strong> Manually call functions declared
+inside the script with arbitrary arguments to test edge cases without
+modifying the source file.</li>
+<li><strong>Modify State:</strong> Alter values in memory and rerun
+specific logic interactively to see how changes affect output.</li>
+</ul>
+<p>For example, consider a file named <code>math_utils.lua</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> add<span class="op">(</span><span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">a</span> <span class="op">+</span> <span class="va">b</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="va">total</span> <span class="op">=</span> add<span class="op">(</span><span class="dv">10</span><span class="op">,</span> <span class="dv">20</span><span class="op">)</span></span></code></pre></div>
+<p>Running <code>lua -i math_utils.lua</code> loads the file and
+displays the prompt:</p>
+<pre class="text"><code>&gt; print(total)
+30
+&gt; print(add(5, 15))
+20</code></pre>
+<h3 id="passing-arguments">Passing Arguments</h3>
+<p>The <code>-i</code> flag works seamlessly alongside script arguments.
+Any arguments passed after the script filename remain accessible inside
+the script through the <code>arg</code> table:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-i</span> process.lua input.txt output.txt</span></code></pre></div>
+<p>In this scenario, <code>process.lua</code> processes the arguments,
+executes its routines, and then drops into the interactive shell.</p>
+<h3 id="combining-with-the--e-flag">Combining with the <code>-e</code>
+Flag</h3>
+<p>The <code>-i</code> flag can also be paired with the <code>-e</code>
+flag, which executes code provided directly as a string from the command
+line:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-i</span> <span class="at">-e</span> <span class="st">&quot;x = 42&quot;</span></span></code></pre></div>
+<p>This runs the inline chunk first and immediately opens the
+interactive console with <code>x</code> accessible.</p>
+<p>To exit interactive mode when finished, you can send an end-of-file
+(EOF) signal (<code>Ctrl+D</code> on Unix-like systems,
+<code>Ctrl+Z</code> followed by <code>Enter</code> on Windows) or call
+<code>os.exit()</code>.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

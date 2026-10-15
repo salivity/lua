@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Line Reads: Standard vs Preserving Newlines - lua</title>
+    <meta name="description" content="Reading input line-by-line in the Lua programming language can be accomplished using either standard line reads or line reads that preserve newline characters. In modern Lua (versions 5.3 and newer), these two approaches are controlled using the &quot;l&quot; and &quot;">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-line-reads-standard-vs-preserving-newlines">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Line Reads: Standard vs Preserving Newlines - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-line-reads-standard-vs-preserving-newlines" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Reading input line-by-line in the Lua programming language can be accomplished using either standard line reads or line reads that preserve newline characters. In modern Lua (versions 5.3 and newer), these two approaches are controlled using the &quot;l&quot; and &quot;" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-line-reads-standard-vs-preserving-newlines">Lua Line Reads:
+Standard vs Preserving Newlines</h1>
+<p>Reading input line-by-line in the Lua programming language can be
+accomplished using either standard line reads or line reads that
+preserve newline characters. In modern Lua (versions 5.3 and newer),
+these two approaches are controlled using the <code>"l"</code> and
+<code>"L"</code> format specifiers in functions like
+<code>io.read()</code> and <code>file:read()</code>. Understanding the
+functional differences between stripping and retaining newline
+characters is critical for text parsing, data serialization, and
+accurate file reproduction.</p>
+<h3 id="the-format-specifiers-l-vs-l">The Format Specifiers:
+<code>"l"</code> vs <code>"L"</code></h3>
+<p>When reading lines from a file descriptor or standard input, Lua
+provides two format options:</p>
+<ul>
+<li><strong>Standard Line Read (<code>"l"</code> or
+<code>"*l"</code>):</strong> Reads the next line from the stream and
+discards the end-of-line delimiter (<code>\n</code> or
+<code>\r\n</code>). The resulting Lua string contains only the textual
+content of the line.</li>
+<li><strong>Newline-Preserving Read (<code>"L"</code> or
+<code>"*L"</code>):</strong> Reads the next line from the stream and
+appends the end-of-line delimiter to the end of the returned
+string.</li>
+</ul>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">file</span> <span class="op">=</span> <span class="fu">io.open</span><span class="op">(</span><span class="st">&quot;example.txt&quot;</span><span class="op">,</span> <span class="st">&quot;r&quot;</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Standard read (strips newline)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">clean_line</span> <span class="op">=</span> <span class="va">file</span><span class="op">:</span><span class="fu">read</span><span class="op">(</span><span class="st">&quot;l&quot;</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- Preserved read (includes newline)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">raw_line</span> <span class="op">=</span> <span class="va">file</span><span class="op">:</span><span class="fu">read</span><span class="op">(</span><span class="st">&quot;L&quot;</span><span class="op">)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="va">file</span><span class="op">:</span><span class="fu">close</span><span class="op">()</span></span></code></pre></div>
+<h3 id="core-differences">Core Differences</h3>
+<h4 id="1-line-ending-retention-and-cross-platform-handling">1. Line
+Ending Retention and Cross-Platform Handling</h4>
+<p>Standard line reading automatically strips whatever newline format
+the host platform or stream uses (such as LF on Unix-like systems or
+CRLF on Windows).</p>
+<p>Newline-preserving reads keep the exact byte sequence that terminated
+the line in the source stream. This makes <code>"L"</code> essential
+when working with binary-sensitive text streams or protocols where
+distinguishing between <code>\r\n</code> and <code>\n</code> is
+required.</p>
+<h4 id="2-file-reproduction-and-streaming">2. File Reproduction and
+Streaming</h4>
+<p>When copying, filtering, or proxying text files line-by-line,
+standard reads (<code>"l"</code>) require you to manually append
+newlines when writing output (e.g.,
+<code>output:write(line, "\n")</code>). This introduces two
+problems:</p>
+<ul>
+<li>It can inadvertently convert the file's original line endings to a
+different format.</li>
+<li>It may add a newline to the final line of a file where one did not
+originally exist.</li>
+</ul>
+<p>Using newline-preserving reads (<code>"L"</code>) allows you to pipe
+input directly to output with <code>output:write(line)</code>. The
+output file will match the original input file byte-for-byte.</p>
+<h4 id="3-handling-the-final-line-eof-behavior">3. Handling the Final
+Line (EOF Behavior)</h4>
+<p>Both methods return <code>nil</code> when attempting to read past the
+end of the file. However, they behave differently on the final line of a
+file if that line lacks a terminating newline:</p>
+<ul>
+<li>With <code>"l"</code>, there is no way to determine whether the
+final line had a trailing newline or ended abruptly at EOF, because the
+delimiter is discarded in either case.</li>
+<li>With <code>"L"</code>, you can inspect the end of the returned
+string (e.g., using <code>string.sub(line, -1) == "\n"</code>). If the
+final line does not contain a trailing newline character, you know the
+file ended without a newline delimiter.</li>
+</ul>
+<h4 id="4-parsing-and-pattern-matching">4. Parsing and Pattern
+Matching</h4>
+<p>For general text parsing—such as reading configuration files,
+processing comma-separated values, or checking string commands—standard
+reads (<code>"l"</code>) are typically preferred. They eliminate the
+need to run extra string-trimming operations to remove <code>\r</code>
+and <code>\n</code> before applying pattern matching or equality
+checks.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Is Ravi: Lua with Static Types and LLVM - lua</title>
+    <meta name="description" content="Ravi is a customized, derivative dialect of Lua 5.3 designed to overcome Lua’s performance limitations in compute-heavy scenarios through optional static typing and Just-In-Time (JIT) compilation. This article explains what the Ravi programming language i">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/what-is-ravi-lua-with-static-types-and-llvm">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What Is Ravi: Lua with Static Types and LLVM - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/what-is-ravi-lua-with-static-types-and-llvm" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Ravi is a customized, derivative dialect of Lua 5.3 designed to overcome Lua’s performance limitations in compute-heavy scenarios through optional static typing and Just-In-Time (JIT) compilation. This article explains what the Ravi programming language i" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="what-is-ravi-lua-with-static-types-and-llvm">What Is Ravi: Lua
+with Static Types and LLVM</h1>
+<p>Ravi is a customized, derivative dialect of Lua 5.3 designed to
+overcome Lua’s performance limitations in compute-heavy scenarios
+through optional static typing and Just-In-Time (JIT) compilation. This
+article explains what the Ravi programming language is, how its optional
+type system enhances execution efficiency, and how it harnesses the LLVM
+compiler infrastructure to generate high-performance native machine code
+while preserving full backward compatibility with standard dynamic
+Lua.</p>
+<h2 id="understanding-ravi">Understanding Ravi</h2>
+<p>Ravi is an open-source programming language based on the core of Lua
+5.3. Lua is widely praised for its simplicity, lightweight footprint,
+and embeddability, but its dynamic nature introduces runtime overhead
+during numeric computations and array operations. Ravi was created to
+address this bottleneck.</p>
+<p>Rather than reinventing Lua, Ravi acts as an extended superset of Lua
+5.3. It retains Lua's syntax, standard libraries, and dynamic
+capabilities, ensuring that existing Lua 5.3 code runs in Ravi without
+modification. However, it introduces syntax extensions and an enhanced
+execution engine aimed at developers who need near-C performance
+directly within a Lua-like environment.</p>
+<h2 id="introducing-optional-static-types">Introducing Optional Static
+Types</h2>
+<p>The primary architectural enhancement in Ravi is its optional type
+system. In standard Lua, values have types, but variables do not; every
+operation must dynamically check the types of its operands at runtime.
+Ravi allows programmers to optionally annotate variables, function
+parameters, and return types with specific static types.</p>
+<h3 id="supported-type-annotations">Supported Type Annotations</h3>
+<p>Ravi introduces distinct types, including:</p>
+<ul>
+<li><strong><code>integer</code></strong>: A 64-bit signed integer.</li>
+<li><strong><code>number</code></strong>: A 64-bit floating-point number
+(double).</li>
+<li><strong><code>table</code></strong>: A standard dynamic Lua
+table.</li>
+<li><strong>Specialized Arrays</strong>: Specialized types like
+<code>integer[]</code> and <code>number[]</code> that represent
+contiguous arrays of flat primitives rather than dynamic hash
+tables.</li>
+</ul>
+<h3 id="optimization-mechanics">Optimization Mechanics</h3>
+<p>When static types are provided, the Ravi parser and bytecode
+generator skip the dynamic type checks usually required during
+execution:</p>
+<ol type="1">
+<li><strong>Direct Arithmetic</strong>: When two <code>integer</code>
+variables are added, Ravi emits specialized bytecode instructions
+designed exclusively for 64-bit integer addition, eliminating runtime
+type testing and tagging.</li>
+<li><strong>Efficient Array Access</strong>: By using specialized array
+types (<code>number[]</code>), Ravi bypasses the standard Lua table
+lookup mechanisms. It reads and writes directly to contiguous blocks of
+memory, avoiding memory indirection and boundary checks where safe.</li>
+<li><strong>Graceful Fallback</strong>: If a variable is unannotated, it
+remains dynamic, and Ravi processes it using standard Lua
+semantics.</li>
+</ol>
+<h2 id="llvm-compilation-in-ravi">LLVM Compilation in Ravi</h2>
+<p>Beyond static typing, Ravi introduces an advanced compilation
+pipeline that leverages LLVM (Low Level Virtual Machine) to translate
+code into native machine instructions.</p>
+<h3 id="bytecode-to-llvm-ir">Bytecode to LLVM IR</h3>
+<p>Standard Lua translates source code into Lua bytecode, which is
+executed sequentially by a register-based virtual machine interpreter.
+While fast for an interpreter, this loop incurs instruction dispatch
+overhead.</p>
+<p>Ravi bridges this gap with a JIT compiler:</p>
+<ol type="1">
+<li><strong>Compilation Tiering</strong>: Ravi can interpret standard
+bytecode or invoke the JIT compiler for computationally intensive
+functions.</li>
+<li><strong>Intermediate Representation</strong>: Ravi compiles typed
+bytecode directly into LLVM Intermediate Representation (LLVM IR).
+Because type annotations eliminate dynamic ambiguity, the generated IR
+can represent pure native arithmetic, pointer operations, and register
+assignments.</li>
+<li><strong>LLVM Optimization Passes</strong>: Once the IR is generated,
+LLVM applies industrial-grade compiler optimizations, including
+dead-code elimination, loop unrolling, and vectorization.</li>
+<li><strong>Machine Code Generation</strong>: LLVM compiles the IR into
+native machine code (x86-64, ARM, etc.) at runtime, allowing the CPU to
+execute functions directly without the virtual machine interpreter.</li>
+</ol>
+<h2 id="the-synergy-of-types-and-llvm">The Synergy of Types and
+LLVM</h2>
+<p>LLVM requires precise type information to generate optimal machine
+code. A standard dynamic language produces complex, branching LLVM IR
+because it must account for every possible type a variable might
+hold.</p>
+<p>Ravi solves this challenge through its optional typing. By supplying
+static types, the developer provides the exact metadata LLVM needs to
+generate tight native loops free from runtime type-guards. As a result,
+performance-critical algorithms implemented in Ravi with static types
+and LLVM compilation can approach the speed of equivalent C code while
+maintaining the flexibility of the Lua runtime.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

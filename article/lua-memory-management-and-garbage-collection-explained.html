@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Memory Management and Garbage Collection Explained - lua</title>
+    <meta name="description" content="Lua utilizes an automatic memory management system centered around an efficient mark-and-sweep garbage collector, removing the burden of manual memory deallocation from the programmer. This article examines the mechanics of how Lua allocates memory, track">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-memory-management-and-garbage-collection-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Memory Management and Garbage Collection Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-memory-management-and-garbage-collection-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua utilizes an automatic memory management system centered around an efficient mark-and-sweep garbage collector, removing the burden of manual memory deallocation from the programmer. This article examines the mechanics of how Lua allocates memory, track" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-memory-management-and-garbage-collection-explained">Lua
+Memory Management and Garbage Collection Explained</h1>
+<p>Lua utilizes an automatic memory management system centered around an
+efficient mark-and-sweep garbage collector, removing the burden of
+manual memory deallocation from the programmer. This article examines
+the mechanics of how Lua allocates memory, tracks object references,
+manages cleanup cycles incrementally and generationally, and provides
+developers with controls to tune performance in resource-constrained
+environments.</p>
+<h3 id="the-allocation-architecture">The Allocation Architecture</h3>
+<p>Lua does not manage raw system memory directly. Instead, the Lua
+runtime handles all memory allocation and deallocation through a single
+allocator function defined in C, typically conforming to the
+<code>lua_Alloc</code> type signature:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">typedef</span> <span class="dt">void</span> <span class="op">*</span> <span class="op">(*</span>lua_Alloc<span class="op">)</span> <span class="op">(</span><span class="dt">void</span> <span class="op">*</span>ud<span class="op">,</span> <span class="dt">void</span> <span class="op">*</span>ptr<span class="op">,</span> <span class="dt">size_t</span> osize<span class="op">,</span> <span class="dt">size_t</span> nsize<span class="op">);</span></span></code></pre></div>
+<p>By default, the standard C <code>realloc</code> function handles
+these requests, but developers embedding Lua can supply custom
+allocators to implement custom arenas, track usage, or enforce hard
+memory limits. Every dynamic resource in Lua—including tables, strings,
+functions, threads, and full userdata—is allocated through this
+interface.</p>
+<h3 id="the-mark-and-sweep-core">The Mark-and-Sweep Core</h3>
+<p>At the heart of Lua's garbage collector (GC) is a tracing
+mark-and-sweep algorithm. The collector identifies which objects are
+reachable from "root" references (such as the global table, the
+registry, and active coroutine call stacks) and discards the rest.</p>
+<p>Lua tracks the state of each object using a tri-color marking
+abstraction:</p>
+<ul>
+<li><strong>White:</strong> Objects that are candidates for collection.
+Lua uses two shades of white (current white and other white) to
+distinguish newly created objects during an active collection
+cycle.</li>
+<li><strong>Gray:</strong> Objects visited by the collector, but whose
+referenced children have not yet been evaluated.</li>
+<li><strong>Black:</strong> Objects visited along with all of their
+immediate references. Black objects can never point directly to white
+objects without triggering a write barrier.</li>
+</ul>
+<p>During collection, roots are initially marked gray. The collector
+pops gray objects, visits their fields, marks those children gray, and
+colors the original object black. Once no gray objects remain, any
+objects that remain white are unreachable and are reclaimed during the
+sweep phase.</p>
+<h3 id="incremental-collection-and-write-barriers">Incremental
+Collection and Write Barriers</h3>
+<p>Prior to Lua 5.1, the engine relied on a "stop-the-world" strategy,
+freezing program execution during the entire mark-and-sweep cycle.
+Modern Lua uses an incremental collector that executes interleaved with
+normal program instructions.</p>
+<p>Because the program can mutate references while the collector is
+running, an invariant violation could occur: a black object might be
+modified to reference a newly allocated white object, hiding it from
+traversal. Lua prevents this using <strong>write barriers</strong>. When
+a table or reference is mutated, the write barrier detects if a black
+object points to a white object, either by shifting the black object
+back to gray (barrier back) or immediately marking the white object gray
+(barrier forward).</p>
+<h3 id="generational-collection-lua-54">Generational Collection (Lua
+5.4)</h3>
+<p>Lua 5.4 introduced a generational garbage collection mode based on
+the weak generational hypothesis: most dynamically allocated objects die
+young.</p>
+<p>In generational mode, objects are segregated into distinct
+categories:</p>
+<ul>
+<li><strong>Minor collections:</strong> Frequent, rapid sweeps that only
+traverse and collect recently allocated (young) objects.</li>
+<li><strong>Major collections:</strong> Infrequent full mark-and-sweep
+cycles triggered when memory growth persists or young objects are
+promoted to old objects.</li>
+</ul>
+<p>Generational mode drastically reduces GC overhead in workloads with
+high allocation turnover, such as tight loops creating short-lived
+tables.</p>
+<h3 id="weak-references-and-finalizers">Weak References and
+Finalizers</h3>
+<p>Lua provides tools to modify garbage collection semantics for
+advanced resource management:</p>
+<ul>
+<li><strong>Weak Tables:</strong> Configured via the <code>__mode</code>
+field of a metatable (<code>"k"</code> for weak keys, <code>"v"</code>
+for weak values, or <code>"kv"</code> for both). Weak references do not
+prevent the collector from reclaiming an object, making them useful for
+caches and memoization.</li>
+<li><strong>Finalizers (<code>__gc</code> Metamethod):</strong> When an
+object associated with a <code>__gc</code> metamethod becomes
+unreachable, the collector does not reclaim it immediately. Instead, it
+marks the object for finalization, revives it temporarily to execute its
+cleanup routine, and reclaims it in the subsequent cycle.</li>
+</ul>
+<h3 id="manual-control-and-parameter-tuning">Manual Control and
+Parameter Tuning</h3>
+<p>Developers can inspect and adjust collector behavior using the
+<code>collectgarbage()</code> function. Key control parameters
+include:</p>
+<ul>
+<li><strong>gc-pause:</strong> Controls the delay between the end of one
+collection cycle and the start of the next. Lower values start cycles
+sooner, reducing memory footprint at the expense of CPU cycles.</li>
+<li><strong>gc-stepmul:</strong> Controls the speed of the collector
+relative to memory allocation during incremental mode. Higher values
+make the collector more aggressive.</li>
+<li><strong>gc-stepsize:</strong> Determines the size of each
+incremental pause step in bytes.</li>
+</ul>
+<p>Through this combination of an abstract allocator, tri-color
+incremental sweeping, optional generational sorting, and
+developer-facing tuning levers, Lua maintains a predictable footprint
+suitable for everything from microcontrollers to large-scale game
+engines.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

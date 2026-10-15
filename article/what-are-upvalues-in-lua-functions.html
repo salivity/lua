@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Are Upvalues in Lua Functions? - lua</title>
+    <meta name="description" content="This article provides a concise explanation of upvalues in the Lua programming language, focusing on how closures access variables from enclosing scopes. You will learn what upvalues are, how Lua manages their lifecycle between the execution stack and hea">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/what-are-upvalues-in-lua-functions">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="What Are Upvalues in Lua Functions? - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/what-are-upvalues-in-lua-functions" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides a concise explanation of upvalues in the Lua programming language, focusing on how closures access variables from enclosing scopes. You will learn what upvalues are, how Lua manages their lifecycle between the execution stack and hea" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="what-are-upvalues-in-lua-functions">What Are Upvalues in Lua
+Functions?</h1>
+<p>This article provides a concise explanation of upvalues in the Lua
+programming language, focusing on how closures access variables from
+enclosing scopes. You will learn what upvalues are, how Lua manages
+their lifecycle between the execution stack and heap memory, and how
+they enable data encapsulation and shared state across multiple
+functions.</p>
+<p>In Lua, an upvalue—also known as an external local variable—is a
+local variable from an enclosing outer function that is accessed by an
+inner nested function. When an inner function references a local
+variable from an outer scope, that variable becomes an upvalue for the
+inner function, creating a closure.</p>
+<h3 id="how-upvalues-work">How Upvalues Work</h3>
+<p>When Lua executes a function containing an inner function, the inner
+function captures any referenced variables from the outer lexical
+environment.</p>
+<p>Lua handles upvalues in two distinct states:</p>
+<ol type="1">
+<li><strong>Open Upvalues:</strong> While the outer function is still
+active and executing, its local variables remain on the Lua call stack.
+The inner function's upvalue points directly to the memory slot on the
+stack.</li>
+<li><strong>Closed Upvalues:</strong> When the outer function finishes
+execution and exits, its stack frame is destroyed. Lua automatically
+"closes" the upvalue by copying the variable's value from the stack into
+a dedicated memory space allocated inside the closure itself. This
+ensures that the inner function continues to access and modify the
+variable even after the outer function has returned.</li>
+</ol>
+<h3 id="code-example-encapsulation-via-upvalues">Code Example:
+Encapsulation via Upvalues</h3>
+<p>The following example demonstrates an upvalue functioning as private
+state:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> createCounter<span class="op">()</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">count</span> <span class="op">=</span> <span class="dv">0</span>  <span class="co">-- &#39;count&#39; is local to createCounter</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">count</span> <span class="op">=</span> <span class="va">count</span> <span class="op">+</span> <span class="dv">1</span>  <span class="co">-- &#39;count&#39; is an upvalue for this anonymous function</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">count</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">counter</span> <span class="op">=</span> createCounter<span class="op">()</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>counter<span class="op">())</span> <span class="co">-- Outputs: 1</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>counter<span class="op">())</span> <span class="co">-- Outputs: 2</span></span></code></pre></div>
+<p>In this example, <code>count</code> is an upvalue. Even after
+<code>createCounter</code> finishes running, <code>counter</code>
+retains access to <code>count</code> in a closed state. External code
+cannot directly modify or inspect <code>count</code>, providing clean
+data hiding.</p>
+<h3 id="shared-upvalues">Shared Upvalues</h3>
+<p>If multiple nested functions in the same scope reference the same
+outer local variable, they share identical upvalue storage. Changes made
+by one function are immediately visible to the others:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> createAccount<span class="op">(</span><span class="va">initialBalance</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">balance</span> <span class="op">=</span> <span class="va">initialBalance</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="kw">function</span> deposit<span class="op">(</span><span class="va">amount</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">balance</span> <span class="op">=</span> <span class="va">balance</span> <span class="op">+</span> <span class="va">amount</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">balance</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="kw">function</span> withdraw<span class="op">(</span><span class="va">amount</span><span class="op">)</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">balance</span> <span class="op">=</span> <span class="va">balance</span> <span class="op">-</span> <span class="va">amount</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">balance</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">deposit</span><span class="op">,</span> <span class="va">withdraw</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">deposit</span><span class="op">,</span> <span class="va">withdraw</span> <span class="op">=</span> createAccount<span class="op">(</span><span class="dv">100</span><span class="op">)</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>deposit<span class="op">(</span><span class="dv">50</span><span class="op">))</span>   <span class="co">-- Outputs: 150</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>withdraw<span class="op">(</span><span class="dv">30</span><span class="op">))</span>  <span class="co">-- Outputs: 120</span></span></code></pre></div>
+<p>Both <code>deposit</code> and <code>withdraw</code> share the same
+upvalue <code>balance</code>. Modifying it in <code>deposit</code>
+updates the state read by <code>withdraw</code>.</p>
+<h3 id="inspecting-and-modifying-upvalues">Inspecting and Modifying
+Upvalues</h3>
+<p>Lua provides functions within the standard <code>debug</code> library
+to inspect and alter upvalues dynamically:</p>
+<ul>
+<li><code>debug.getupvalue(f, index)</code>: Retrieves the name and
+value of an upvalue by its 1-based index from function
+<code>f</code>.</li>
+<li><code>debug.setupvalue(f, index, value)</code>: Assigns a new value
+to the specified upvalue index in function <code>f</code>.</li>
+</ul>
+<p>Upvalues are the foundational mechanism for closures, object-like
+encapsulation, and state retention in functional Lua programming.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

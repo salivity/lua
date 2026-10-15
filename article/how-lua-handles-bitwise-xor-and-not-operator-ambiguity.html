@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Handles Bitwise XOR and NOT Operator Ambiguity - lua</title>
+    <meta name="description" content="Lua uses the tilde symbol (~) for both the binary bitwise XOR operator and the unary bitwise NOT operator. This article explains how Lua&#39;s syntactic grammar, operator positioning, and single-pass recursive descent parser distinguish between these two oper">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-handles-bitwise-xor-and-not-operator-ambiguity">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Handles Bitwise XOR and NOT Operator Ambiguity - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-handles-bitwise-xor-and-not-operator-ambiguity" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua uses the tilde symbol (~) for both the binary bitwise XOR operator and the unary bitwise NOT operator. This article explains how Lua&#39;s syntactic grammar, operator positioning, and single-pass recursive descent parser distinguish between these two oper" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-handles-bitwise-xor-and-not-operator-ambiguity">How Lua
+Handles Bitwise XOR and NOT Operator Ambiguity</h1>
+<p>Lua uses the tilde symbol (<code>~</code>) for both the binary
+bitwise XOR operator and the unary bitwise NOT operator. This article
+explains how Lua's syntactic grammar, operator positioning, and
+single-pass recursive descent parser distinguish between these two
+operations without encountering ambiguity or requiring lookahead
+backtracking.</p>
+<h2 id="positional-context-prefix-vs-infix">Positional Context: Prefix
+vs. Infix</h2>
+<p>The primary mechanism Lua uses to avoid ambiguity is positional
+context within the grammar of expressions. An expression alternates
+predictably between operands and operators:</p>
+<ul>
+<li><strong>Unary Bitwise NOT (<code>~x</code>)</strong> is a prefix
+operator. It can only appear where an operand or the start of a
+subexpression is expected, such as at the beginning of an expression,
+immediately after an assignment operator, or directly following another
+operator (e.g., <code>y = ~x</code> or <code>a &amp; ~b</code>).</li>
+<li><strong>Binary Bitwise XOR (<code>x ~ y</code>)</strong> is an infix
+operator. It can only appear where a binary operator is expected, which
+occurs strictly after a complete operand or subexpression has already
+been resolved (e.g., <code>x ~ y</code>).</li>
+</ul>
+<p>Because the parser always knows whether it is waiting for an operand
+or a binary operator, the token <code>~</code> is never ambiguous. If an
+operand has just been parsed, <code>~</code> must be XOR. If the parser
+is awaiting an operand, <code>~</code> must be NOT.</p>
+<h2 id="precedence-and-associativity-resolution">Precedence and
+Associativity Resolution</h2>
+<p>Operator precedence reinforces this separation when both operations
+appear close together:</p>
+<ul>
+<li><strong>Unary NOT</strong> has high precedence, evaluated at the
+same level as unary minus (<code>-</code>), unary length
+(<code>#</code>), and logical <code>not</code>.</li>
+<li><strong>Binary XOR</strong> has lower precedence, evaluated at the
+same level as binary OR (<code>|</code>) and binary AND
+(<code>&amp;</code>).</li>
+</ul>
+<p>Consider the expression <code>~a ~ b</code>. The parser interprets
+the first <code>~</code> in a prefix position (unary NOT on
+<code>a</code>). Once <code>a</code> is consumed, the parser expects an
+infix operator, identifying the second <code>~</code> as binary XOR. The
+expression resolves unambiguously to <code>(~a) ~ b</code>.</p>
+<p>Conversely, in <code>a ~ ~b</code>, the first <code>~</code> occurs
+after operand <code>a</code> (making it binary XOR), and the second
+<code>~</code> occurs after an operator where a new operand is required
+(making it unary NOT). This evaluates strictly as
+<code>a ~ (~b)</code>.</p>
+<h2 id="implementation-in-the-lua-parser">Implementation in the Lua
+Parser</h2>
+<p>Under the hood, Lua's parser (<code>lparser.c</code>) implements
+expression parsing via a precedence-climbing algorithm within the
+internal <code>subexpr</code> function.</p>
+<p>When entering an expression, Lua checks for prefix unary operators
+(<code>~</code>, <code>-</code>, <code>#</code>, <code>not</code>). If
+it matches <code>~</code>, it registers a unary bitwise operation and
+immediately recurses to parse the following subexpression with unary
+precedence.</p>
+<p>Only after a valid primary expression or operand is constructed does
+the parser enter its binary operator loop. Inside this loop,
+encountering <code>~</code> maps directly to the binary
+<code>OPR_BXOR</code> enum. Because the state machine strictly
+distinguishes between parsing a primary subexpression and evaluating
+intermediate binary operators, the token <code>~</code> is handled by
+two completely separate execution paths.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Tables Dynamically Resize Array and Hash Parts - lua</title>
+    <meta name="description" content="Lua tables are hybrid data structures composed of a contiguous array section and a chained hash map section. As programs insert keys, Lua does not statically lock elements into one storage mechanism; instead, it dynamically shifts elements between the arr">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-tables-dynamically-resize-array-and-hash-parts">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Tables Dynamically Resize Array and Hash Parts - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-tables-dynamically-resize-array-and-hash-parts" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua tables are hybrid data structures composed of a contiguous array section and a chained hash map section. As programs insert keys, Lua does not statically lock elements into one storage mechanism; instead, it dynamically shifts elements between the arr" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-tables-dynamically-resize-array-and-hash-parts">How Lua
+Tables Dynamically Resize Array and Hash Parts</h1>
+<p>Lua tables are hybrid data structures composed of a contiguous array
+section and a chained hash map section. As programs insert keys, Lua
+does not statically lock elements into one storage mechanism; instead,
+it dynamically shifts elements between the array and hash parts using an
+internal rehashing algorithm. This dynamic balancing ensures that dense
+sequences of integer keys enjoy <span
+class="math inline">\(O(1)\)</span> direct indexing and lower memory
+overhead, while arbitrary or sparse keys fall back onto the hash table
+without requiring manual developer intervention.</p>
+<h3 id="the-dual-architecture-of-lua-tables">The Dual Architecture of
+Lua Tables</h3>
+<p>Internally, Lua represents a table through the <code>Table</code>
+struct (defined in <code>ltable.h</code>). This struct maintains two
+distinct storage segments:</p>
+<ul>
+<li><strong>The Array Part (<code>TValue *array</code>):</strong> A
+contiguous C array sized to a power of two (<span
+class="math inline">\(2^n\)</span>). It stores values corresponding to
+1-based sequential integer keys from <span
+class="math inline">\(1\)</span> up to <code>sizearray</code>. Accessing
+keys in this segment requires no hashing and operates via direct pointer
+offset.</li>
+<li><strong>The Hash Part (<code>Node *node</code>):</strong> A hash
+table sized to a power of two, resolving collisions using a hybrid of
+open addressing and separate chaining (often referred to as Brent's
+variation or coalesce chaining with a "last free" pointer). It holds
+non-integer keys, negative or fractional numbers, and integer keys
+outside the current array boundary.</li>
+</ul>
+<h3 id="the-trigger-detecting-exhaustion">The Trigger: Detecting
+Exhaustion</h3>
+<p>Elements do not shift continuously on every individual insertion.
+Instead, shifts occur when an insertion fails to find space in the hash
+part.</p>
+<p>When a new key cannot be placed into the array (either because it is
+not an integer, it is <span class="math inline">\(\le 0\)</span>, or it
+exceeds the current <code>sizearray</code>), Lua attempts to insert it
+into the hash part. If the hash part has no free nodes remaining
+(meaning the internal <code>lastfree</code> cursor has reached the
+beginning of the node array), Lua invokes the internal
+<code>luaH_newkey</code> function, which triggers the table's
+<code>rehash</code> routine.</p>
+<h3 id="the-rehashing-algorithm">The Rehashing Algorithm</h3>
+<p>The core of Lua’s reallocation strategy lies in the
+<code>rehash</code> function. The primary goal of <code>rehash</code> is
+to determine a new size for the array part, <span
+class="math inline">\(N\)</span>, where <span
+class="math inline">\(N\)</span> is a power of two, such that at least
+half of the slots between <span class="math inline">\(1\)</span> and
+<span class="math inline">\(N\)</span> are populated. This
+condition—often called the 50% utilization rule—prevents memory
+fragmentation from overly sparse arrays.</p>
+<p>The algorithm executes the following sequence:</p>
+<ol type="1">
+<li><strong>Bucket Counting:</strong> Lua initializes an array of
+counters, where each counter <span class="math inline">\(i\)</span>
+corresponds to the number of existing integer keys in the range <span
+class="math inline">\((2^{i-1}, 2^i]\)</span>.</li>
+<li><strong>Scanning the Array Part:</strong> Lua iterates over the
+existing array part and increments the corresponding power-of-two range
+counters for every non-nil value present.</li>
+<li><strong>Scanning the Hash Part:</strong> Lua iterates over the hash
+part, checks for keys that are valid positive integers, and increments
+the range counters for those keys as well.</li>
+<li><strong>Finding Optimal Array Size:</strong> Lua iterates through
+the cumulative sums of these counters to find the largest power-of-two
+size <span class="math inline">\(N\)</span> such that the number of
+valid keys from <span class="math inline">\(1\)</span> to <span
+class="math inline">\(N\)</span> is greater than <span
+class="math inline">\(N / 2\)</span>.</li>
+<li><strong>Assigning Remaining Keys:</strong> All non-integer keys,
+non-positive integer keys, and integer keys greater than the newly
+computed <span class="math inline">\(N\)</span> are allocated to the
+hash part.</li>
+</ol>
+<h3 id="shifting-elements-between-segments">Shifting Elements Between
+Segments</h3>
+<p>Once the new sizes for the array part and the hash part are computed,
+Lua allocates new memory buffers for both segments and re-distributes
+every existing key-value pair:</p>
+<ul>
+<li><strong>Hash to Array:</strong> Any integer key between <span
+class="math inline">\(1\)</span> and <span
+class="math inline">\(N\)</span> that previously resided in the hash
+part is written directly to index <code>key - 1</code> in the new array
+allocation. The corresponding hash node is freed.</li>
+<li><strong>Array to Hash:</strong> If the table shrank its array
+segment (which occurs if dense sequences were deleted prior to rehash),
+keys that used to sit in the array part at indices <span
+class="math inline">\(&gt; N\)</span> are extracted, hashed, and
+inserted into the new hash table nodes.</li>
+<li><strong>Hash to Hash:</strong> Non-integer keys and integers outside
+the array boundary are re-hashed and linked into the newly sized hash
+table.</li>
+<li><strong>Array to Array:</strong> Keys remaining within the new
+boundary <span class="math inline">\(1 \dots N\)</span> are copied to
+the new contiguous memory block.</li>
+</ul>
+<p>Finally, the old memory blocks are released, the table's metadata
+pointers are updated, and the pending insertion that initially triggered
+the rehash completes.</p>
+<h3 id="performance-considerations">Performance Considerations</h3>
+<p>Because rehashing visits all existing elements in both the array and
+hash parts, it runs in <span class="math inline">\(O(n)\)</span> time
+relative to table size. However, because both parts double in capacity
+when expanding, the cost of reallocation is amortized over many
+insertions, resulting in an amortized <span
+class="math inline">\(O(1)\)</span> insertion time.</p>
+<p>Sparse insertions—such as assigning to index <code>t[1]</code> and
+then <code>t[1000000]</code>—will keep <code>t[1]</code> in the array
+part (size 1) and place <code>t[1000000]</code> into the hash part to
+satisfy the 50% density threshold without wasting memory on one million
+empty slots.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

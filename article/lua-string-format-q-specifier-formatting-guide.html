@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua string.format %q Specifier Formatting Guide - lua</title>
+    <meta name="description" content="The %q specifier in Lua&#39;s string.format function is designed to serialize values into valid Lua literals that can be safely read back by the Lua interpreter. This guide details how %q functions, the data types it supports across different Lua versions, an">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-string-format-q-specifier-formatting-guide">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua string.format %q Specifier Formatting Guide - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-string-format-q-specifier-formatting-guide" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The %q specifier in Lua&#39;s string.format function is designed to serialize values into valid Lua literals that can be safely read back by the Lua interpreter. This guide details how %q functions, the data types it supports across different Lua versions, an" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-stringformat-q-specifier-formatting-guide">Lua string.format
+%q Specifier Formatting Guide</h1>
+<p>The <code>%q</code> specifier in Lua's <code>string.format</code>
+function is designed to serialize values into valid Lua literals that
+can be safely read back by the Lua interpreter. This guide details how
+<code>%q</code> functions, the data types it supports across different
+Lua versions, and how it handles escaping and value representation.</p>
+<h3 id="modifier-and-flag-support">Modifier and Flag Support</h3>
+<p>Unlike numeric or general string specifiers (such as <code>%s</code>,
+<code>%d</code>, or <code>%f</code>), the <code>%q</code> specifier does
+not accept standard formatting modifiers:</p>
+<ul>
+<li><strong>Width and Precision:</strong> You cannot specify minimum
+field widths (e.g., <code>%20q</code>) or precision limits (e.g.,
+<code>%.5q</code>). Attempting to do so results in an error.</li>
+<li><strong>Flags:</strong> Alignment and sign flags such as
+<code>-</code>, <code>+</code>, <code>0</code>, or <code>#</code> are
+not supported.</li>
+</ul>
+<p>The formatting applied by <code>%q</code> is fixed and handled
+automatically by Lua based on the type of value supplied.</p>
+<h3 id="type-specific-formatting-behavior">Type-Specific Formatting
+Behavior</h3>
+<p>Starting in Lua 5.2 and continuing through Lua 5.3 and 5.4,
+<code>%q</code> was expanded to accept types beyond standard strings.
+Its output varies depending on the input type:</p>
+<h4 id="1-strings">1. Strings</h4>
+<p>When passed a string value, <code>%q</code> wraps the content inside
+double quotation marks (<code>"..."</code>) and escapes characters that
+could break Lua syntax or corrupt data:</p>
+<ul>
+<li><strong>Double Quotes (<code>"</code>):</strong> Converted to
+<code>\"</code>.</li>
+<li><strong>Backslashes (<code>\</code>):</strong> Converted to
+<code>\\</code>.</li>
+<li><strong>Newlines (<code>\n</code>) and Carriage Returns
+(<code>\r</code>):</strong> Converted to their literal escape sequences
+rather than actual line breaks.</li>
+<li><strong>Null Characters (<code>\0</code>) and Non-Printable
+ASCII:</strong> Converted to decimal or hexadecimal escape sequences
+(e.g., <code>\000</code> or <code>\x00</code>) to guarantee safe
+execution when parsed by <code>load</code> or
+<code>dostring</code>.</li>
+</ul>
+<h4 id="2-booleans-and-nil">2. Booleans and Nil</h4>
+<ul>
+<li><strong><code>nil</code>:</strong> Output as the literal keyword
+<code>nil</code> without quotes.</li>
+<li><strong><code>true</code> / <code>false</code>:</strong> Output as
+the literal keywords <code>true</code> or <code>false</code> without
+quotes.</li>
+</ul>
+<h4 id="3-numbers">3. Numbers</h4>
+<p>In Lua 5.3 and newer, <code>%q</code> formats numbers so that their
+full precision is retained when re-read:</p>
+<ul>
+<li><strong>Integers:</strong> Output in standard decimal format (e.g.,
+<code>42</code>).</li>
+<li><strong>Floats:</strong> Output in standard floating-point form or
+in hexadecimal floating-point notation (e.g., <code>0x1.4p+3</code>)
+whenever necessary to avoid precision loss.</li>
+<li><strong>Special Values:</strong> Handles special IEEE 754 float
+values such as <code>inf</code>, <code>-inf</code>, and <code>nan</code>
+in a syntax compatible with Lua.</li>
+</ul>
+<h4 id="4-unsupported-types">4. Unsupported Types</h4>
+<p>Passing complex types to <code>%q</code>—such as tables, functions,
+threads (coroutines), or userdata—results in a runtime error. To format
+these types, you must serialize them manually or convert them using
+custom logic before calling <code>string.format</code>.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

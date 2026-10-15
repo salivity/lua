@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua math.random Pseudo-Random Seed Initialization - lua</title>
+    <meta name="description" content="Modern versions of the Lua programming language, starting with Lua 5.4, handle pseudo-random number generation internally rather than relying on the host platform&#39;s C runtime library. This modern implementation uses the xoshiro256 algorithm and automatica">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-math-random-pseudo-random-seed-initialization">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua math.random Pseudo-Random Seed Initialization - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-math-random-pseudo-random-seed-initialization" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Modern versions of the Lua programming language, starting with Lua 5.4, handle pseudo-random number generation internally rather than relying on the host platform&#39;s C runtime library. This modern implementation uses the xoshiro256 algorithm and automatica" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-mathrandom-pseudo-random-seed-initialization">Lua
+math.random Pseudo-Random Seed Initialization</h1>
+<p>Modern versions of the Lua programming language, starting with Lua
+5.4, handle pseudo-random number generation internally rather than
+relying on the host platform's C runtime library. This modern
+implementation uses the xoshiro256** algorithm and automatically
+initializes its pseudo-random seed when the math library loads, removing
+the legacy requirement of manually calling
+<code>math.randomseed(os.time())</code> to avoid repeating sequence
+patterns upon startup.</p>
+<h3 id="the-shift-to-xoshiro256">The Shift to xoshiro256**</h3>
+<p>In Lua 5.3 and earlier, <code>math.random</code> and
+<code>math.randomseed</code> acted as thin wrappers around the standard
+C library functions <code>rand()</code> and <code>srand()</code>. This
+design led to platform-dependent quality and required developers to
+manually seed the generator, often using system time, to avoid identical
+outputs across runs.</p>
+<p>Lua 5.4 replaced this mechanism entirely by integrating the
+xoshiro256** (xor-shift-rotate) algorithm directly into the core engine.
+This generator maintains an internal 256-bit state represented as four
+64-bit unsigned integers, providing high-performance, statistically
+robust pseudo-random sequences across all operating systems.</p>
+<h3 id="automatic-initialization-at-startup">Automatic Initialization at
+Startup</h3>
+<p>When a modern Lua state opens and loads the standard math library via
+<code>luaopen_math</code>, the engine executes an internal function that
+sets up the generator's state without user intervention.</p>
+<p>To initialize the state, Lua gathers entropy from two primary sources
+available in standard C:</p>
+<ol type="1">
+<li><strong>System Time:</strong> The standard C <code>time(NULL)</code>
+function retrieves the current calendar time in seconds.</li>
+<li><strong>Memory Addresses:</strong> The runtime takes the address of
+a local variable or internal Lua structure on the stack.</li>
+</ol>
+<p>Because modern operating systems implement Address Space Layout
+Randomization (ASLR), memory addresses change between program
+executions. By combining the system time with these randomized memory
+addresses, Lua derives two distinct 64-bit integer values.</p>
+<h3 id="expanding-seeds-into-internal-state">Expanding Seeds into
+Internal State</h3>
+<p>The two initial 64-bit values are not used directly as the final
+state. Because the xoshiro256** algorithm requires four non-zero 64-bit
+integers to function properly, Lua passes the initial values through a
+secondary, lightweight generator called SplitMix64.</p>
+<p>SplitMix64 generates the four distinct pseudo-random 64-bit integers
+required to populate the full 256-bit state of the xoshiro256** engine.
+This expansion guarantees that even if the initial seed values have low
+entropy, the full state array is properly scrambled and valid.</p>
+<h3 id="manual-seeding-in-modern-lua">Manual Seeding in Modern Lua</h3>
+<p>While automatic seeding handles standard execution, developers can
+still control the seed manually:</p>
+<ul>
+<li><strong><code>math.randomseed()</code> with no arguments:</strong>
+Re-executes the automatic seeding logic, mixing fresh system time and
+current memory addresses to re-randomize the generator with
+non-deterministic values.</li>
+<li><strong><code>math.randomseed(x, y)</code>:</strong> Accepts up to
+two integers to set the seed deterministically. Lua runs these inputs
+through the same SplitMix64 initialization process, ensuring
+reproducible test environments while fully populating the internal
+256-bit state.</li>
+</ul>
+<p>Although this initialization strategy prevents predictable output
+across program restarts in non-adversarial environments, it relies on
+low-entropy sources and is not cryptographically secure.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

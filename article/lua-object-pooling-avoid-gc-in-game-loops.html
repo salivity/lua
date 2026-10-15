@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Object Pooling: Avoid GC in Game Loops - lua</title>
+    <meta name="description" content="In Lua-based game development, dynamic table allocation within inner game loops frequently triggers automatic garbage collection (GC) cycles, leading to visible stutter and frame rate drops. Object pooling circumvents this issue by pre-allocating and recy">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-object-pooling-avoid-gc-in-game-loops">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Object Pooling: Avoid GC in Game Loops - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-object-pooling-avoid-gc-in-game-loops" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua-based game development, dynamic table allocation within inner game loops frequently triggers automatic garbage collection (GC) cycles, leading to visible stutter and frame rate drops. Object pooling circumvents this issue by pre-allocating and recy" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-object-pooling-avoid-gc-in-game-loops">Lua Object Pooling:
+Avoid GC in Game Loops</h1>
+<p>In Lua-based game development, dynamic table allocation within inner
+game loops frequently triggers automatic garbage collection (GC) cycles,
+leading to visible stutter and frame rate drops. Object pooling
+circumvents this issue by pre-allocating and recycling tables rather
+than abandoning them for the collector to sweep. This guide outlines the
+essential architectural patterns and best practices for creating
+high-performance table and object pools in Lua, ensuring stable frame
+times in performance-critical environments like Love2D, Defold, or
+Roblox.</p>
+<h3 id="the-gc-problem-in-lua-game-loops">The GC Problem in Lua Game
+Loops</h3>
+<p>Lua manages memory automatically using an incremental or generational
+garbage collector. Every time a table or closure is instantiated
+(<code>local v = { x = 0, y = 0 }</code>), memory is allocated on the
+heap. In a 60 FPS loop running physics, AI, or particle updates,
+generating hundreds of short-lived tables per frame forces Lua's GC to
+run aggressively. When the GC pause kicks in, frame rendering stalls.
+The solution is zero-allocation loops achieved through pooling.</p>
+<h3 id="implement-a-fast-stack-based-pool">Implement a Fast Stack-Based
+Pool</h3>
+<p>A minimal, performant pool operates as a Last-In, First-Out (LIFO)
+stack. Using a simple array with an integer pointer is significantly
+faster than using standard library functions like
+<code>table.insert</code> and <code>table.remove</code>, which incur
+overhead from dynamic resizing and boundary checks.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Pool</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="va">Pool</span><span class="op">.</span><span class="va">__index</span> <span class="op">=</span> <span class="va">Pool</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Pool</span><span class="op">.</span>new<span class="op">(</span><span class="va">constructor</span><span class="op">,</span> <span class="va">initial_size</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">self</span> <span class="op">=</span> <span class="fu">setmetatable</span><span class="op">({},</span> <span class="va">Pool</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span><span class="op">.</span><span class="va">constructor</span> <span class="op">=</span> <span class="va">constructor</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span><span class="op">.</span><span class="va">free_objects</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span><span class="op">.</span><span class="va">size</span> <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="cn">_</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="op">(</span><span class="va">initial_size</span> <span class="kw">or</span> <span class="dv">32</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span><span class="op">.</span><span class="va">size</span> <span class="op">=</span> <span class="va">self</span><span class="op">.</span><span class="va">size</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span><span class="op">.</span><span class="va">free_objects</span><span class="op">[</span><span class="va">self</span><span class="op">.</span><span class="va">size</span><span class="op">]</span> <span class="op">=</span> <span class="va">self</span><span class="op">.</span>constructor<span class="op">()</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">self</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Pool</span><span class="op">:</span>obtain<span class="op">(...)</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">obj</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">self</span><span class="op">.</span><span class="va">size</span> <span class="op">&gt;</span> <span class="dv">0</span> <span class="cf">then</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>        <span class="va">obj</span> <span class="op">=</span> <span class="va">self</span><span class="op">.</span><span class="va">free_objects</span><span class="op">[</span><span class="va">self</span><span class="op">.</span><span class="va">size</span><span class="op">]</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span><span class="op">.</span><span class="va">free_objects</span><span class="op">[</span><span class="va">self</span><span class="op">.</span><span class="va">size</span><span class="op">]</span> <span class="op">=</span> <span class="kw">nil</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span><span class="op">.</span><span class="va">size</span> <span class="op">=</span> <span class="va">self</span><span class="op">.</span><span class="va">size</span> <span class="op">-</span> <span class="dv">1</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>        <span class="va">obj</span> <span class="op">=</span> <span class="va">self</span><span class="op">.</span>constructor<span class="op">()</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">obj</span><span class="op">.</span><span class="va">init</span> <span class="cf">then</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>        <span class="va">obj</span><span class="op">:</span>init<span class="op">(...)</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">obj</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Pool</span><span class="op">:</span>free<span class="op">(</span><span class="va">obj</span><span class="op">)</span></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">obj</span><span class="op">.</span><span class="va">reset</span> <span class="cf">then</span></span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>        <span class="va">obj</span><span class="op">:</span>reset<span class="op">()</span></span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span><span class="op">.</span><span class="va">size</span> <span class="op">=</span> <span class="va">self</span><span class="op">.</span><span class="va">size</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span><span class="op">.</span><span class="va">free_objects</span><span class="op">[</span><span class="va">self</span><span class="op">.</span><span class="va">size</span><span class="op">]</span> <span class="op">=</span> <span class="va">obj</span></span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="pre-warm-pools-during-initialization">Pre-warm Pools During
+Initialization</h3>
+<p>Never allow a pool to allocate memory during gameplay. Allocate the
+maximum expected capacity of objects during level loading, scene
+transitions, or engine initialization. If a game scenario requires a
+maximum of 500 active bullets, pre-warm the pool to 500 or 600 items.
+Growing a pool at runtime triggers both table creation and hash/array
+re-hashing inside the Lua runtime.</p>
+<h3 id="clean-object-states-without-deleting-keys">Clean Object States
+Without Deleting Keys</h3>
+<p>When resetting a recycled object, avoid setting keys to
+<code>nil</code> if those keys will simply be assigned again on the next
+acquisition. In Lua, toggling keys between <code>nil</code> and a value
+causes table re-hashes and internal reallocation.</p>
+<ul>
+<li><strong>Scalar Values:</strong> Reset numeric, boolean, or string
+flags back to default values (e.g., <code>self.x = 0</code>,
+<code>self.alive = false</code>).</li>
+<li><strong>Nested Tables:</strong> If an object contains sub-tables
+(like a vector or bounding box), pool those sub-tables or clean their
+inner scalar fields instead of recreating them.</li>
+<li><strong>External References:</strong> Explicitly set references to
+other game entities or assets to <code>nil</code> upon returning the
+object to the pool to prevent memory leaks from retained
+references.</li>
+</ul>
+<h3 id="separate-array-and-hash-elements">Separate Array and Hash
+Elements</h3>
+<p>Lua optimizes tables internally into an array part and a hash
+(dictionary) part. Mixed tables that alternate between sequential
+integers and string keys can trigger reallocation.</p>
+<p>For pooled objects representing vectors, transforms, or components,
+prioritize consistent keys. If performance is paramount, structure
+pooled data as flat arrays with numeric indices (e.g.,
+<code>obj[1]</code> for X, <code>obj[2]</code> for Y) or ensure the hash
+structure remains static throughout the application lifecycle.</p>
+<h3 id="avoid-accidental-hidden-allocations">Avoid Accidental Hidden
+Allocations</h3>
+<p>A robust object pool can still be undermined by hidden allocations
+inside the loop:</p>
+<ul>
+<li><strong>Closures:</strong> Avoid defining local functions or
+anonymous callbacks inside pooled methods or loop updates. Each
+declaration allocates a new closure object.</li>
+<li><strong>String Manipulation:</strong> String concatenation
+(<code>..</code>) allocates new memory because Lua strings are immutable
+and interned. Use predefined IDs, booleans, or enums (numbers) to
+represent states instead of dynamic strings.</li>
+<li><strong>Varargs (<code>...</code>):</strong> In standard Lua
+versions (prior to LuaJIT optimizations or Lua 5.3+ improvements),
+passing or capturing <code>...</code> into a table (<code>{...}</code>)
+instantiates a new table. Pass explicit parameters to <code>init</code>
+and <code>reset</code> methods.</li>
+</ul>
+<h3 id="keep-pools-homogeneous">Keep Pools Homogeneous</h3>
+<p>Do not create a single "generic" table pool for entirely different
+data structures. A bullet table requires different internal sizing than
+an enemy AI state machine table. Keeping pools homogeneous ensures that
+the internal memory footprint of the tables matches their usage pattern,
+preventing Lua from continually expanding the capacity of small tables
+that accidentally inherited larger fields from previous use.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

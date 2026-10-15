@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Nil Works in the Lua Type System - lua</title>
+    <meta name="description" content="In Lua, nil is a foundational primitive that represents the absence of a value. It functions as both an independent basic type and the sole value belonging to that type. This article explores how nil operates within Lua&#39;s dynamic type system, covering its">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-nil-works-in-the-lua-type-system">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Nil Works in the Lua Type System - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-nil-works-in-the-lua-type-system" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, nil is a foundational primitive that represents the absence of a value. It functions as both an independent basic type and the sole value belonging to that type. This article explores how nil operates within Lua&#39;s dynamic type system, covering its" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-nil-works-in-the-lua-type-system">How Nil Works in the Lua
+Type System</h1>
+<p>In Lua, <code>nil</code> is a foundational primitive that represents
+the absence of a value. It functions as both an independent basic type
+and the sole value belonging to that type. This article explores how
+<code>nil</code> operates within Lua's dynamic type system, covering its
+role in variable declarations, conditional logic, table manipulation,
+memory management, and function returns.</p>
+<h2 id="the-nil-type-and-value">The Nil Type and Value</h2>
+<p>Lua features a dynamically typed architecture where values carry
+types rather than variables. The system defines eight basic types:
+<code>nil</code>, <code>boolean</code>, <code>number</code>,
+<code>string</code>, <code>userdata</code>, <code>function</code>,
+<code>thread</code>, and <code>table</code>.</p>
+<p>The <code>nil</code> type contains exactly one value:
+<code>nil</code>. Its primary purpose is to distinguish itself from any
+other valid data. Evaluating the type using the built-in
+<code>type()</code> function:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">type</span><span class="op">(</span><span class="kw">nil</span><span class="op">))</span> <span class="co">-- Output: &quot;nil&quot;</span></span></code></pre></div>
+<p>Because <code>nil</code> is a distinct type, it cannot be equated
+with zero (<code>0</code>), empty strings (<code>""</code>), or empty
+tables (<code>{}</code>).</p>
+<h2 id="default-values-and-variable-state">Default Values and Variable
+State</h2>
+<p>In Lua, any global or local variable that has been declared but not
+assigned a value automatically holds <code>nil</code>.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">x</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="co">-- Output: nil</span></span></code></pre></div>
+<p>Assigning <code>nil</code> to an existing variable effectively resets
+it. For global variables, assigning <code>nil</code> removes the
+variable from the global environment table (<code>_G</code>), freeing
+the associated value for garbage collection if no other references
+exist.</p>
+<h2 id="boolean-context-and-falsiness">Boolean Context and
+Falsiness</h2>
+<p>In Lua’s conditional evaluation, <code>nil</code> behaves as a falsy
+value. Lua has only two values that evaluate to false in control
+structures like <code>if</code>, <code>while</code>, and
+<code>repeat</code>: <code>false</code> and <code>nil</code>. Every
+other value—including the number <code>0</code>, empty strings, and
+empty tables—evaluates to <code>true</code>.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="kw">nil</span> <span class="cf">then</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;nil is falsy&quot;</span><span class="op">)</span> <span class="co">-- This will execute</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>Because of this property, developers frequently use <code>nil</code>
+in short-circuit evaluations for setting default values:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">port</span> <span class="op">=</span> <span class="va">custom_port</span> <span class="kw">or</span> <span class="dv">8080</span></span></code></pre></div>
+<p>If <code>custom_port</code> is <code>nil</code>, the expression
+resolves to <code>8080</code>.</p>
+<h2 id="nil-in-tables">Nil in Tables</h2>
+<p>Tables are the sole data structuring mechanism in Lua, acting as
+associative arrays. The <code>nil</code> value has specific operational
+rules when interacting with tables:</p>
+<h3 id="key-removal-and-non-existent-keys">Key Removal and Non-Existent
+Keys</h3>
+<p>Accessing an uninitialized or non-existent key in a table returns
+<code>nil</code> without raising an error:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">user</span> <span class="op">=</span> <span class="op">{</span> <span class="va">name</span> <span class="op">=</span> <span class="st">&quot;Alice&quot;</span> <span class="op">}</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">user</span><span class="op">.</span><span class="va">age</span><span class="op">)</span> <span class="co">-- Output: nil</span></span></code></pre></div>
+<p>Assigning <code>nil</code> to an existing key completely removes that
+key-value pair from the table:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="va">user</span><span class="op">.</span><span class="va">name</span> <span class="op">=</span> <span class="kw">nil</span> <span class="co">-- The &quot;name&quot; key is deleted and memory is reclaimed</span></span></code></pre></div>
+<h3 id="table-length-and-sequences">Table Length and Sequences</h3>
+<p>Using <code>nil</code> within list-like tables (sequences) alters how
+the length operator (<code>#</code>) behaves. A sequence is defined as a
+table containing positive integer keys from <code>1</code> to
+<code>n</code> without gaps. Introducing <code>nil</code> creates a
+"hole."</p>
+<p>When an array contains holes, the length operator (<code>#</code>) is
+not guaranteed to return the total count of elements; it may return any
+index <code>n</code> immediately preceding a <code>nil</code>, leading
+to unpredictable iteration when using <code>ipairs</code> or
+<code>#</code>.</p>
+<h2 id="function-arguments-and-return-values">Function Arguments and
+Return Values</h2>
+<p>Functions in Lua adjust argument counts dynamically:</p>
+<ul>
+<li><strong>Missing Arguments:</strong> If a function expects a
+parameter but none is passed, the corresponding local parameter defaults
+to <code>nil</code>.</li>
+<li><strong>Missing Returns:</strong> If a function ends without an
+explicit <code>return</code> statement, it implicitly returns
+<code>nil</code>.</li>
+<li><strong>Trailing Nil Values:</strong> Trailing <code>nil</code>
+values in multiple assignments or multiple return values are discarded
+unless captured explicitly.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

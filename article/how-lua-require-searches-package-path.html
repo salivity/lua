@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua require Searches package.path - lua</title>
+    <meta name="description" content="In the Lua programming language, the require function is the standard mechanism for loading external code modules. When given a module name, require consults the package.path string to locate pure Lua source files by substituting the requested module name">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-require-searches-package-path">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua require Searches package.path - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-require-searches-package-path" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the require function is the standard mechanism for loading external code modules. When given a module name, require consults the package.path string to locate pure Lua source files by substituting the requested module name" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-require-searches-packagepath">How Lua require Searches
+package.path</h1>
+<p>In the Lua programming language, the <code>require</code> function is
+the standard mechanism for loading external code modules. When given a
+module name, <code>require</code> consults the <code>package.path</code>
+string to locate pure Lua source files by substituting the requested
+module name into a series of predefined path templates. This article
+explains how Lua formats module identifiers, iterates through
+<code>package.path</code> templates, checks for matching files, and
+handles cache and fallback mechanisms.</p>
+<h3 id="the-structure-of-packagepath">The Structure of package.path</h3>
+<p>The <code>package.path</code> variable is a standard global string
+containing a semicolon-delimited list of file path templates. Each
+template represents a potential file location on the host file system
+and contains a question mark (<code>?</code>) placeholder.</p>
+<p>A typical <code>package.path</code> configuration on a Unix-like
+system looks like this:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">./</span>?<span class="op">.</span><span class="va">lua</span><span class="op">;/</span><span class="va">usr</span><span class="op">/</span><span class="kw">local</span><span class="op">/</span><span class="va">share</span><span class="op">/</span><span class="va">lua</span><span class="op">/</span><span class="dv">5.4</span><span class="op">/</span>?<span class="op">.</span><span class="va">lua</span><span class="op">;/</span><span class="va">usr</span><span class="op">/</span><span class="kw">local</span><span class="op">/</span><span class="va">share</span><span class="op">/</span><span class="va">lua</span><span class="op">/</span><span class="dv">5.4</span><span class="op">/</span>?<span class="op">/</span><span class="va">init</span><span class="op">.</span><span class="va">lua</span></span></code></pre></div>
+<p>In this string, semicolons (<code>;</code>) act strictly as
+separators between distinct search templates.</p>
+<h3 id="module-name-translation">Module Name Translation</h3>
+<p>Before testing paths, <code>require</code> normalizes the module name
+provided as an argument. If the module name contains dots
+(<code>.</code>), Lua interprets them as hierarchical directory
+separators:</p>
+<ol type="1">
+<li>Dots (<code>.</code>) are replaced with the system-specific
+directory separator (<code>/</code> on POSIX systems or <code>\</code>
+on Windows). For example, <code>require("utils.parser")</code>
+transforms the module name into <code>utils/parser</code>.</li>
+<li>Any question mark placeholder (<code>?</code>) in the path templates
+is then substituted with this transformed string.</li>
+</ol>
+<p>Applying <code>utils.parser</code> to the template
+<code>./?.lua</code> results in <code>./utils/parser.lua</code>.
+Applying it to <code>/?/init.lua</code> results in
+<code>/utils/parser/init.lua</code>.</p>
+<h3 id="the-search-procedure">The Search Procedure</h3>
+<p>When <code>require(modname)</code> is invoked, Lua performs the
+search through the following sequential steps:</p>
+<ol type="1">
+<li><strong>Check the Cache</strong>: Lua first checks
+<code>package.loaded[modname]</code>. If the module has already been
+loaded, <code>require</code> immediately returns the cached value,
+bypassing the file system search entirely.</li>
+<li><strong>Consult Searchers</strong>: Lua delegates the lookup to the
+loader functions in the <code>package.searchers</code> table (called
+<code>package.loaders</code> in Lua 5.1). The second searcher in this
+table handles standard Lua files via <code>package.path</code>.</li>
+<li><strong>Template Iteration</strong>: The Lua file searcher parses
+<code>package.path</code> from left to right, splitting the string by
+semicolons.</li>
+<li><strong>File Probing</strong>: For each template, Lua substitutes
+the formatted module name for the <code>?</code> character and attempts
+to open the file in read mode.</li>
+<li><strong>Loading the Chunk</strong>: As soon as a file is
+successfully opened, the search terminates. Lua loads the file contents
+as a chunk using <code>loadfile</code> and executes it, passing the
+module name as an argument.</li>
+<li><strong>Caching the Result</strong>: If the chunk returns a non-nil
+value, that value is stored in <code>package.loaded[modname]</code>. If
+no value is returned, Lua stores <code>true</code> in the cache to mark
+the module as loaded.</li>
+</ol>
+<h3 id="error-reporting-and-fallbacks">Error Reporting and
+Fallbacks</h3>
+<p>If no template in <code>package.path</code> yields an accessible
+file, the Lua loader fails and yields an error trace detailing every
+evaluated file path. The <code>require</code> function then proceeds
+down the <code>package.searchers</code> chain to check for C shared
+libraries using <code>package.cpath</code>. If all searchers fail, Lua
+raises an error containing the full list of examined paths across both
+<code>package.path</code> and <code>package.cpath</code>.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

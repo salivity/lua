@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How eLua Adapts Lua for Bare-Metal Hardware - lua</title>
+    <meta name="description" content="The eLua (Embedded Lua) project adapts the standard Lua programming language runtime to run directly on microcontrollers without the support of an underlying operating system. This article examines the core modifications and architectural enhancements int">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-e-lua-adapts-lua-for-bare-metal-hardware">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How eLua Adapts Lua for Bare-Metal Hardware - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-e-lua-adapts-lua-for-bare-metal-hardware" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The eLua (Embedded Lua) project adapts the standard Lua programming language runtime to run directly on microcontrollers without the support of an underlying operating system. This article examines the core modifications and architectural enhancements int" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-elua-adapts-lua-for-bare-metal-hardware">How eLua Adapts Lua
+for Bare-Metal Hardware</h1>
+<p>The eLua (Embedded Lua) project adapts the standard Lua programming
+language runtime to run directly on microcontrollers without the support
+of an underlying operating system. This article examines the core
+modifications and architectural enhancements introduced by eLua,
+focusing on memory footprint reduction, hardware peripheral integration,
+integer-based execution, and bare-metal system initialization.</p>
+<h3 id="bare-metal-initialization-and-system-startup">Bare-Metal
+Initialization and System Startup</h3>
+<p>Standard Lua relies on a host operating system and a full C runtime
+library to initialize the environment, manage I/O, and allocate
+resources. In contrast, eLua acts as both the runtime and the operating
+system. It provides minimal startup files, interrupt vector tables, and
+clock initialization code tailored to specific processor architectures
+(such as ARM7, ARM9, Cortex-M, and AVR32). Upon boot, the
+microcontroller configures system clocks, initializes the stack and
+heap, and directly launches the Lua virtual machine or drops the user
+into an interactive Read-Eval-Print Loop (REPL).</p>
+<h3 id="memory-optimization-lua-tiny-ram-ltr">Memory Optimization: Lua
+Tiny RAM (LTR)</h3>
+<p>Microcontrollers typically feature far less RAM than Flash
+memory—often as little as 32 KB to 64 KB of RAM alongside several
+hundred kilobytes of Flash. Standard Lua duplicates core libraries,
+string tables, and function references into RAM at startup, consuming
+tens of kilobytes before running user code.</p>
+<p>To solve this, eLua introduced the Lua Tiny RAM (LTR) patch. LTR
+alters the Lua runtime to allow read-only data structures—such as
+standard library tables, C functions, and constant strings—to remain in
+Flash (ROM) memory rather than being loaded into RAM. By treating these
+structures as statically mapped Flash entities, eLua reduces baseline
+RAM usage to just a few kilobytes, leaving the vast majority of memory
+free for user applications.</p>
+<h3 id="the-emergency-garbage-collector-egc">The Emergency Garbage
+Collector (EGC)</h3>
+<p>In desktop environments, Lua invokes its garbage collector
+periodically based on memory allocation metrics. On bare-metal targets
+with limited memory, an allocation request can easily fail if a garbage
+collection cycle has not run recently.</p>
+<p>The eLua project addresses this by implementing an Emergency Garbage
+Collector. If a memory allocation request (<code>malloc</code> or
+equivalent) fails, the runtime forces a full garbage collection cycle
+immediately and retries the allocation. Only if the second attempt fails
+does eLua raise an "out of memory" error. This prevents unnecessary
+allocation aborts on systems operating close to their physical memory
+limits.</p>
+<h3
+id="floating-point-vs-integer-numerical-representation">Floating-Point
+vs. Integer Numerical Representation</h3>
+<p>Standard Lua traditionally defined its primary numeric type
+(<code>lua_Number</code>) as a double-precision floating-point number.
+Many low-power microcontrollers lack a hardware Floating-Point Unit
+(FPU), making software-emulated floating-point arithmetic slow and
+memory-intensive.</p>
+<p>eLua allows developers to configure the runtime build for
+integer-only operation. By redefining <code>lua_Number</code> as a
+32-bit signed integer, the runtime avoids software floating-point
+emulation libraries, significantly reducing binary size and accelerating
+mathematical operations on integer-only processor cores.</p>
+<h3 id="hardware-abstraction-layer-hal">Hardware Abstraction Layer
+(HAL)</h3>
+<p>To bridge high-level Lua scripts with low-level chip registers, eLua
+introduces a standardized Platform Hardware Abstraction Layer. The HAL
+defines a consistent C interface for common microcontroller peripherals,
+including:</p>
+<ul>
+<li>General-Purpose Input/Output (GPIO)</li>
+<li>Universal Asynchronous Receiver-Transmitter (UART)</li>
+<li>Serial Peripheral Interface (SPI)</li>
+<li>Inter-Integrated Circuit (I2C)</li>
+<li>Analog-to-Digital Converters (ADC)</li>
+<li>Pulse-Width Modulation (PWM)</li>
+<li>Timers and Pulse Counters</li>
+</ul>
+<p>The runtime exposes these HAL functions directly to Lua through
+dedicated native modules (e.g., <code>pio</code>, <code>uart</code>,
+<code>spi</code>). When a Lua script toggles a pin or configures a baud
+rate, the runtime executes the underlying C driver mapped specifically
+to the active processor architecture.</p>
+<h3 id="filesystem-and-standard-io-redirection">Filesystem and Standard
+I/O Redirection</h3>
+<p>Standard Lua assumes access to a POSIX or Windows filesystem and
+standard I/O streams (<code>stdin</code>, <code>stdout</code>,
+<code>stderr</code>). eLua integrates a lightweight virtual filesystem
+layer that redirects standard input and output to physical communication
+ports, typically a serial UART interface or USB-CDC. This enables an
+interactive console over a terminal emulator.</p>
+<p>For code and data storage, eLua provides RomFS, a read-only
+filesystem compiled directly into the microcontroller's Flash memory
+alongside the firmware. It can also interface with external SPI Flash
+chips or SD cards running FAT filesystems via integrated libraries like
+FatFS, allowing scripts to be executed without reflashing the
+device.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

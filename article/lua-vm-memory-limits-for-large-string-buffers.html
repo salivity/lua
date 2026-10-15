@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua VM Memory Limits for Large String Buffers - lua</title>
+    <meta name="description" content="This article explores how the Lua Virtual Machine (VM) manages memory constraints when constructing exceptionally large string buffers. It examines the VM’s underlying allocation mechanisms, how string buffers interact with garbage collection, architectur">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-vm-memory-limits-for-large-string-buffers">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua VM Memory Limits for Large String Buffers - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-vm-memory-limits-for-large-string-buffers" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how the Lua Virtual Machine (VM) manages memory constraints when constructing exceptionally large string buffers. It examines the VM’s underlying allocation mechanisms, how string buffers interact with garbage collection, architectur" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-vm-memory-limits-for-large-string-buffers">Lua VM Memory
+Limits for Large String Buffers</h1>
+<p>This article explores how the Lua Virtual Machine (VM) manages memory
+constraints when constructing exceptionally large string buffers. It
+examines the VM’s underlying allocation mechanisms, how string buffers
+interact with garbage collection, architectural ceiling limits, and the
+error-handling lifecycle that occurs when an allocation reaches its
+operational threshold.</p>
+<h3 id="memory-allocation-architecture-in-lua">Memory Allocation
+Architecture in Lua</h3>
+<p>The Lua core does not allocate memory directly from the operating
+system. Instead, it delegates all memory operations—allocation,
+reallocation, and freeing—through a single user-configurable allocator
+function defined by the <code>lua_Alloc</code> prototype:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">typedef</span> <span class="dt">void</span> <span class="op">*</span> <span class="op">(*</span>lua_Alloc<span class="op">)</span> <span class="op">(</span><span class="dt">void</span> <span class="op">*</span>ud<span class="op">,</span> <span class="dt">void</span> <span class="op">*</span>ptr<span class="op">,</span> <span class="dt">size_t</span> osize<span class="op">,</span> <span class="dt">size_t</span> nsize<span class="op">);</span></span></code></pre></div>
+<p>By default, the standard standalone Lua interpreter implements this
+using the standard C library's <code>realloc</code>. Whenever the Lua VM
+requires memory for a string buffer, it invokes this function via
+internal macros such as <code>luaM_realloc_</code>.</p>
+<h3 id="string-interning-and-buffer-creation">String Interning and
+Buffer Creation</h3>
+<p>Lua strings are immutable values. Lua divides strings into two
+categories:</p>
+<ol type="1">
+<li><strong>Short strings:</strong> Up to a configurable length
+(typically 40 bytes), which are globally interned into a hash table to
+ensure uniqueness and instantaneous equality comparisons.</li>
+<li><strong>Long strings:</strong> Strings exceeding this threshold,
+which are not globally interned upon creation. This prevents performance
+degradation when handling exceptionally large data payloads.</li>
+</ol>
+<p>When building large string buffers via the auxiliary C API
+(<code>luaL_Buffer</code>), or using high-level methods like
+<code>table.concat</code>, Lua avoids creating dozens of intermediate
+immutable string objects. In modern versions (Lua 5.4),
+<code>luaL_Buffer</code> leverages dynamic allocation buffers or
+user-provided memory regions. During buffer construction, Lua attempts
+to grow the buffer exponentially using <code>luaL_prepbuffsize</code> to
+minimize the number of calls to the allocator.</p>
+<h3 id="vm-allocation-limits">VM Allocation Limits</h3>
+<p>The upper boundaries for string buffers are constrained by three
+primary layers:</p>
+<ol type="1">
+<li><strong>Address Space and Architecture:</strong> On 32-bit
+architectures, the theoretical maximum addressable space per process is
+typically 2 GB to 4 GB, setting an immediate upper bound on any single
+contiguous block of memory. On 64-bit systems, this ceiling is
+dramatically higher, but still bounded by physical RAM and operating
+system limits (such as swap space or <code>ulimit</code> settings).</li>
+<li><strong>Internal Integer Limits:</strong> Lua strings use a
+<code>size_t</code> variable to store length. However, the VM defines
+internal maximums (such as <code>MAX_SIZET</code>) and protects against
+integer overflows during size calculations. For instance, when Lua
+computes the memory needed for a string, it must account for the
+<code>TString</code> structure header and a trailing null terminator
+(<code>\0</code>). If requested buffer size calculation overflows, the
+VM rejects the operation before invoking the allocator.</li>
+<li><strong>LuaJIT Specific Constraints:</strong> While standard Lua
+64-bit builds can technically allocate strings up to the boundaries of
+available memory (or <code>PTRDIFF_MAX</code>), LuaJIT has a hard
+architectural limit. LuaJIT requires all memory managed by its GC to
+reside within the lowest 2 GB or 4 GB of the virtual address space,
+drastically reducing the maximum possible size for large string
+buffers.</li>
+</ol>
+<h3 id="memory-exhaustion-and-error-handling">Memory Exhaustion and
+Error Handling</h3>
+<p>When constructing an exceptionally large string causes the allocator
+to fail (i.e., <code>lua_Alloc</code> returns <code>NULL</code>), the
+Lua VM follows a strict failure pipeline:</p>
+<ol type="1">
+<li><strong>Emergency Garbage Collection:</strong> Before conceding
+failure, the Lua VM invokes an emergency garbage collection cycle.
+Unlike normal incremental GC steps, the emergency GC runs immediately in
+an attempt to free unused objects and recover enough contiguous memory
+to fulfill the allocation request.</li>
+<li><strong>Allocation Retry:</strong> After the emergency collection
+finishes, the VM attempts the allocation a second time.</li>
+<li><strong>Triggering <code>LUA_ERRMEM</code>:</strong> If the
+allocator returns <code>NULL</code> again, the VM treats this as an
+unrecoverable allocation failure. Lua calls <code>luaM_error(L)</code>,
+which throws a memory error using Lua’s internal exception handling
+(<code>setjmp</code>/<code>longjmp</code> in C, or C++ exceptions if
+compiled as C++).</li>
+<li><strong>Stack Unwinding:</strong> The execution halts, unwinds the
+current execution stack to the nearest protected call boundary
+(<code>pcall</code> or <code>lua_pcall</code>), and returns the error
+code <code>LUA_ERRMEM</code> along with the standard static error
+message <code>"not enough memory"</code>. Because creating an error
+message object itself requires memory, Lua uses a pre-allocated static
+string for this specific failure state.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

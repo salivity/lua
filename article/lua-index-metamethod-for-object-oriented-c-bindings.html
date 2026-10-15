@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua __index Metamethod for Object-Oriented C Bindings - lua</title>
+    <meta name="description" content="This article explains how the index metamethod bridges procedural C libraries and the Lua runtime to create idiomatic, object-oriented APIs. By pairing Lua metatables with C userdata, the index metamethod intercepts field access on native data structures,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-index-metamethod-for-object-oriented-c-bindings">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua __index Metamethod for Object-Oriented C Bindings - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-index-metamethod-for-object-oriented-c-bindings" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains how the index metamethod bridges procedural C libraries and the Lua runtime to create idiomatic, object-oriented APIs. By pairing Lua metatables with C userdata, the index metamethod intercepts field access on native data structures," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-__index-metamethod-for-object-oriented-c-bindings">Lua
+__index Metamethod for Object-Oriented C Bindings</h1>
+<p>This article explains how the <code>__index</code> metamethod bridges
+procedural C libraries and the Lua runtime to create idiomatic,
+object-oriented APIs. By pairing Lua metatables with C userdata, the
+<code>__index</code> metamethod intercepts field access on native data
+structures, mapping object-like method invocations (such as
+<code>object:method()</code>) directly to compiled C functions. The
+following sections explore the mechanics of userdata, metatable
+configuration, method table resolution, and the execution flow of method
+calls from Lua to C.</p>
+<h2 id="the-challenge-of-binding-c-to-lua">The Challenge of Binding C to
+Lua</h2>
+<p>C is a procedural language that structures data using structs and
+manages behavior via independent functions. In contrast, modern Lua code
+frequently uses an object-oriented paradigm where data structures own
+methods accessed via the colon syntax
+(<code>instance:method()</code>).</p>
+<p>In Lua's C API, arbitrary C memory is represented as
+<code>userdata</code>. A userdata block behaves as an opaque block of
+raw memory to the Lua runtime; natively, it cannot hold key-value pairs
+or functions like standard Lua tables. Attempting to access a field
+directly on a raw userdata object (such as <code>my_object.foo</code>)
+raises a runtime error unless a metatable with an <code>__index</code>
+metamethod is attached.</p>
+<h2 id="how-the-__index-metamethod-works">How the __index Metamethod
+Works</h2>
+<p>The <code>__index</code> metamethod defines fallback behavior when
+Lua queries a key that does not exist in a given value. Because userdata
+contains no intrinsic table keys, <strong>every</strong> indexing
+operation triggers the <code>__index</code> metamethod defined in its
+metatable.</p>
+<p>The <code>__index</code> metamethod can be configured in two
+ways:</p>
+<ol type="1">
+<li><strong>As a function:</strong> Lua calls
+<code>__index(target, key)</code> whenever a lookup occurs. This is
+useful for dynamic property access or getters.</li>
+<li><strong>As a table:</strong> Lua redirects the lookup to that table.
+If the key exists in the specified table, Lua retrieves and returns that
+value.</li>
+</ol>
+<p>For object-oriented C bindings, pointing <code>__index</code> to a
+table of C functions is the standard design pattern.</p>
+<h2 id="implementing-oop-bindings-via-the-c-api">Implementing OOP
+Bindings via the C API</h2>
+<p>Enabling object-oriented access involves three main components:
+creating the userdata, setting up the metatable, and registering the
+methods.</p>
+<h3 id="1-creating-the-method-table-and-metatable">1. Creating the
+Method Table and Metatable</h3>
+<p>Using Lua's auxiliary library, a unique metatable is created in the
+Lua registry using <code>luaL_newmetatable</code>. This metatable serves
+as both the class definition and the method repository.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Define the methods exposed to Lua</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">const</span> <span class="kw">struct</span> luaL_Reg mylib_methods<span class="op">[]</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span><span class="st">&quot;get_value&quot;</span><span class="op">,</span> mylib_get_value<span class="op">},</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span><span class="st">&quot;set_value&quot;</span><span class="op">,</span> mylib_set_value<span class="op">},</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span><span class="st">&quot;close&quot;</span><span class="op">,</span>     mylib_destroy<span class="op">},</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>NULL<span class="op">,</span> NULL<span class="op">}</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> luaopen_mylib<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Create the metatable for the object type</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    luaL_newmetatable<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;MyLib.Object&quot;</span><span class="op">);</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Register methods into the metatable</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    luaL_setfuncs<span class="op">(</span>L<span class="op">,</span> mylib_methods<span class="op">,</span> <span class="dv">0</span><span class="op">);</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Set metatable.__index = metatable</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    lua_pushvalue<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">1</span><span class="op">);</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    lua_setfield<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">2</span><span class="op">,</span> <span class="st">&quot;__index&quot;</span><span class="op">);</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">1</span><span class="op">;</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>By assigning the metatable to its own <code>__index</code> field, the
+metatable acts as its own method lookup dictionary.</p>
+<h3 id="2-instantiating-userdata">2. Instantiating Userdata</h3>
+<p>When a constructor function is invoked from Lua, C allocates memory
+inside Lua's garbage collector using <code>lua_newuserdata</code> and
+associates it with the registered metatable.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">int</span> mylib_new<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Allocate memory managed by Lua&#39;s GC</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    MyStruct <span class="op">*</span>obj <span class="op">=</span> <span class="op">(</span>MyStruct <span class="op">*)</span>lua_newuserdata<span class="op">(</span>L<span class="op">,</span> <span class="kw">sizeof</span><span class="op">(</span>MyStruct<span class="op">));</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    obj<span class="op">-&gt;</span>value <span class="op">=</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Attach the metatable to the new userdata</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    luaL_setmetatable<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;MyLib.Object&quot;</span><span class="op">);</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">1</span><span class="op">;</span> <span class="co">// Userdata is on top of the stack</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h2 id="resolution-flow-of-a-method-call">Resolution Flow of a Method
+Call</h2>
+<p>When a Lua script executes a method call on the instance:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">obj</span> <span class="op">=</span> <span class="va">mylib</span><span class="op">.</span>new<span class="op">()</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="va">obj</span><span class="op">:</span>set_value<span class="op">(</span><span class="dv">42</span><span class="op">)</span></span></code></pre></div>
+<p>The runtime executes the following sequence:</p>
+<ol type="1">
+<li><strong>Syntactic Desugaring:</strong> The colon syntax
+<code>obj:set_value(42)</code> is translated into
+<code>obj.set_value(obj, 42)</code>.</li>
+<li><strong>Key Resolution:</strong> Lua evaluates
+<code>obj.set_value</code>. Because <code>obj</code> is a userdata type,
+it has no native keys.</li>
+<li><strong>Metatable Interception:</strong> Lua inspects
+<code>obj</code>'s metatable and finds the <code>__index</code>
+field.</li>
+<li><strong>Table Redirection:</strong> Lua evaluates the
+<code>__index</code> value, which points back to
+<code>"MyLib.Object"</code>.</li>
+<li><strong>Function Lookup:</strong> Lua looks up the key
+<code>"set_value"</code> in <code>"MyLib.Object"</code>, retrieving the
+C function pointer <code>mylib_set_value</code>.</li>
+<li><strong>Invocation:</strong> Lua calls <code>mylib_set_value</code>,
+passing <code>obj</code> as the first argument (<code>self</code>) and
+<code>42</code> as the second argument.</li>
+</ol>
+<p>Inside <code>mylib_set_value</code>, the C function uses
+<code>luaL_checkudata</code> to validate and extract the underlying
+pointer:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">int</span> mylib_set_value<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    MyStruct <span class="op">*</span>obj <span class="op">=</span> <span class="op">(</span>MyStruct <span class="op">*)</span>luaL_checkudata<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="st">&quot;MyLib.Object&quot;</span><span class="op">);</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">int</span> new_val <span class="op">=</span> luaL_checkinteger<span class="op">(</span>L<span class="op">,</span> <span class="dv">2</span><span class="op">);</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    obj<span class="op">-&gt;</span>value <span class="op">=</span> new_val<span class="op">;</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h2 id="summary">Summary</h2>
+<p>The <code>__index</code> metamethod is the critical mechanism that
+bridges Lua’s dynamic, table-based dispatch system with static C
+structures. By converting field access into a table lookup within a
+method registry, <code>__index</code> provides native C libraries with
+clean encapsulation, type safety, and seamless object-oriented usability
+in Lua.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

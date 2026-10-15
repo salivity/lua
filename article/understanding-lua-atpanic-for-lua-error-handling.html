@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding lua_atpanic for Lua Error Handling - lua</title>
+    <meta name="description" content="The Lua C API relies on protected environments to manage runtime exceptions safely, but errors occurring outside these contexts trigger an unrecoverable state known as a panic. This article explores the purpose of the luaatpanic function, detailing how Lu">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/understanding-lua-atpanic-for-lua-error-handling">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding lua_atpanic for Lua Error Handling - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/understanding-lua-atpanic-for-lua-error-handling" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The Lua C API relies on protected environments to manage runtime exceptions safely, but errors occurring outside these contexts trigger an unrecoverable state known as a panic. This article explores the purpose of the luaatpanic function, detailing how Lu" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="understanding-lua_atpanic-for-lua-error-handling">Understanding
+lua_atpanic for Lua Error Handling</h1>
+<p>The Lua C API relies on protected environments to manage runtime
+exceptions safely, but errors occurring outside these contexts trigger
+an unrecoverable state known as a panic. This article explores the
+purpose of the <code>lua_atpanic</code> function, detailing how Lua
+handles unprotected errors by default, how setting a custom panic
+handler gives developers control over critical failures, and the strict
+rules governing panic handler implementation.</p>
+<h3 id="the-role-of-protected-calls-in-lua">The Role of Protected Calls
+in Lua</h3>
+<p>In standard Lua C API programming, error recovery is achieved through
+protected calls using functions such as <code>lua_pcall</code>. When
+code executes within a protected call, any error—whether raised by
+standard script execution or explicitly via
+<code>lua_error</code>—causes Lua to capture the error message, unwind
+the internal Lua stack, and return an error code to the host
+application. This mechanism keeps the host application running smoothly
+and allows it to recover or report the failure gracefully.</p>
+<h3 id="why-panics-occur">Why Panics Occur</h3>
+<p>A panic occurs when an error is raised while no protected call is
+active on the stack. Common triggers include:</p>
+<ul>
+<li>Executing code via unprotected functions like <code>lua_call</code>
+instead of <code>lua_pcall</code>.</li>
+<li>Invoking API functions that can raise errors (such as memory
+allocation failures in <code>lua_pushstring</code> or table
+manipulations) outside of a protected callback.</li>
+<li>Failing to establish an initial protected boundary during Lua state
+initialization.</li>
+</ul>
+<p>Because there is no protected frame to catch the error, Lua cannot
+perform a standard stack unwinding. Without intervention, Lua invokes
+its default panic handler.</p>
+<h3 id="the-purpose-of-lua_atpanic">The Purpose of
+<code>lua_atpanic</code></h3>
+<p>The <code>lua_atpanic</code> function allows a host program to
+replace Lua's default panic behavior with a user-defined callback. Its
+signature is:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>lua_CFunction lua_atpanic <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> lua_CFunction panicf<span class="op">);</span></span></code></pre></div>
+<p>By default, Lua's built-in panic handler prints the error message
+found on top of the stack to standard error (<code>stderr</code>) and
+immediately terminates the host application by calling
+<code>exit(EXIT_FAILURE)</code> or <code>abort()</code>. In production
+systems, such as game engines, web servers, or embedded devices,
+abruptly terminating the entire host process due to an unhandled script
+failure is often unacceptable.</p>
+<p><code>lua_atpanic</code> provides the following critical
+capabilities:</p>
+<ol type="1">
+<li><strong>Custom Diagnostic Logging:</strong> The handler receives the
+active <code>lua_State</code>, with the error object located at the top
+of the stack. This enables the host application to extract detailed
+error messages, capture native stack traces, and write to dedicated
+logging subsystems before shutdown.</li>
+<li><strong>Resource Preservation:</strong> It allows the application to
+attempt emergency cleanup, flush file buffers, or alert monitoring
+systems that a catastrophic failure has taken place.</li>
+<li><strong>Execution Redirection:</strong> It provides a mechanism to
+prevent the immediate termination of the host program by redirecting the
+flow of execution.</li>
+</ol>
+<h3 id="critical-rules-for-panic-handlers">Critical Rules for Panic
+Handlers</h3>
+<p>A panic handler must adhere to strict behavioral constraints:</p>
+<ul>
+<li><strong>Do Not Return Normally:</strong> A panic function must never
+execute a standard <code>return</code> statement back to Lua. If a panic
+handler returns, Lua immediately invokes its fallback mechanism and
+terminates the process via <code>abort()</code>.</li>
+<li><strong>Non-Local Exits:</strong> If the host application wishes to
+stay alive, the panic handler must bypass Lua entirely using a non-local
+jump. In C, this is typically done using <code>longjmp</code> to return
+control to a predefined recovery point outside the Lua state. In C++,
+throwing an exception from the handler can achieve this, provided the
+Lua library was compiled as C++ to support proper C++ stack
+unwinding.</li>
+<li><strong>State Invalidation:</strong> Once a Lua state enters a panic
+condition, its internal consistency is compromised. The host application
+should not attempt to continue executing code within that specific
+<code>lua_State</code>. The recommended pattern is to log the error,
+destroy the corrupted state with <code>lua_close</code>, and instantiate
+a fresh <code>lua_State</code> if recovery is desired.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

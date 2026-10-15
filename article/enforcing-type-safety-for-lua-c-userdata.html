@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enforcing Type Safety for Lua C Userdata - lua</title>
+    <meta name="description" content="Enforcing type safety when exposing C pointers to the Lua runtime requires binding each pointer type to a unique metatable registered in the Lua registry. Because Lua is dynamically typed, passing raw pointers directly via light userdata exposes the host">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/enforcing-type-safety-for-lua-c-userdata">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Enforcing Type Safety for Lua C Userdata - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/enforcing-type-safety-for-lua-c-userdata" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Enforcing type safety when exposing C pointers to the Lua runtime requires binding each pointer type to a unique metatable registered in the Lua registry. Because Lua is dynamically typed, passing raw pointers directly via light userdata exposes the host" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="enforcing-type-safety-for-lua-c-userdata">Enforcing Type Safety
+for Lua C Userdata</h1>
+<p>Enforcing type safety when exposing C pointers to the Lua runtime
+requires binding each pointer type to a unique metatable registered in
+the Lua registry. Because Lua is dynamically typed, passing raw pointers
+directly via light userdata exposes the host application to segmentation
+faults and undefined behavior. By encapsulating C pointers inside full
+userdata and validating them with standard auxiliary library functions
+such as <code>luaL_newmetatable</code> and <code>luaL_checkudata</code>,
+C extensions can guarantee that a userdata object passed to an API
+function strictly matches the expected C type.</p>
+<h3 id="the-problem-with-light-userdata">The Problem with Light
+Userdata</h3>
+<p>In Lua, <code>lightuserdata</code> represents a raw C pointer
+(<code>void*</code>). While lightweight and unmanaged by the garbage
+collector, light userdata objects share a single common metatable across
+the entire Lua state. Consequently, Lua cannot distinguish between a
+pointer to a <code>Window</code> struct and a pointer to a
+<code>DatabaseConnection</code> struct when both are passed as light
+userdata. Passing the wrong pointer leads to memory corruption or
+crashes when cast in C.</p>
+<p>To achieve type safety, you must use <strong>full userdata</strong>,
+which allocates memory managed by the Lua garbage collector and supports
+individual metatables.</p>
+<hr />
+<h3 id="step-1-encapsulating-the-pointer-in-full-userdata">Step 1:
+Encapsulating the Pointer in Full Userdata</h3>
+<p>Instead of pushing raw addresses, allocate a full userdata instance
+sized to hold the C pointer (<code>void**</code>):</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">typedef</span> <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">int</span> id<span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">char</span> name<span class="op">[</span><span class="dv">32</span><span class="op">];</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> Connection<span class="op">;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> push_connection<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> Connection <span class="op">*</span>conn<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Allocate userdata holding the pointer to the struct</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    Connection <span class="op">**</span>ud <span class="op">=</span> <span class="op">(</span>Connection <span class="op">**)</span>lua_newuserdata<span class="op">(</span>L<span class="op">,</span> <span class="kw">sizeof</span><span class="op">(</span>Connection <span class="op">*));</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>ud <span class="op">=</span> conn<span class="op">;</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Associate the specific type metatable</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    luaL_setmetatable<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;MyLib.Connection&quot;</span><span class="op">);</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">1</span><span class="op">;</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<hr />
+<h3 id="step-2-registering-the-type-metatable">Step 2: Registering the
+Type Metatable</h3>
+<p>During module initialization, create a unique metatable in the Lua
+registry for each distinct C type using <code>luaL_newmetatable</code>.
+This metatable acts as a type tag and a container for methods and
+garbage-collection hooks:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">const</span> luaL_Reg connection_methods<span class="op">[]</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span><span class="st">&quot;close&quot;</span><span class="op">,</span> l_connection_close<span class="op">},</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span><span class="st">&quot;send&quot;</span><span class="op">,</span>  l_connection_send<span class="op">},</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>NULL<span class="op">,</span> NULL<span class="op">}</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> luaopen_mylib<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Creates metatable if it does not exist, and registers it in the registry</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">(</span>luaL_newmetatable<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;MyLib.Connection&quot;</span><span class="op">))</span> <span class="op">{</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Set up __index for method calls</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>        lua_pushvalue<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">1</span><span class="op">);</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>        lua_setfield<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">2</span><span class="op">,</span> <span class="st">&quot;__index&quot;</span><span class="op">);</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Register methods</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>        luaL_setfuncs<span class="op">(</span>L<span class="op">,</span> connection_methods<span class="op">,</span> <span class="dv">0</span><span class="op">);</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">1</span><span class="op">;</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<hr />
+<h3 id="step-3-validating-userdata-on-access">Step 3: Validating
+Userdata on Access</h3>
+<p>Whenever a C function is called from Lua expecting a specific pointer
+type, validate the argument using <code>luaL_checkudata</code>:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> Connection <span class="op">*</span>to_connection<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">int</span> index<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    Connection <span class="op">**</span>ud <span class="op">=</span> <span class="op">(</span>Connection <span class="op">**)</span>luaL_checkudata<span class="op">(</span>L<span class="op">,</span> index<span class="op">,</span> <span class="st">&quot;MyLib.Connection&quot;</span><span class="op">);</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">(*</span>ud <span class="op">==</span> NULL<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>        luaL_error<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;attempt to use a closed Connection&quot;</span><span class="op">);</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">*</span>ud<span class="op">;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> l_connection_send<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    Connection <span class="op">*</span>conn <span class="op">=</span> to_connection<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">);</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>data <span class="op">=</span> luaL_checkstring<span class="op">(</span>L<span class="op">,</span> <span class="dv">2</span><span class="op">);</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Operation is completely type-safe</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    send_data<span class="op">(</span>conn<span class="op">,</span> data<span class="op">);</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>luaL_checkudata</code> checks whether the argument at
+<code>index</code> is full userdata and whether its metatable matches
+the one associated with <code>"MyLib.Connection"</code> in the registry.
+If the types do not match, it throws a descriptive Lua error and aborts
+execution, preventing undefined pointer casts.</p>
+<hr />
+<h3 id="non-throwing-validation-lual_testudata">Non-Throwing Validation:
+<code>luaL_testudata</code></h3>
+<p>In Lua 5.2 and later, <code>luaL_testudata</code> provides a
+non-throwing check:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> <span class="op">*</span>luaL_testudata<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">int</span> arg<span class="op">,</span> <span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>tname<span class="op">);</span></span></code></pre></div>
+<p>If the object matches the registered metatable, it returns the
+pointer; otherwise, it returns <code>NULL</code>. This enables method
+overloading, optional parameters, and custom error handling without
+triggering an immediate Lua panic.</p>
+<hr />
+<h3 id="summary-checklist-for-type-safety">Summary Checklist for Type
+Safety</h3>
+<ol type="1">
+<li><strong>Avoid <code>lightuserdata</code></strong> for typed objects;
+use full userdata wrapping the pointer.</li>
+<li><strong>Assign namespaced registry keys</strong> to metatables
+(e.g., <code>Module.TypeName</code>) via
+<code>luaL_newmetatable</code>.</li>
+<li><strong>Always verify inputs</strong> using
+<code>luaL_checkudata</code> or <code>luaL_testudata</code> prior to
+casting memory inside C callbacks.</li>
+<li><strong>Invalidate freed pointers</strong> by setting the wrapped
+pointer to <code>NULL</code> to prevent use-after-free bugs.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

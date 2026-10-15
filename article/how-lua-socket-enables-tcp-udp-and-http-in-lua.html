@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How LuaSocket Enables TCP, UDP, and HTTP in Lua - lua</title>
+    <meta name="description" content="LuaSocket is the standard networking extension for the Lua programming language, bridging Lua&#39;s lightweight runtime with native operating system network interfaces. By wrapping standard C socket APIs into an idiomatic Lua interface, LuaSocket equips devel">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-socket-enables-tcp-udp-and-http-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How LuaSocket Enables TCP, UDP, and HTTP in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-socket-enables-tcp-udp-and-http-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="LuaSocket is the standard networking extension for the Lua programming language, bridging Lua&#39;s lightweight runtime with native operating system network interfaces. By wrapping standard C socket APIs into an idiomatic Lua interface, LuaSocket equips devel" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-luasocket-enables-tcp-udp-and-http-in-lua">How LuaSocket
+Enables TCP, UDP, and HTTP in Lua</h1>
+<p>LuaSocket is the standard networking extension for the Lua
+programming language, bridging Lua's lightweight runtime with native
+operating system network interfaces. By wrapping standard C socket APIs
+into an idiomatic Lua interface, LuaSocket equips developers with core
+transport-layer protocols like TCP and UDP, as well as higher-level
+application protocols like HTTP. This article explains how LuaSocket is
+structured, how it manages both low-level and high-level communications,
+and how it handles asynchronous I/O within Lua's single-threaded
+architecture.</p>
+<h3 id="the-c-level-core-wrapping-berkeley-sockets">The C-Level Core:
+Wrapping Berkeley Sockets</h3>
+<p>Lua natively lacks built-in network functionality, focusing instead
+on being small, embeddable, and platform-independent. LuaSocket resolves
+this by functioning as a compiled C library. At its foundation, it
+directly interfaces with platform-specific networking interfaces:
+Winsock on Windows and POSIX-compliant Berkeley sockets on Unix-like
+platforms (such as Linux and macOS).</p>
+<p>When a Lua script imports LuaSocket, the runtime binds Lua tables and
+methods to compiled C functions. The C layer handles socket creation,
+memory allocation, error management, and translating C structures (such
+as <code>sockaddr_in</code>) into native Lua types, like strings and
+tables.</p>
+<h3 id="reliable-stream-communication-with-tcp">Reliable Stream
+Communication with TCP</h3>
+<p>LuaSocket provides stream-oriented networking through its TCP
+submodule via <code>socket.tcp()</code>. Once initialized, a socket can
+act as either a client or a server:</p>
+<ul>
+<li><strong>Client Mode:</strong> The socket uses the
+<code>connect()</code> method to establish a connection to a remote IP
+address and port. Once connected, data is transferred using
+<code>send()</code> and <code>receive()</code>. LuaSocket simplifies
+parsing by allowing developers to read exact byte counts, read
+line-by-line using pattern flags (e.g., <code>*l</code>), or stream
+entire buffers (e.g., <code>*a</code>).</li>
+<li><strong>Server Mode:</strong> Sockets bind to a local interface
+using <code>bind()</code> and enter a passive state with
+<code>listen()</code>. The <code>accept()</code> method blocks until an
+incoming client connection is detected, returning a new client socket
+instance specifically dedicated to that session.</li>
+</ul>
+<h3 id="connectionless-messaging-with-udp">Connectionless Messaging with
+UDP</h3>
+<p>For low-latency, connectionless, and datagram-based communications,
+LuaSocket provides <code>socket.udp()</code>. Unlike TCP, UDP requires
+no handshake or persistent connection state:</p>
+<ul>
+<li><strong>Datagram Routing:</strong> UDP sockets utilize
+<code>sendto()</code> to direct individual packets to a specified
+destination IP and port, and <code>receivefrom()</code> to capture
+incoming packets alongside the sender's address metadata.</li>
+<li><strong>Connected UDP:</strong> Developers can invoke the
+<code>setpeername()</code> method on a UDP socket. This binds the socket
+to a specific remote peer in the operating system's network layer,
+allowing the use of simpler <code>send()</code> and
+<code>receive()</code> calls while filtering out packets from unexpected
+senders.</li>
+<li><strong>Multicasting:</strong> LuaSocket includes options via
+<code>setoption()</code> to join multicast groups, enabling one-to-many
+communication across local networks.</li>
+</ul>
+<h3 id="high-level-protocols-and-http-capabilities">High-Level Protocols
+and HTTP Capabilities</h3>
+<p>While TCP and UDP handle transport-layer needs, LuaSocket extends its
+utility by implementing application-layer protocols directly in Lua on
+top of its TCP implementation. The most prominent example is the
+<code>socket.http</code> module.</p>
+<p>The HTTP module wraps standard HTTP/1.1 requests into simple function
+calls, such as <code>http.request()</code>. Under the hood, the module
+performs several sequential steps:</p>
+<ol type="1">
+<li>Resolves the target hostname using the system's DNS utilities.</li>
+<li>Opens a TCP stream connection on port 80 (or a custom specified
+port).</li>
+<li>Constructs and transmits the HTTP request headers and payload.</li>
+<li>Reads and parses the response headers, status codes, and body.</li>
+</ol>
+<p>To handle large data payloads efficiently without consuming high
+amounts of RAM, the HTTP implementation integrates with the LTN12 (Lua
+Technical Note 12) framework. LTN12 uses "sources" and "sinks" to stream
+data chunks iteratively, allowing file uploads and downloads to run
+seamlessly without buffering the entire payload into a single Lua
+string.</p>
+<h3 id="non-blocking-io-and-socket-multiplexing">Non-Blocking I/O and
+Socket Multiplexing</h3>
+<p>Because Lua runs as a single-threaded interpreter, blocking network
+operations would freeze the entire application. LuaSocket solves this by
+implementing non-blocking I/O controls and socket multiplexing:</p>
+<ul>
+<li><strong>Timeouts:</strong> Through the <code>settimeout()</code>
+method, developers can assign timeout durations to individual sockets.
+Setting the timeout to <code>0</code> makes operations completely
+non-blocking, returning immediately with an error flag if data is not
+readily available.</li>
+<li><strong>The Select Function:</strong> LuaSocket exposes
+<code>socket.select()</code>, which maps directly to the underlying OS
+<code>select()</code> system call. This allows a single Lua thread to
+monitor multiple TCP and UDP sockets simultaneously, returning lists of
+sockets that are ready for reading or writing without stalling
+execution.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

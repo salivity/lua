@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Makefile Architecture Across Platforms - lua</title>
+    <meta name="description" content="The official Lua distribution achieves exceptional cross-platform portability by utilizing a clean, two-tiered Makefile architecture that decouples standard build logic from platform-specific configurations. By defaulting to pure ANSI/ISO C and selectivel">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-makefile-architecture-across-platforms">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Makefile Architecture Across Platforms - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-makefile-architecture-across-platforms" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The official Lua distribution achieves exceptional cross-platform portability by utilizing a clean, two-tiered Makefile architecture that decouples standard build logic from platform-specific configurations. By defaulting to pure ANSI/ISO C and selectivel" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-makefile-architecture-across-platforms">Lua Makefile
+Architecture Across Platforms</h1>
+<p>The official Lua distribution achieves exceptional cross-platform
+portability by utilizing a clean, two-tiered Makefile architecture that
+decouples standard build logic from platform-specific configurations. By
+defaulting to pure ANSI/ISO C and selectively injecting operating system
+flags, this build system compiles seamlessly on environments ranging
+from standard POSIX systems and modern Linux distributions to macOS and
+Windows without requiring complex build configuration tools like
+Autotools or CMake.</p>
+<h3 id="the-two-tiered-hierarchy">The Two-Tiered Hierarchy</h3>
+<p>The distribution organizes its compilation through a root
+<code>Makefile</code> and an engine-level <code>src/Makefile</code>:</p>
+<ol type="1">
+<li><strong>The Root Makefile:</strong> Acts as the user-facing entry
+point. It defines installation directories (<code>/usr/local</code> by
+default) and high-level targets like <code>all</code>,
+<code>clean</code>, and <code>install</code>. When a user runs a
+platform target, such as <code>make linux</code>, the root Makefile
+merely sets standard variables and delegates execution down into the
+<code>src/</code> directory via
+<code>$(MAKE) -C src &lt;platform&gt;</code>.</li>
+<li><strong>The Source Makefile (<code>src/Makefile</code>):</strong>
+Houses the core compilation recipes for the Lua core library
+(<code>liblua.a</code>), the standalone interpreter (<code>lua</code>),
+and the compiler (<code>luac</code>). It contains the platform profile
+definitions, managing compiler settings and library dependencies.</li>
+</ol>
+<h3 id="the-baseline-philosophy">The Baseline Philosophy</h3>
+<p>At its foundation, Lua targets strict standard C (C99 in modern
+versions; C89 historically). The build system reflects this by defining
+a baseline configuration:</p>
+<ul>
+<li><strong><code>CC = gcc</code></strong> (or another standard C
+compiler)</li>
+<li><strong><code>CFLAGS = -O2 -Wall -Wextra -DLUA_COMPAT_5_3 $(SYSCFLAGS) $(MYCFLAGS)</code></strong></li>
+<li><strong><code>LIBS = -lm $(SYSLIBS) $(MYLIBS)</code></strong></li>
+</ul>
+<p>Variables prefixed with <code>SYS</code> represent system-specific
+flags supplied by platform profiles, while <code>MY</code> variables are
+reserved for end-user customizations. If compiled without specific
+platform profiles (e.g., the <code>generic</code> or <code>c89</code>
+targets), Lua builds using only standard library routines, omitting
+features like dynamic module loading or command-line editing to
+guarantee compilation on any standard C environment.</p>
+<h3 id="platform-target-specialization">Platform Target
+Specialization</h3>
+<p>Platform profiles in <code>src/Makefile</code> function by
+recursively invoking <code>make</code> with customized values for
+<code>SYSCFLAGS</code> and <code>SYSLIBS</code>. Each profile adapts Lua
+to local platform conventions and enables non-standard features:</p>
+<ul>
+<li><strong><code>posix</code></strong>: Injects
+<code>-DLUA_USE_POSIX</code> into <code>SYSCFLAGS</code>, enabling
+POSIX-specific system calls such as terminal handling and standard path
+separators.</li>
+<li><strong><code>linux</code></strong>: Builds on POSIX by specifying
+<code>-DLUA_USE_LINUX</code>, which enables GNU readline support and
+dynamic library loading via <code>dlopen</code>. It updates
+<code>SYSLIBS</code> to link against
+<code>-Wl,-E -ldl -lreadline</code>.</li>
+<li><strong><code>macosx</code></strong>: Sets
+<code>-DLUA_USE_MACOSX</code>, configuring readline support and dynamic
+loading while tailoring linker behaviors for Apple's Mach-O dynamic
+linker.</li>
+<li><strong><code>mingw</code></strong>: Configures the build for
+Windows using the MinGW GCC port. It targets native Windows APIs, sets
+output binaries with <code>.exe</code> extensions, and compiles Lua into
+a Windows Dynamic Link Library (<code>lua5x.dll</code>) alongside the
+static archive.</li>
+</ul>
+<h3 id="integration-with-luaconfh">Integration with
+<code>luaconf.h</code></h3>
+<p>The Makefile architecture relies on preprocessor flags
+(<code>-DLUA_USE_*</code>) to interface with Lua's source code,
+primarily <code>src/luaconf.h</code>. Rather than relying on automated
+feature-probing scripts, <code>luaconf.h</code> uses preprocessor
+conditionals to inspect these incoming Makefile definitions.</p>
+<p>For instance, passing <code>-DLUA_USE_DLOPEN</code> signals
+<code>luaconf.h</code> to activate POSIX dynamic loading code in
+<code>loadlib.c</code>. When targeting Windows, dynamic loading defaults
+to <code>LoadLibrary</code> without requiring extra linker flags.</p>
+<h3 id="build-artifact-generation">Build Artifact Generation</h3>
+<p>Once the profile assigns the appropriate <code>SYSCFLAGS</code> and
+<code>SYSLIBS</code>, the final phase executes the build recipes:</p>
+<ol type="1">
+<li>Compiles the individual C translation units into <code>.o</code>
+object files.</li>
+<li>Archives the runtime files into <code>liblua.a</code> using
+<code>ar</code> and <code>ranlib</code>.</li>
+<li>Links the CLI driver (<code>lua.o</code>) against
+<code>liblua.a</code> and <code>$(LIBS)</code> to produce the standalone
+interpreter.</li>
+<li>Links the compiler driver (<code>luac.o</code>) against
+<code>liblua.a</code> to produce the bytecode compiler.</li>
+</ol>
+<p>Through this explicit separation between generic build rules and
+modular platform overrides, Lua’s Makefile architecture delivers a
+lightweight, dependency-free compilation pipeline across heterogeneous
+operating systems.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

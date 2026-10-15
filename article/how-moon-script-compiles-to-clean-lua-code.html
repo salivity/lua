@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How MoonScript Compiles to Clean Lua Code - lua</title>
+    <meta name="description" content="MoonScript is a dynamic, whitespace-sensitive language that compiles entirely into standard Lua without requiring an auxiliary virtual machine. This article explores the internal mechanisms MoonScript uses to transform expressive syntax—such as classes, l">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-moon-script-compiles-to-clean-lua-code">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How MoonScript Compiles to Clean Lua Code - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-moon-script-compiles-to-clean-lua-code" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="MoonScript is a dynamic, whitespace-sensitive language that compiles entirely into standard Lua without requiring an auxiliary virtual machine. This article explores the internal mechanisms MoonScript uses to transform expressive syntax—such as classes, l" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-moonscript-compiles-to-clean-lua-code">How MoonScript
+Compiles to Clean Lua Code</h1>
+<p>MoonScript is a dynamic, whitespace-sensitive language that compiles
+entirely into standard Lua without requiring an auxiliary virtual
+machine. This article explores the internal mechanisms MoonScript uses
+to transform expressive syntax—such as classes, list comprehensions, and
+lexical scoping—into idiomatic, highly performant Lua code that natively
+executes on runtimes like Lua 5.1, LuaJIT, and modern Lua
+implementations.</p>
+<h3 id="parsing-and-the-abstract-syntax-tree">Parsing and the Abstract
+Syntax Tree</h3>
+<p>The compilation pipeline begins with LPeg (Parsing Expression Grammar
+for Lua), which MoonScript relies on to parse source text. LPeg
+constructs an Abstract Syntax Tree (AST) representing the program's
+structural logic.</p>
+<p>Unlike compilers that translate into intermediate bytecode or rely on
+an omnipresent runtime library, MoonScript’s AST transformer is
+specifically designed to target Lua's syntactic constructs. The compiler
+evaluates the AST nodes not to execute them, but to rearrange them into
+structural patterns that mirror how an experienced Lua developer would
+solve the problem by hand.</p>
+<h3 id="scope-resolution-and-local-variable-hoisting">Scope Resolution
+and Local Variable Hoisting</h3>
+<p>One of the key differences between the two languages is variable
+declaration. Standard Lua defaults to global scoping unless explicitly
+defined with <code>local</code>, which often leads to unintended
+variable leakage. MoonScript reverses this convention by making all
+assignments local by default.</p>
+<p>During compilation, MoonScript traverses each lexical scope to
+identify variable definitions. It then injects explicit
+<code>local</code> declarations at the top of the resulting Lua scope
+blocks. If a variable is assigned within a conditional branch or inner
+block, the compiler ensures it is predeclared in the parent block if it
+needs to persist, avoiding uninitialized reference errors and keeping
+Lua's scope clean and predictable.</p>
+<h3 id="transforming-object-oriented-structures">Transforming
+Object-Oriented Structures</h3>
+<p>Lua natively lacks a <code>class</code> statement, instead using
+metatables and prototypes to accomplish object-oriented programming.
+MoonScript introduces full <code>class</code> definitions with
+inheritance, constructors, and instance variables.</p>
+<p>When MoonScript encounters a class, it does not invent an arbitrary
+object engine. Instead, it compiles the definition into standard Lua
+metatable boilerplate:</p>
+<ul>
+<li>An internal table representing the class prototype is created.</li>
+<li>The prototype's <code>__index</code> metamethod points to
+itself.</li>
+<li>Inheritance is implemented by linking the subclass prototype to the
+superclass via <code>setmetatable</code>.</li>
+<li>A constructor function is attached to an <code>__init</code> or
+class-instantiation helper that calls <code>setmetatable({}, cls)</code>
+to return new instances.</li>
+</ul>
+<p>By emitting standard metatable patterns, the generated Lua remains
+immediately interoperable with other native Lua modules and runs without
+runtime translation overhead.</p>
+<h3 id="comprehensions-and-functional-syntactic-sugar">Comprehensions
+and Functional Syntactic Sugar</h3>
+<p>Features like list comprehensions, slicing, and pattern matching are
+converted directly into imperative loops. For example, a single-line
+list comprehension in MoonScript transforms into an explicit
+<code>for</code> loop that allocates a table and uses standard index
+increments to insert values.</p>
+<p>Rather than wrapping functional patterns in higher-order functions
+(such as <code>map</code> or <code>filter</code>) that incur
+function-call overhead, MoonScript produces flat, imperative Lua
+statements. This guarantees maximum execution speed, particularly when
+running under LuaJIT, which optimizes sequential loops exceptionally
+well.</p>
+<h3 id="expression-hoisting-and-clean-formatting">Expression Hoisting
+and Clean Formatting</h3>
+<p>MoonScript allows constructs like <code>if</code>,
+<code>switch</code>, and <code>do</code> blocks to yield values directly
+as expressions. Since standard Lua treats these strictly as statements,
+the compiler uses "statement hoisting" to reconcile the difference.</p>
+<p>When a statement is used as an expression, the compiler allocates a
+temporary, locally-scoped variable immediately prior to the construct.
+The branches inside the statement are then rewritten to assign their
+resulting values to this temporary holder. This design eliminates the
+need for anonymous self-executing functions (closures) wherever
+possible, reducing memory allocations and keeping the generated Lua
+clean, readable, and easy to debug.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

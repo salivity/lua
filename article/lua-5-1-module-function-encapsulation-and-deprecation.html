@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua 5.1 module Function: Encapsulation and Deprecation - lua</title>
+    <meta name="description" content="In Lua 5.1, the built-in module() function was introduced to standardize how packages defined namespaces and encapsulated their internal state. By manipulating the calling function’s environment, it aimed to eliminate boilerplate and prevent unintended le">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-5-1-module-function-encapsulation-and-deprecation">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua 5.1 module Function: Encapsulation and Deprecation - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-5-1-module-function-encapsulation-and-deprecation" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua 5.1, the built-in module() function was introduced to standardize how packages defined namespaces and encapsulated their internal state. By manipulating the calling function’s environment, it aimed to eliminate boilerplate and prevent unintended le" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-51-module-function-encapsulation-and-deprecation">Lua 5.1
+module Function: Encapsulation and Deprecation</h1>
+<p>In Lua 5.1, the built-in <code>module()</code> function was
+introduced to standardize how packages defined namespaces and
+encapsulated their internal state. By manipulating the calling
+function’s environment, it aimed to eliminate boilerplate and prevent
+unintended leakage of variables into the global scope. However, this
+mechanism introduced significant side effects, including global
+namespace pollution, broken access to standard libraries, and structural
+conflicts with Lua's runtime design. As a result, <code>module()</code>
+was deprecated in Lua 5.2 and completely removed in subsequent versions
+in favor of a simpler, table-return pattern.</p>
+<h3 id="how-module-handled-environment-encapsulation">How
+<code>module</code> Handled Environment Encapsulation</h3>
+<p>Prior to Lua 5.1, authors manually created tables and assigned them
+to global variables to serve as modules. This often led to accidental
+global variable declarations within the module file.</p>
+<p>To solve this, Lua 5.1 introduced <code>module(name, ...)</code>.
+When called, <code>module()</code> performed several automated
+tasks:</p>
+<ol type="1">
+<li><strong>Table Creation and Registration:</strong> It checked if a
+table named <code>name</code> already existed. If not, it created a new
+table, registered it in <code>package.loaded[name]</code>, and assigned
+it to the global variable <code>name</code>.</li>
+<li><strong>Environment Replacement:</strong> Using Lua 5.1’s
+<code>setfenv()</code> function, <code>module()</code> changed the
+environment of the current chunk so that the new module table became the
+chunk's global environment.</li>
+</ol>
+<p>Because the environment was swapped to the module table itself, any
+variable or function declared without the <code>local</code> keyword was
+automatically assigned directly to the module table:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>module<span class="op">(</span><span class="st">&quot;mymodule&quot;</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Automatically exported as mymodule.greet</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> greet<span class="op">()</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">&quot;Hello&quot;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>This effectively encapsulated the module's functions and internal
+declarations without requiring developers to prefix every export with a
+table name.</p>
+<h3 id="why-module-was-deprecated">Why <code>module</code> Was
+Deprecated</h3>
+<p>Despite simplifying basic module definitions, the mechanics behind
+<code>module()</code> proved problematic in real-world applications for
+several reasons.</p>
+<h4 id="1-inability-to-access-standard-globals">1. Inability to Access
+Standard Globals</h4>
+<p>Once <code>module()</code> replaced the function's environment with
+the newly created table, standard global functions and libraries—such as
+<code>print()</code>, <code>tostring()</code>, <code>math</code>, and
+<code>table</code>—were no longer visible. A developer had to explicitly
+alias every needed global locally before calling
+<code>module()</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">print</span> <span class="op">=</span> <span class="fu">print</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">math</span> <span class="op">=</span> <span class="va">math</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>module<span class="op">(</span><span class="st">&quot;mymodule&quot;</span><span class="op">)</span></span></code></pre></div>
+<h4 id="2-the-flaws-of-packageseeall">2. The Flaws of
+<code>package.seeall</code></h4>
+<p>To remedy the loss of standard globals, Lua provided the
+<code>package.seeall</code> option:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>module<span class="op">(</span><span class="st">&quot;mymodule&quot;</span><span class="op">,</span> <span class="va">package</span><span class="op">.</span><span class="va">seeall</span><span class="op">)</span></span></code></pre></div>
+<p>This assigned a metatable to the module where <code>__index</code>
+pointed to the global table <code>_G</code>. While this restored access
+to standard functions, it broke true encapsulation and introduced
+security concerns. Any consumer of <code>mymodule</code> could access
+the entire global environment through the module's metatable (e.g.,
+<code>mymodule.os.execute()</code>), and modifying fields on the module
+could inadvertently overwrite or expose sensitive globals.</p>
+<h4 id="3-automatic-global-namespace-pollution">3. Automatic Global
+Namespace Pollution</h4>
+<p>The <code>module()</code> function forcefully set a global variable
+with the module's name. This prevented users from cleanly renaming
+modules upon import, complicated sandboxing, and conflicted with systems
+that preferred unpolluted global environments.</p>
+<h4 id="4-the-removal-of-setfenv-and-the-shift-to-_env">4. The Removal
+of <code>setfenv</code> and the Shift to <code>_ENV</code></h4>
+<p>In Lua 5.2, the runtime model shifted from dynamic function
+environments (<code>getfenv</code>/<code>setfenv</code>) to lexical
+environments controlled by the <code>_ENV</code> variable. Because
+<code>module()</code> relied directly on dynamic stack manipulation via
+<code>setfenv</code>, it was fundamentally incompatible with this
+cleaner, compiler-driven scoping model.</p>
+<h3 id="the-modern-replacement">The Modern Replacement</h3>
+<p>Modern Lua completely bypasses <code>module()</code> in favor of
+returning a plain local table:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">mymodule</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">mymodule</span><span class="op">.</span>greet<span class="op">()</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">&quot;Hello&quot;</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">mymodule</span></span></code></pre></div>
+<p>This standard idiom retains natural access to standard globals,
+eliminates unwanted modifications to <code>_G</code>, and allows the
+importing file to assign the module to any local variable name via
+<code>require</code>.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

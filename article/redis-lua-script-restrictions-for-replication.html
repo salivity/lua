@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redis Lua Script Restrictions for Replication - lua</title>
+    <meta name="description" content="To guarantee data consistency across replicas and the Append Only File (AOF), Redis executes Lua scripts within a sandboxed, deterministic environment. This article details the core state restrictions Redis enforces on Lua scripts—including global variabl">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/redis-lua-script-restrictions-for-replication">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Redis Lua Script Restrictions for Replication - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/redis-lua-script-restrictions-for-replication" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="To guarantee data consistency across replicas and the Append Only File (AOF), Redis executes Lua scripts within a sandboxed, deterministic environment. This article details the core state restrictions Redis enforces on Lua scripts—including global variabl" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="redis-lua-script-restrictions-for-replication">Redis Lua Script
+Restrictions for Replication</h1>
+<p>To guarantee data consistency across replicas and the Append Only
+File (AOF), Redis executes Lua scripts within a sandboxed, deterministic
+environment. This article details the core state restrictions Redis
+enforces on Lua scripts—including global variable lockdowns, random
+number seed management, lexical sorting of unordered collections, and
+write-after-read limitations—ensuring that identical script executions
+produce identical state transitions on every node.</p>
+<h3 id="global-variable-lockdown">Global Variable Lockdown</h3>
+<p>Redis reuses the same Lua execution context to avoid the overhead of
+re-initializing the Lua state machine on every <code>EVAL</code>
+invocation. Because state could leak from one execution to another,
+Redis strictly forbids scripts from creating global variables or
+modifying the global environment.</p>
+<ul>
+<li><strong>Sandboxed Environment:</strong> The global environment table
+(<code>_G</code>) is protected. Attempting to define a global variable
+via <code>my_var = 1</code> or modifying pre-existing global libraries
+(such as <code>string</code> or <code>math</code>) raises a runtime
+error:
+<code>Script attempted to create global variable '...'</code>.</li>
+<li><strong>Explicit Local Scope:</strong> All variables, helper
+functions, and imported modules must be declared with the
+<code>local</code> keyword. This ensures that every script runs as an
+isolated, stateless transaction without leaving artifacts that could
+alter the behavior of subsequent scripts.</li>
+</ul>
+<h3 id="deterministic-randomness-and-prng-control">Deterministic
+Randomness and PRNG Control</h3>
+<p>In standard Lua, functions like <code>math.random</code> and
+<code>math.randomseed</code> can produce varying outputs depending on
+system state and execution timing. Because identical calls must yield
+identical outputs across the primary instance and all replicas:</p>
+<ul>
+<li>Redis resets the internal Lua pseudorandom number generator (PRNG)
+before every script execution.</li>
+<li>The PRNG is initialized with the exact same default seed every time
+a script starts. Unless explicitly seeded inside the script, successive
+runs of identical scripts will generate the exact same sequence of
+pseudorandom numbers.</li>
+</ul>
+<h3 id="forced-ordering-of-non-deterministic-data">Forced Ordering of
+Non-Deterministic Data</h3>
+<p>Certain Redis commands return sets or collections whose internal
+memory layout does not guarantee a predictable order. For example, hash
+keys (<code>HKEYS</code>) or sets (<code>SMEMBERS</code>) rely on
+internal hash table bucketing, which can vary between Redis instances
+with different memory architectures or hash seeds.</p>
+<ul>
+<li>When a Lua script invokes commands like <code>SMEMBERS</code>,
+<code>HKEYS</code>, <code>HGETALL</code>, <code>SUNION</code>, or
+<code>SDIFF</code>, Redis intercepts the output before passing it to the
+Lua runtime.</li>
+<li>Redis automatically applies a lexicographical sort to the elements.
+This guarantees that iterations through retrieved collections execute in
+the exact same sequence on both the primary node and the replicas.</li>
+</ul>
+<h3
+id="non-deterministic-command-and-write-limitations">Non-Deterministic
+Command and Write Limitations</h3>
+<p>In Redis's original script-based replication model (the default prior
+to Redis 5.0), the entire Lua script text was sent to replicas and
+written to the AOF. To prevent the script from producing different
+writes across nodes, Redis placed strict limits on non-deterministic
+commands:</p>
+<ul>
+<li><strong>Non-Deterministic Command Flagging:</strong> Commands like
+<code>TIME</code>, <code>SRANDMEMBER</code>, and <code>RANDOMKEY</code>
+are flagged as non-deterministic because their output depends on the
+clock or internal node state.</li>
+<li><strong>Write Blocking After Non-Deterministic Calls:</strong> Once
+a script executes a non-deterministic read command, Redis marks the
+script execution state as "dirty" with non-determinism. Any subsequent
+call to a write command (such as <code>SET</code>, <code>HSET</code>, or
+<code>DEL</code>) is aborted with a runtime error:
+<code>Write commands not allowed after non-deterministic commands</code>.</li>
+</ul>
+<h3 id="script-replication-vs-command-effects-replication">Script
+Replication vs. Command Effects Replication</h3>
+<p>To reduce the friction caused by strict determinism rules, Redis 3.2
+introduced—and Redis 5.0 made default—<strong>effects
+replication</strong> (command-based replication).</p>
+<ul>
+<li>Instead of sending the full Lua script to replicas and the AOF,
+Redis records only the actual mutating commands resulting from the
+script execution.</li>
+<li>Under effects replication, scripts can safely execute
+non-deterministic commands (like <code>TIME</code>) followed by write
+commands, because the replicas receive the resulting values directly
+rather than re-executing the logic.</li>
+<li>Even with effects replication enabled, the sandbox and global
+variable protections remain enforced to preserve internal engine
+stability and prevent cross-execution state contamination.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luacheck: Static Code Analysis and Linting for Lua - lua</title>
+    <meta name="description" content="Luacheck is a specialized command-line tool that performs static analysis and linting for the Lua programming language. This article provides an overview of how Luacheck parses source code, tracks variable lifecycles, detects scope-related issues such as">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/luacheck-static-code-analysis-and-linting-for-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Luacheck: Static Code Analysis and Linting for Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/luacheck-static-code-analysis-and-linting-for-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Luacheck is a specialized command-line tool that performs static analysis and linting for the Lua programming language. This article provides an overview of how Luacheck parses source code, tracks variable lifecycles, detects scope-related issues such as" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="luacheck-static-code-analysis-and-linting-for-lua">Luacheck:
+Static Code Analysis and Linting for Lua</h1>
+<p>Luacheck is a specialized command-line tool that performs static
+analysis and linting for the Lua programming language. This article
+provides an overview of how Luacheck parses source code, tracks variable
+lifecycles, detects scope-related issues such as undefined globals or
+unused values, and integrates into continuous integration environments
+to maintain software quality without executing code.</p>
+<h3 id="lexical-parsing-and-ast-generation">Lexical Parsing and AST
+Generation</h3>
+<p>Luacheck begins its analysis by reading Lua source files and
+tokenizing the source stream. It translates the code into an Abstract
+Syntax Tree (AST), which represents the hierarchical syntactic structure
+of the program.</p>
+<p>During this initial parsing stage, Luacheck catches syntax errors and
+malformed constructs before any deeper semantic checks begin. Because
+Lua has evolved across various versions (such as Lua 5.1, 5.2, 5.3, 5.4,
+and LuaJIT), Luacheck's parser can be targeted toward a specific
+standard. This allows it to validate version-specific syntax, such as
+bitwise operators introduced in Lua 5.3 or integer division, preventing
+runtime failures on mismatched runtime targets.</p>
+<h3 id="scope-resolution-and-global-variable-tracking">Scope Resolution
+and Global Variable Tracking</h3>
+<p>The core feature of Luacheck addresses Lua’s dynamic scoping model.
+In standard Lua, variables default to global scope unless explicitly
+declared with the <code>local</code> keyword. This frequently causes
+accidental global pollution and subtle runtime bugs.</p>
+<p>To resolve this, Luacheck maps out lexical scopes and tracks all
+identifiers:</p>
+<ul>
+<li><strong>Global Access Detection:</strong> Luacheck maintains an
+internal manifest of valid standard globals based on the configured Lua
+version (such as <code>table</code>, <code>string</code>,
+<code>print</code>, and <code>math</code>). Any read or write to an
+unrecognized global variable is flagged as a potential bug or typo.</li>
+<li><strong>Custom Environment Whitelisting:</strong> Codebases
+interacting with external frameworks (like OpenResty, Love2D, or Neovim)
+introduce custom global variables. Luacheck allows developers to
+whitelist allowed globals or declare custom environments so legitimate
+framework APIs are not flagged.</li>
+</ul>
+<h3 id="variable-lifecycle-and-data-flow-analysis">Variable Lifecycle
+and Data Flow Analysis</h3>
+<p>Beyond tracking scope boundaries, Luacheck analyzes how variables are
+manipulated across execution branches:</p>
+<ol type="1">
+<li><strong>Unused Variables and Values:</strong> If a local variable is
+declared but never referenced, or if a variable is overwritten before
+its current value is read, Luacheck issues a warning. It recognizes
+standard conventions, such as variables prefixed with an underscore
+(<code>_</code>), indicating intentionally unused placeholders (e.g., in
+multi-return functions or loops).</li>
+<li><strong>Shadowing:</strong> Luacheck identifies when an inner scope
+declares a variable with the same name as a variable in an outer scope,
+preventing confusing or unintended variable masking.</li>
+<li><strong>Uninitialized Access:</strong> If a code branch attempts to
+read a local variable before an assignment guarantees a defined value,
+the analyzer highlights the potential reference error.</li>
+<li><strong>Unreachable Code:</strong> The control-flow graph identifies
+unreachable lines following explicit <code>return</code>,
+<code>break</code>, or terminal function calls.</li>
+</ol>
+<h3 id="configuration-and-suppression">Configuration and
+Suppression</h3>
+<p>Luacheck is designed to adapt to specific project conventions via a
+<code>.luacheckrc</code> configuration file written directly in Lua.</p>
+<p>Within this configuration, developers can:</p>
+<ul>
+<li>Define global options such as standard library profiles
+(<code>std = "lua54"</code> or <code>std = "ngx_lua"</code>).</li>
+<li>Set per-path rules to apply stricter checks to production libraries
+while relaxing rules for test suites.</li>
+<li>Disable specific warning codes entirely across the project.</li>
+</ul>
+<p>For inline adjustments, Luacheck supports structured comments within
+the code itself. Developers can suppress false positives or intentional
+edge cases using directives such as
+<code>-- luacheck: push ignore</code>,
+<code>-- luacheck: globals my_global</code>, or
+<code>-- luacheck: ignore 211</code> without altering the project-wide
+configuration.</p>
+<h3 id="cicd-and-tooling-integration">CI/CD and Tooling Integration</h3>
+<p>Luacheck operates deterministically without evaluating or running the
+code, making it fast and lightweight. It provides multiple output
+formats, including plain human-readable text, structured tabular
+reports, and machine-readable formats like JSON or checkstyle XML.</p>
+<p>Because it returns standard Unix exit codes reflecting the severity
+of detected warnings and errors, Luacheck readily integrates into
+automated build pipelines, pre-commit hooks, and code editor language
+servers to prevent code regressions before deployment.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

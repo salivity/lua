@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purpose of warn Function in Lua 5.4 - lua</title>
+    <meta name="description" content="The warn function introduced in Lua 5.4 provides a standardized, built-in mechanism for emitting non-fatal diagnostic messages directly from Lua code. This article explains the purpose of the warn function, how it improves upon older patterns like standar">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/purpose-of-warn-function-in-lua-5-4">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Purpose of warn Function in Lua 5.4 - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/purpose-of-warn-function-in-lua-5-4" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The warn function introduced in Lua 5.4 provides a standardized, built-in mechanism for emitting non-fatal diagnostic messages directly from Lua code. This article explains the purpose of the warn function, how it improves upon older patterns like standar" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="purpose-of-warn-function-in-lua-54">Purpose of warn Function in
+Lua 5.4</h1>
+<p>The <code>warn</code> function introduced in Lua 5.4 provides a
+standardized, built-in mechanism for emitting non-fatal diagnostic
+messages directly from Lua code. This article explains the purpose of
+the <code>warn</code> function, how it improves upon older patterns like
+standard output printing, its operational syntax, and how developers can
+control or customize warning behavior across applications.</p>
+<h3 id="the-problem-warn-solves">The Problem <code>warn</code>
+Solves</h3>
+<p>Prior to Lua 5.4, Lua lacked a dedicated, language-level warning
+system. Developers typically had two choices when handling non-optimal
+conditions:</p>
+<ol type="1">
+<li><strong><code>error()</code>:</strong> Aborts execution and raises
+an error, which requires <code>pcall</code> or <code>xpcall</code> to
+catch. This is excessive for non-critical issues like deprecation
+notices or suboptimal configurations.</li>
+<li><strong><code>print()</code> or
+<code>io.stderr:write()</code>:</strong> Outputs a message manually.
+This approach pollutes standard output, bypasses any unified
+error/warning management, and cannot be easily suppressed, redirected,
+or toggled globally by an embedding host application.</li>
+</ol>
+<p>The <code>warn</code> function bridges this gap by providing an
+official, non-halting communication channel for reporting issues that
+require attention without interrupting program execution.</p>
+<h3 id="how-warn-works">How <code>warn</code> Works</h3>
+<p>The basic syntax of the function is:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">warn</span><span class="op">(</span><span class="va">msg1</span><span class="op">,</span> <span class="va">msg2</span><span class="op">,</span> <span class="op">...)</span></span></code></pre></div>
+<p>The function accepts one or more string arguments, concatenates them,
+and emits the resulting message to standard error (<code>stderr</code>)
+by default. Unlike <code>error()</code>, execution continues
+uninterrupted on the very next line of code.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> set_timeout<span class="op">(</span><span class="va">seconds</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">seconds</span> <span class="op">&lt;</span> <span class="dv">0</span> <span class="cf">then</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>        <span class="fu">warn</span><span class="op">(</span><span class="st">&quot;Negative timeout provided; defaulting to 0.&quot;</span><span class="op">)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">seconds</span> <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- execution continues</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="warning-control-messages">Warning Control Messages</h3>
+<p>Lua 5.4 introduces control commands for the warning system. Any
+argument passed to <code>warn</code> that begins with the <code>@</code>
+symbol is treated as a control message rather than standard text:</p>
+<ul>
+<li><strong><code>@off</code></strong>: Disables the emission of future
+warning messages.</li>
+<li><strong><code>@on</code></strong>: Re-enables warning
+emissions.</li>
+</ul>
+<p>By default, warnings are enabled in the standalone Lua interpreter.
+In embedded environments, host applications can configure their initial
+state.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">warn</span><span class="op">(</span><span class="st">&quot;@off&quot;</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">warn</span><span class="op">(</span><span class="st">&quot;This message will not be displayed.&quot;</span><span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">warn</span><span class="op">(</span><span class="st">&quot;@on&quot;</span><span class="op">)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">warn</span><span class="op">(</span><span class="st">&quot;Warnings are now visible again.&quot;</span><span class="op">)</span></span></code></pre></div>
+<h3 id="host-customization-via-the-c-api">Host Customization via the C
+API</h3>
+<p>A primary architectural purpose of <code>warn</code> is to integrate
+cleanly with host environments. In C, Lua provides
+<code>lua_setwarnf</code>, which allows developers embedding Lua to
+attach a custom warning handler function.</p>
+<p>This capability enables host programs to:</p>
+<ul>
+<li>Route warnings directly into structured logging systems (such as
+systemd, syslog, or custom file loggers).</li>
+<li>Filter or ignore specific classes of warnings.</li>
+<li>Convert warnings into full exceptions during automated test
+runs.</li>
+</ul>
+<h3 id="summary">Summary</h3>
+<p>The <code>warn</code> function in Lua 5.4 establishes a clean
+distinction between fatal execution failures and advisory notifications.
+By providing built-in toggles (<code>@on</code>, <code>@off</code>) and
+direct integration with the C API, it delivers a consistent,
+configurable way for libraries and scripts to report soft errors without
+breaking runtime flow.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

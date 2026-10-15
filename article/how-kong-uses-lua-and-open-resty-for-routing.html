@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Kong Uses Lua and OpenResty for Routing - lua</title>
+    <meta name="description" content="Kong API Gateway achieves high-performance microservice routing by using the Lua programming language within the OpenResty web platform to dynamically intercept, process, and forward HTTP requests. By executing Lua code inside the asynchronous, non-blocki">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-kong-uses-lua-and-open-resty-for-routing">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Kong Uses Lua and OpenResty for Routing - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-kong-uses-lua-and-open-resty-for-routing" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Kong API Gateway achieves high-performance microservice routing by using the Lua programming language within the OpenResty web platform to dynamically intercept, process, and forward HTTP requests. By executing Lua code inside the asynchronous, non-blocki" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-kong-uses-lua-and-openresty-for-routing">How Kong Uses Lua
+and OpenResty for Routing</h1>
+<p>Kong API Gateway achieves high-performance microservice routing by
+using the Lua programming language within the OpenResty web platform to
+dynamically intercept, process, and forward HTTP requests. By executing
+Lua code inside the asynchronous, non-blocking Nginx event loop, Kong
+can evaluate incoming traffic, execute plugin logic, resolve upstream
+microservice destinations, and manipulate payloads in memory with
+sub-millisecond latency.</p>
+<h3 id="the-foundation-nginx-and-openresty">The Foundation: Nginx and
+OpenResty</h3>
+<p>At its core, Kong is built on OpenResty, a software bundle that
+integrates Nginx core with the Just-In-Time (JIT) Lua compiler
+(<code>LuaJIT</code>). OpenResty exposes the internal processing phases
+of Nginx to Lua through a series of directives, such as
+<code>access_by_lua_block</code>, <code>rewrite_by_lua_block</code>, and
+<code>content_by_lua_block</code>.</p>
+<p>Instead of relying on standard static Nginx configuration files that
+require server reloads (<code>nginx -s reload</code>) to apply changes,
+Kong runs entirely as a dynamic Lua application on top of this
+environment. It manages routing configurations inside an external
+database (PostgreSQL) or a declarative YAML file, loading these rules
+directly into shared memory.</p>
+<h3 id="the-routing-mechanism-lua-in-nginx-phases">The Routing
+Mechanism: Lua in Nginx Phases</h3>
+<p>When a client sends a request to Kong, it traverses the standard
+Nginx request-processing lifecycle. Kong hooks its Lua codebase into
+these phases to handle routing:</p>
+<ol type="1">
+<li><strong><code>rewrite</code> phase:</strong> Kong normalizes URLs,
+strips prefixes, or applies basic path modifications defined in route
+rules.</li>
+<li><strong><code>access</code> phase:</strong> This is where the core
+routing decisions occur. Kong's Lua router inspects the incoming HTTP
+method, URI path, headers, and hostnames. It evaluates these values
+against an in-memory data structure (typically a Radix tree implemented
+in Lua) to find a matching Route and associated Service entity.</li>
+<li><strong>Upstream resolution:</strong> Once a Service is matched,
+Kong's Lua balancer resolves the target microservice address. If the
+target is an Upstream object containing multiple microservice instances,
+Kong applies Lua-based load-balancing algorithms (such as round-robin,
+least-connections, or hash-based routing) and performs passive or active
+health checks.</li>
+<li><strong>Dynamic proxying:</strong> OpenResty sets internal Nginx
+variables (<code>$upstream_host</code>, <code>$upstream_uri</code>)
+based on the Lua router’s decision, directing Nginx to forward the
+connection to the determined microservice instance without leaving the
+event loop.</li>
+</ol>
+<h3 id="in-memory-configuration-and-shared-dictionaries">In-Memory
+Configuration and Shared Dictionaries</h3>
+<p>To route microservices without introducing database bottlenecks, Kong
+utilizes OpenResty's shared memory zones
+(<code>lua_shared_dict</code>).</p>
+<p>Routing tables, upstream definitions, and target health statuses are
+cached in shared memory across all Nginx worker processes. When routing
+changes are made via Kong’s Admin API, event workers propagate
+invalidation messages across the system, prompting the Lua runtime to
+re-build its in-memory routing tree without dropping existing network
+connections.</p>
+<h3 id="plugin-execution-during-routing">Plugin Execution During
+Routing</h3>
+<p>The integration of Lua and OpenResty allows Kong to inject
+microservice policies directly into the routing path. Between the moment
+a route is matched and the request is proxied, Kong executes configured
+Lua plugins in a deterministic sequence based on defined priorities:</p>
+<ul>
+<li><strong>Authentication:</strong> Plugins (e.g., Key Authentication,
+JWT, OAuth2) validate incoming credentials against cached credentials in
+Lua memory.</li>
+<li><strong>Traffic Control:</strong> Plugins enforce rate limits via
+OpenResty memory dictionaries or Redis before the proxy phase is
+reached.</li>
+<li><strong>Transformations:</strong> Lua scripts can mutate headers,
+query parameters, or body contents on the fly using
+<code>header_filter_by_lua</code> and <code>body_filter_by_lua</code>
+before the upstream microservice receives the request.</li>
+</ul>
+<p>By executing all routing, balancing, and policy enforcement within
+the embedded LuaJIT engine, Kong eliminates process switching and
+preserves the native high-concurrency architecture of Nginx.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

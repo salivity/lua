@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why Lua Forbids Modifying Keys During Next Iteration - lua</title>
+    <meta name="description" content="In Lua, assigning a value to a non-existent key while traversing a table with next—including the generic pairs loop—results in undefined behavior. This restriction exists because Lua tables rely on a compact, highly optimized internal hash table structure">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-lua-forbids-modifying-keys-during-next-iteration">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why Lua Forbids Modifying Keys During Next Iteration - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-lua-forbids-modifying-keys-during-next-iteration" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, assigning a value to a non-existent key while traversing a table with next—including the generic pairs loop—results in undefined behavior. This restriction exists because Lua tables rely on a compact, highly optimized internal hash table structure" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-lua-forbids-modifying-keys-during-next-iteration">Why Lua
+Forbids Modifying Keys During Next Iteration</h1>
+<p>In Lua, assigning a value to a non-existent key while traversing a
+table with <code>next</code>—including the generic <code>pairs</code>
+loop—results in undefined behavior. This restriction exists because Lua
+tables rely on a compact, highly optimized internal hash table
+structure. Inserting new keys alters this underlying structure, which
+breaks the internal indexing that <code>next</code> depends on to locate
+subsequent elements.</p>
+<h3 id="how-next-works-under-the-hood">How <code>next</code> Works Under
+the Hood</h3>
+<p>A Lua table is implemented internally as a combination of a
+contiguous array part and a hash map part. When you call
+<code>next(table, key)</code>, Lua does not keep an external cursor or
+an iterator object stored in memory. Instead, it relies on the provided
+<code>key</code> as a reference point.</p>
+<p>To find the subsequent entry, Lua performs an internal search:</p>
+<ol type="1">
+<li>It hashes the provided <code>key</code> to locate its position
+inside the table's node array.</li>
+<li>It advances to the immediately following physical slot in the
+internal storage.</li>
+<li>It returns the key and value found at that next non-empty slot.</li>
+</ol>
+<p>Because the state of the iteration is entirely reconstructed on each
+step using only the table and the current key, the iteration order is
+strictly bound to the physical memory layout of the table's internal
+array of hash nodes.</p>
+<h3 id="the-problem-with-adding-new-keys">The Problem with Adding New
+Keys</h3>
+<p>When you assign a value to a key that does not already exist in the
+table during iteration, several internal changes occur:</p>
+<ul>
+<li><strong>Rehashing and Resizing:</strong> If the hash part of the
+table is full, inserting a new key forces Lua to reallocate and resize
+the node array. During a rehash, Lua recalculates the positions of all
+existing keys to maintain optimal lookup times. As a result, the
+physical positions of both visited and unvisited keys change. The
+original reference key passed to <code>next</code> may end up at a
+completely different offset or collision chain, causing the iterator to
+skip unvisited entries or cycle back over previously processed
+ones.</li>
+<li><strong>Collision Chain Realignment:</strong> Even when an insertion
+does not trigger a full reallocation, Lua resolves collisions using a
+variation of Brent's algorithm (last-free-node approach). Inserting a
+key can cause existing collision chains to be reorganized or displaced.
+If the key passed into <code>next</code> is part of a modified chain,
+<code>next</code> may lose track of which keys have already been
+visited.</li>
+</ul>
+<p>Because Lua cannot guarantee deterministic traversal once the
+internal node array has been reshuffled, the language specification
+explicitly defines key insertion during traversal as undefined
+behavior.</p>
+<h3 id="modifying-values-vs-modifying-keys">Modifying Values vs.
+Modifying Keys</h3>
+<p>Lua makes a strict distinction between changing values and changing
+keys:</p>
+<ul>
+<li><strong>Allowed:</strong> Modifying existing keys (changing
+<code>t[k]</code> to a different non-nil value) or clearing existing
+keys (setting <code>t[k] = nil</code>) is explicitly safe. Lua handles
+<code>nil</code> assignments by removing the value while keeping the key
+node intact during traversal, avoiding a structural reorganization that
+would break <code>next</code>.</li>
+<li><strong>Forbidden:</strong> Creating new keys (setting
+<code>t[new_key] = value</code>) introduces new entries into the
+internal structure, triggering the structural instability described
+above.</li>
+</ul>
+<h3 id="safe-alternatives">Safe Alternatives</h3>
+<p>To safely introduce new keys based on iteration results, you must
+decouple the read phase from the write phase:</p>
+<ol type="1">
+<li><strong>Collect Changes in a Separate Buffer:</strong> Store the new
+keys and their intended values in a separate temporary table during the
+iteration, then merge the temporary table into the main table once
+traversal completes.</li>
+<li><strong>Iterate Over a Key Snapshot:</strong> Copy all existing keys
+into a temporary array and iterate over that array using
+<code>ipairs</code>. You can then freely add new keys to the original
+table, as <code>ipairs</code> tracks a numeric counter rather than the
+hash table layout.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

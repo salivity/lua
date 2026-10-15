@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Generational GC Works in Lua 5.4 - lua</title>
+    <meta name="description" content="Lua 5.4 introduces an optional generational garbage collection (GC) mode alongside its default incremental collector. Generational GC operates on the weak generational hypothesis: most newly allocated objects have very short lifespans, while older objects">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-generational-gc-works-in-lua-5-4">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Generational GC Works in Lua 5.4 - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-generational-gc-works-in-lua-5-4" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua 5.4 introduces an optional generational garbage collection (GC) mode alongside its default incremental collector. Generational GC operates on the weak generational hypothesis: most newly allocated objects have very short lifespans, while older objects" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-generational-gc-works-in-lua-54">How Generational GC Works
+in Lua 5.4</h1>
+<p>Lua 5.4 introduces an optional generational garbage collection (GC)
+mode alongside its default incremental collector. Generational GC
+operates on the weak generational hypothesis: most newly allocated
+objects have very short lifespans, while older objects tend to persist.
+By focusing memory reclamation efforts primarily on recently created
+objects rather than traversing the entire memory graph, Lua 5.4 achieves
+significantly lower latency and reduced CPU overhead in programs with
+high allocation and deallocation churn.</p>
+<h2 id="core-concepts-and-object-generations">Core Concepts and Object
+Generations</h2>
+<p>Under generational mode, Lua categorizes heap-allocated objects into
+two primary states based on their survival across collection cycles:</p>
+<ul>
+<li><strong>Young Objects:</strong> Objects allocated since the last
+garbage collection cycle. These represent the primary target of
+reclamation efforts.</li>
+<li><strong>Old Objects:</strong> Objects that have survived at least
+one collection cycle. These objects are presumed stable and are excluded
+from frequent scans.</li>
+</ul>
+<p>To handle object progression, Lua internally manages state
+transitions: a newly allocated object starts in the nursery (young). If
+it survives a minor collection, it is promoted to an intermediate or old
+state.</p>
+<h2 id="minor-vs-major-collection-cycles">Minor vs. Major Collection
+Cycles</h2>
+<p>Lua 5.4 separates reclamation into two types of cycles:</p>
+<h3 id="minor-collections">Minor Collections</h3>
+<p>Minor collections run frequently and only inspect young objects.
+Because the scan avoids traversing the vast majority of older objects,
+it finishes in a fraction of the time required by an incremental step or
+full cycle. Young objects that are unreachable are freed immediately.
+Surviving objects are promoted to old status.</p>
+<h3 id="major-collections">Major Collections</h3>
+<p>If minor collections fail to free sufficient memory, or if the memory
+footprint grows past defined thresholds, Lua falls back to a major
+collection. A major collection performs a complete mark-and-sweep cycle
+across all objects in memory, young and old alike. After a major cycle
+completes, all surviving objects are marked as old, and the generational
+tracking resets.</p>
+<h2 id="the-write-barrier">The Write Barrier</h2>
+<p>Generational collection requires tracking instances where an old
+object is modified to reference a newly created young object. Without
+this, a minor collection would incorrectly assume the young object is
+unreachable and free it prematurely.</p>
+<p>Lua 5.4 handles this using a <strong>write barrier</strong>. Whenever
+a table or object in the old generation is modified to reference a young
+object:</p>
+<ol type="1">
+<li>The write barrier detects the old-to-young pointer.</li>
+<li>The old object is placed into a "gray-again" or modified list.</li>
+<li>During the next minor collection, Lua traverses only these specific
+modified old objects rather than scanning the entire old generation,
+ensuring young objects remain reachable without costly global
+traversals.</li>
+</ol>
+<h2 id="enabling-and-tuning-generational-gc">Enabling and Tuning
+Generational GC</h2>
+<p>Generational mode is not enabled by default in Lua 5.4; the
+incremental collector remains the default. To activate generational
+mode, run:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;generational&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>The generational collector can be fine-tuned using two
+parameters:</p>
+<ul>
+<li><strong>Minor Multiplier (<code>minor_mul</code>):</strong> Controls
+the frequency of minor collections based on memory growth from newly
+allocated objects.</li>
+<li><strong>Major Multiplier (<code>major_mul</code>):</strong> Controls
+the threshold of memory growth that triggers a fallback to a major
+collection.</li>
+</ul>
+<p>Adjusting these values allows developers to tailor the collection
+process to specific workload profiles, minimizing peak pause times in
+allocation-heavy environments.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

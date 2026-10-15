@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Redis Enforces Lua Script Atomicity - lua</title>
+    <meta name="description" content="This article explores how Redis guarantees atomicity during the execution of Lua scripts. Redis relies on its single-threaded execution model to run Lua scripts non-preemptively, preventing any other client commands from executing concurrently. While this">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-redis-enforces-lua-script-atomicity">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Redis Enforces Lua Script Atomicity - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-redis-enforces-lua-script-atomicity" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how Redis guarantees atomicity during the execution of Lua scripts. Redis relies on its single-threaded execution model to run Lua scripts non-preemptively, preventing any other client commands from executing concurrently. While this" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-redis-enforces-lua-script-atomicity">How Redis Enforces Lua
+Script Atomicity</h1>
+<p>This article explores how Redis guarantees atomicity during the
+execution of Lua scripts. Redis relies on its single-threaded execution
+model to run Lua scripts non-preemptively, preventing any other client
+commands from executing concurrently. While this design ensures complete
+isolation and consistency without the need for traditional database
+locks, it also introduces specific constraints regarding script
+execution times and runtime error handling.</p>
+<h2 id="the-single-threaded-execution-engine">The Single-Threaded
+Execution Engine</h2>
+<p>At the core of Redis is an event-driven, single-threaded execution
+loop. While Redis uses background threads for specific tasks like
+asynchronous deletion and disk I/O, all client commands and data
+modifications are processed by a single main thread.</p>
+<p>When a client executes a Lua script using the <code>EVAL</code> or
+<code>EVALSHA</code> commands (or via Redis Functions introduced in
+Redis 7.0), Redis hands complete control of the main thread to the
+embedded Lua interpreter. Because the thread is entirely dedicated to
+processing the script:</p>
+<ul>
+<li><strong>No interleaving occurs:</strong> No other client can inject
+a command while the script is running.</li>
+<li><strong>No race conditions exist:</strong> State changes made in the
+first line of a script are immediately visible to subsequent lines, and
+no external client can mutate the keys being evaluated.</li>
+<li><strong>Data isolation is absolute:</strong> The state of the
+database cannot be read or modified by other connections until the
+script runs to completion.</li>
+</ul>
+<p>This mechanism provides serializable isolation, functioning like an
+automated, conditional transaction that surpasses standard
+<code>MULTI</code>/<code>EXEC</code> blocks by allowing read-then-write
+logic based on intermediate data.</p>
+<h2 id="execution-isolation-vs-transactional-rollbacks">Execution
+Isolation vs. Transactional Rollbacks</h2>
+<p>It is crucial to understand how Redis defines atomicity in the
+context of Lua scripts. In traditional ACID database terminology,
+atomicity implies that if an operation fails halfway through, all
+preceding operations are rolled back to the initial state.</p>
+<p>Redis Lua scripts enforce atomicity in terms of
+<strong>isolation</strong>, not <strong>automatic rollback</strong>:</p>
+<ol type="1">
+<li><strong>Before Execution:</strong> If a script fails during the
+compilation or syntax-checking phase, it does not run at all.</li>
+<li><strong>During Execution:</strong> If a runtime error occurs halfway
+through a script (for example, attempting an operation on a key holding
+the wrong data type), the script terminates immediately. However, any
+commands that executed successfully <em>prior</em> to the error are
+<strong>not</strong> rolled back.</li>
+</ol>
+<p>Redis does not maintain an undo log for in-memory operations.
+Therefore, developers must ensure that scripts perform pre-validation
+checks on data types and parameters to avoid runtime failures.</p>
+<h2 id="script-timeouts-and-the-script-kill-command">Script Timeouts and
+the <code>SCRIPT KILL</code> Command</h2>
+<p>Because a running Lua script blocks all other operations on the Redis
+server, an infinite loop or heavy computation inside a script could make
+the instance unresponsive. To safeguard against this, Redis implements a
+execution watchdog configured by the <code>lua-time-limit</code>
+directive (defaulting to 5 seconds).</p>
+<p>When a script exceeds this threshold:</p>
+<ul>
+<li>Redis stops accepting normal commands and begins returning a
+<code>BUSY</code> error to other connected clients.</li>
+<li>Clients can send a <code>SCRIPT KILL</code> command, which instructs
+Redis to terminate the script, but <strong>only if the script has not
+performed any write operations</strong>.</li>
+<li>If the script has already modified the dataset,
+<code>SCRIPT KILL</code> is disabled to prevent partial data corruption.
+In this scenario, the only way to recover the instance is via the
+<code>SHUTDOWN NOSAVE</code> command, which stops the server without
+persisting the inconsistent state to disk.</li>
+</ul>
+<p>By maintaining single-threaded script execution, avoiding
+interleaving, and disallowing concurrent data modification, Redis
+guarantees that Lua scripts operate as atomic, isolated units of
+work.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

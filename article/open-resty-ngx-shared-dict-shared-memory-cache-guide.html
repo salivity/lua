@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenResty ngx.shared.DICT Shared Memory Cache Guide - lua</title>
+    <meta name="description" content="This article explores the core purpose, functionality, and advantages of ngx.shared.DICT within the OpenResty ecosystem. OpenResty integrates the Lua programming language into NGINX, relying on NGINX’s multi-process architecture. This guide explains how n">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/open-resty-ngx-shared-dict-shared-memory-cache-guide">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="OpenResty ngx.shared.DICT Shared Memory Cache Guide - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/open-resty-ngx-shared-dict-shared-memory-cache-guide" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores the core purpose, functionality, and advantages of ngx.shared.DICT within the OpenResty ecosystem. OpenResty integrates the Lua programming language into NGINX, relying on NGINX’s multi-process architecture. This guide explains how n" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="openresty-ngxshareddict-shared-memory-cache-guide">OpenResty
+ngx.shared.DICT Shared Memory Cache Guide</h1>
+<p>This article explores the core purpose, functionality, and advantages
+of <code>ngx.shared.DICT</code> within the OpenResty ecosystem.
+OpenResty integrates the Lua programming language into NGINX, relying on
+NGINX’s multi-process architecture. This guide explains how
+<code>ngx.shared.DICT</code> bridges the gap between isolated worker
+processes by providing an ultra-fast, thread-safe shared memory storage
+zone for high-performance caching and cross-worker data
+coordination.</p>
+<h3 id="the-architecture-problem-in-openresty">The Architecture Problem
+in OpenResty</h3>
+<p>NGINX handles concurrency using a master-worker multi-process
+architecture. In OpenResty, every NGINX worker process maintains its own
+independent Lua Virtual Machine (VM) instance.</p>
+<p>Because worker processes are strictly isolated operating system
+processes, standard Lua variables, tables, and modules instantiated in
+one worker cannot be accessed or modified by another. Without a shared
+storage mechanism, each worker would have to fetch and maintain
+duplicate copies of cached data or rely on external network services
+like Redis or Memcached, introducing unwanted network overhead,
+serialization costs, and latency.</p>
+<h3 id="the-purpose-of-ngxshareddict">The Purpose of
+ngx.shared.DICT</h3>
+<p><code>ngx.shared.DICT</code> provides an in-memory key-value
+dictionary that is allocated directly in the NGINX core memory space and
+shared across all NGINX worker processes. Its primary purposes are:</p>
+<ul>
+<li><strong>Cross-Worker State Sharing:</strong> It serves as a unified
+central registry where all worker instances can read and write
+application state, configuration, and data simultaneously.</li>
+<li><strong>Low-Latency In-Memory Caching:</strong> Because data resides
+in the local system RAM, access speeds are measured in nanoseconds. It
+avoids network round trips, TCP handshakes, and inter-process
+communication (IPC) overhead.</li>
+<li><strong>Process-Safe Concurrency:</strong> The dictionary handles
+concurrent read and write operations from multiple worker processes
+natively using internal spinlocks and mutexes. This guarantees data
+consistency without requiring application-level locking logic in
+Lua.</li>
+<li><strong>Atomic Operations:</strong> It natively supports atomic
+operations, such as integer incrementing (<code>incr</code>), making it
+ideal for distributed counters, rate-limiting algorithms, and connection
+tracking.</li>
+</ul>
+<h3 id="core-features-and-lifecycle">Core Features and Lifecycle</h3>
+<p>To use <code>ngx.shared.DICT</code>, the memory zone must be
+predefined in the <code>http</code> block of the <code>nginx.conf</code>
+file using the <code>lua_shared_dict</code> directive with a designated
+name and size (e.g., <code>lua_shared_dict my_cache 10m;</code>).</p>
+<p>Once declared, the dictionary exposes standard key-value operations
+through the Lua API:</p>
+<ul>
+<li><strong>TTL and Expiration:</strong> Entries can be assigned a
+Time-To-Live (TTL) in seconds, after which they automatically
+expire.</li>
+<li><strong>LRU Eviction:</strong> If the allocated shared memory runs
+out of space, <code>ngx.shared.DICT</code> automatically evicts the
+least recently used (LRU) non-expired items when new data is inserted
+using methods like <code>set</code>.</li>
+<li><strong>Safe Operations:</strong> The <code>safe_set</code> and
+<code>safe_add</code> methods allow developers to strictly control
+memory limits by returning an error instead of automatically evicting
+existing entries when memory is exhausted.</li>
+</ul>
+<h3 id="common-use-cases">Common Use Cases</h3>
+<ul>
+<li><strong>Rate Limiting:</strong> Tracking IP requests or API key
+usage counters across all worker processes using atomic increments.</li>
+<li><strong>Dynamic Configuration:</strong> Storing feature flags,
+upstream lists, or routing tables fetched at runtime and accessed
+universally.</li>
+<li><strong>Upstream Response Caching:</strong> Storing micro-cached
+backend responses, tokens, or JWT public keys locally to minimize
+upstream database load.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

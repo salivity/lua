@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Role of luaM_realloc in Lua Memory Management - lua</title>
+    <meta name="description" content="This article provides an overview of the luaMrealloc function and its critical role in the Lua C source code. It examines how this core internal function serves as the centralized gateway for all dynamic memory modifications, translating internal engine d">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/role-of-lua-m-realloc-in-lua-memory-management">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Role of luaM_realloc in Lua Memory Management - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/role-of-lua-m-realloc-in-lua-memory-management" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of the luaMrealloc function and its critical role in the Lua C source code. It examines how this core internal function serves as the centralized gateway for all dynamic memory modifications, translating internal engine d" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="role-of-luam_realloc-in-lua-memory-management">Role of
+luaM_realloc in Lua Memory Management</h1>
+<p>This article provides an overview of the <code>luaM_realloc_</code>
+function and its critical role in the Lua C source code. It examines how
+this core internal function serves as the centralized gateway for all
+dynamic memory modifications, translating internal engine demands into
+calls to Lua's pluggable allocator, updating global memory counters,
+coordinating with the garbage collector, and handling out-of-memory
+states safely.</p>
+<h3 id="the-central-gateway-for-allocation">The Central Gateway for
+Allocation</h3>
+<p>The Lua runtime does not directly invoke standard C library functions
+like <code>malloc</code>, <code>realloc</code>, or <code>free</code>.
+Instead, all dynamic memory management is abstracted through a custom
+memory allocator function (<code>lua_Alloc</code>) stored inside the
+<code>global_State</code>.</p>
+<p>The function <code>luaM_realloc_</code> acts as the primary internal
+interface between the Lua core and this underlying allocator. Whenever
+the engine needs to allocate memory for strings, tables, user data,
+closures, or internal stack frames, the request ultimately passes
+through <code>luaM_realloc_</code>.</p>
+<h3 id="function-signature-and-mechanics">Function Signature and
+Mechanics</h3>
+<p>Defined in <code>lmem.c</code>, the signature of
+<code>luaM_realloc_</code> typically mirrors the following
+structure:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> <span class="op">*</span>luaM_realloc_ <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">void</span> <span class="op">*</span>block<span class="op">,</span> <span class="dt">size_t</span> osize<span class="op">,</span> <span class="dt">size_t</span> nsize<span class="op">);</span></span></code></pre></div>
+<p>The parameters dictate the operation performed by the allocator:</p>
+<ul>
+<li><code>L</code>: The current execution thread state, used to access
+the global state and signal errors.</li>
+<li><code>block</code>: A pointer to the existing memory block (or
+<code>NULL</code> if creating a new allocation).</li>
+<li><code>osize</code>: The original size of the block in bytes.</li>
+<li><code>nsize</code>: The requested new size of the block in
+bytes.</li>
+</ul>
+<p>Based on the sizes provided, <code>luaM_realloc_</code> drives three
+distinct operations:</p>
+<ol type="1">
+<li><strong>Allocation:</strong> If <code>block</code> is
+<code>NULL</code> and <code>osize</code> is <code>0</code>, a positive
+<code>nsize</code> requests a new memory block.</li>
+<li><strong>Deallocation:</strong> If <code>nsize</code> is
+<code>0</code> and <code>block</code> is not <code>NULL</code>, the
+function instructs the allocator to free the block.</li>
+<li><strong>Resizing:</strong> If both <code>osize</code> and
+<code>nsize</code> are non-zero, the function requests the allocator to
+grow or shrink the existing block.</li>
+</ol>
+<h3 id="garbage-collection-coordination-and-accounting">Garbage
+Collection Coordination and Accounting</h3>
+<p>A fundamental duty of <code>luaM_realloc_</code> is keeping Lua's
+garbage collector synchronized with dynamic memory consumption. Inside
+the global state, Lua maintains counters such as <code>totalbytes</code>
+and <code>GCdebt</code>.</p>
+<p>Before and after modifying a block, <code>luaM_realloc_</code>
+updates these metrics:</p>
+<ul>
+<li>When allocating or expanding memory, the net increase is added to
+the garbage collector debt.</li>
+<li>When shrinking or freeing memory, the net decrease is subtracted
+from the debt.</li>
+</ul>
+<p>If dynamic allocations push total memory past collection thresholds,
+the accounting performed by <code>luaM_realloc_</code> signals the
+incremental garbage collector to perform collection steps, ensuring the
+engine balances memory footprint against performance.</p>
+<h3 id="out-of-memory-oom-protection">Out-of-Memory (OOM)
+Protection</h3>
+<p>When an allocation or expansion fails, the underlying allocator
+returns <code>NULL</code>. The <code>luaM_realloc_</code> function
+detects this condition and handles the error gracefully.</p>
+<p>If <code>nsize &gt; 0</code> and the allocator yields
+<code>NULL</code>, <code>luaM_realloc_</code> triggers a memory error
+via Lua's panic or error handling system (typically
+<code>luaD_throw(L, LUA_ERRMEM)</code> or <code>luaM_error(L)</code>).
+This prevents partially allocated or invalid pointers from corrupting
+the internal state and invokes the nearest protected call boundary
+(<code>pcall</code>).</p>
+<h3 id="high-level-macros-and-vector-adjustments">High-Level Macros and
+Vector Adjustments</h3>
+<p>Lua internals rarely call <code>luaM_realloc_</code> directly.
+Instead, the codebase defines specialized macros in <code>lmem.h</code>
+that wrap around it, such as:</p>
+<ul>
+<li><code>luaM_new(L, t)</code>: Allocates a single instance of a
+type.</li>
+<li><code>luaM_free(L, b)</code>: Frees an allocated structure.</li>
+<li><code>luaM_growvector(L, v, nelems, size, t, limit, e)</code>:
+Dynamically doubles array capacity while guarding against integer
+overflow.</li>
+<li><code>luaM_reallocvector(L, v, oldn, n, t)</code>: Resizes arrays
+based on element type and count.</li>
+</ul>
+<p>These macros compute byte sizes and verify limits before handing
+execution over to <code>luaM_realloc_</code>, ensuring consistent bounds
+checking and memory bookkeeping throughout the entire runtime.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

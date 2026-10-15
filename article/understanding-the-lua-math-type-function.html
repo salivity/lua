@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding the Lua math.type Function - lua</title>
+    <meta name="description" content="The math.type function was introduced in Lua 5.3 to distinguish between the two internal representations of the number data type: integers and floating-point numbers. Prior to Lua 5.3, all numbers were represented uniformly as double-precision floating-po">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/understanding-the-lua-math-type-function">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding the Lua math.type Function - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/understanding-the-lua-math-type-function" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The math.type function was introduced in Lua 5.3 to distinguish between the two internal representations of the number data type: integers and floating-point numbers. Prior to Lua 5.3, all numbers were represented uniformly as double-precision floating-po" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="understanding-the-lua-mathtype-function">Understanding the Lua
+math.type Function</h1>
+<p>The <code>math.type</code> function was introduced in Lua 5.3 to
+distinguish between the two internal representations of the number data
+type: integers and floating-point numbers. Prior to Lua 5.3, all numbers
+were represented uniformly as double-precision floating-point values.
+When Lua added native support for 64-bit integers, the standard
+<code>type()</code> function continued to return <code>"number"</code>
+for backward compatibility. The <code>math.type</code> function was
+created to provide developers with a precise way to inspect the exact
+subtype of a numerical value.</p>
+<h3 id="why-mathtype-was-introduced">Why <code>math.type</code> Was
+Introduced</h3>
+<p>Before Lua 5.3, the distinction between integers and floating-point
+numbers did not exist in the language's core architecture. Lua 5.3
+introduced a dual-number representation system to enhance performance
+and ensure precise integer arithmetic, particularly for bitwise
+operations and systems programming.</p>
+<p>Because modifying the existing <code>type()</code> function to return
+<code>"integer"</code> or <code>"float"</code> would break existing
+scripts expecting <code>"number"</code>, Lua preserved
+<code>type()</code> and added <code>math.type()</code> exclusively for
+numerical subtype inspection.</p>
+<h3 id="how-mathtype-works">How <code>math.type</code> Works</h3>
+<p>The <code>math.type</code> function accepts a single argument and
+returns one of three possible values:</p>
+<ul>
+<li><code>"integer"</code>: If the value is represented internally as a
+Lua integer.</li>
+<li><code>"float"</code>: If the value is represented internally as a
+floating-point number.</li>
+<li><code>nil</code>: If the supplied argument is not a number at all
+(unlike <code>type()</code>, which would return <code>"string"</code>,
+<code>"table"</code>, <code>"boolean"</code>, etc.).</li>
+</ul>
+<h3 id="usage-examples">Usage Examples</h3>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Checking integers</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">(</span><span class="dv">42</span><span class="op">))</span>        <span class="co">--&gt; &quot;integer&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">(</span><span class="dv">10</span> <span class="op">+</span> <span class="dv">5</span><span class="op">))</span>    <span class="co">--&gt; &quot;integer&quot;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- Checking floats</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">(</span><span class="dv">3.14</span><span class="op">))</span>      <span class="co">--&gt; &quot;float&quot;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">(</span><span class="dv">42.0</span><span class="op">))</span>      <span class="co">--&gt; &quot;float&quot;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- Non-number inputs</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">(</span><span class="st">&quot;42&quot;</span><span class="op">))</span>      <span class="co">--&gt; nil</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">(</span><span class="kw">true</span><span class="op">))</span>      <span class="co">--&gt; nil</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">({}))</span>        <span class="co">--&gt; nil</span></span></code></pre></div>
+<p>Even if a float holds a mathematically whole number (such as
+<code>42.0</code>), <code>math.type</code> accurately identifies it as a
+<code>"float"</code> because of its internal IEEE 754 storage
+format.</p>
+<h3 id="key-use-cases">Key Use Cases</h3>
+<ul>
+<li><strong>Bitwise Operations:</strong> Bitwise operators
+(<code>&amp;</code>, <code>|</code>, <code>~</code>,
+<code>&gt;&gt;</code>, <code>&lt;&lt;</code>) require integers. Using
+<code>math.type</code> helps validate or debug inputs before running
+bitwise calculations.</li>
+<li><strong>Data Serialization:</strong> Formats such as JSON or binary
+protocols frequently require distinguishing whole integers from
+decimals. <code>math.type</code> allows custom serializers to encode
+values accurately.</li>
+<li><strong>Mathematical Precision:</strong> It helps detect accidental
+implicit float conversions, which occur when an operation inadvertently
+converts an integer into a floating-point value.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

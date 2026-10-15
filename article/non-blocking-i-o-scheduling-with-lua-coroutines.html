@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Non-Blocking I/O Scheduling with Lua Coroutines - lua</title>
+    <meta name="description" content="This article explores how the coroutine-based fiber pattern enables non-blocking I/O operations within the Lua runtime. By combining first-class, stackful coroutines with an asynchronous event loop, Lua can suspend and resume lightweight execution context">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/non-blocking-i-o-scheduling-with-lua-coroutines">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Non-Blocking I/O Scheduling with Lua Coroutines - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/non-blocking-i-o-scheduling-with-lua-coroutines" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how the coroutine-based fiber pattern enables non-blocking I/O operations within the Lua runtime. By combining first-class, stackful coroutines with an asynchronous event loop, Lua can suspend and resume lightweight execution context" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="non-blocking-io-scheduling-with-lua-coroutines">Non-Blocking I/O
+Scheduling with Lua Coroutines</h1>
+<p>This article explores how the coroutine-based fiber pattern enables
+non-blocking I/O operations within the Lua runtime. By combining
+first-class, stackful coroutines with an asynchronous event loop, Lua
+can suspend and resume lightweight execution contexts—often referred to
+as fibers—without blocking the operating system thread. You will learn
+the mechanics behind yielding on I/O boundaries, integrating
+kernel-level multiplexers, and achieving synchronous-looking code with
+asynchronous performance.</p>
+<h3 id="the-foundation-stackful-coroutines-as-fibers">The Foundation:
+Stackful Coroutines as Fibers</h3>
+<p>Lua does not natively provide operating system threads. Instead, it
+offers asymmetric, stackful coroutines via the <code>coroutine</code>
+standard library. Unlike stackless coroutines found in languages like
+JavaScript or Python (which rely on state machines and async/await
+markers), Lua coroutines maintain their own execution stacks.</p>
+<p>A fiber is essentially a coroutine wrapped with scheduler metadata
+(such as an identifier, priority, and wake-up conditions). Because
+switching between Lua coroutines only requires swapping pointers inside
+the Lua state (<code>lua_State</code>), the overhead is measured in
+nanoseconds, and memory usage per fiber is minimal—often just a few
+kilobytes compared to the megabytes typically reserved for OS thread
+stacks.</p>
+<h3 id="the-mechanics-of-non-blocking-yielding">The Mechanics of
+Non-Blocking Yielding</h3>
+<p>To manage I/O without blocking the host process, all network sockets
+and file descriptors must be configured in non-blocking mode (e.g.,
+using <code>O_NONBLOCK</code> via <code>fcntl</code>). The scheduling
+pattern operates as follows:</p>
+<ol type="1">
+<li><strong>Initiating I/O</strong>: A fiber requests an I/O operation,
+such as reading bytes from a TCP socket.</li>
+<li><strong>Immediate Check</strong>: The fiber attempts a non-blocking
+system call. If data is immediately available in the kernel buffer, the
+operation completes synchronously without interruption.</li>
+<li><strong>Yielding on <code>EAGAIN</code> or
+<code>EWOULDBLOCK</code></strong>: If the system call returns an error
+indicating that data is not yet ready, the fiber does not poll in a
+tight loop. Instead, it yields control back to a central scheduler using
+<code>coroutine.yield()</code>.</li>
+<li><strong>Passing Context</strong>: During the yield, the fiber passes
+execution tokens—such as the file descriptor, the requested event type
+(read or write), and a reference to its own coroutine handle—to the
+scheduler.</li>
+</ol>
+<h3 id="the-event-loop-and-demultiplexer">The Event Loop and
+Demultiplexer</h3>
+<p>The central scheduler acts as the bridge between Lua fibers and
+operating system event notification mechanisms (such as Linux's
+<code>epoll</code>, BSD's <code>kqueue</code>, or cross-platform
+abstractions like <code>libuv</code>).</p>
+<p>Once a fiber yields, the scheduler takes the file descriptor and
+registers interest with the event demultiplexer. The scheduler then
+evaluates its run queue:</p>
+<ul>
+<li>If other fibers are marked as runnable, the scheduler immediately
+calls <code>coroutine.resume()</code> on the next fiber in line.</li>
+<li>If all fibers are waiting on external events or timers, the
+scheduler delegates execution to the system demultiplexer (e.g.,
+executing <code>epoll_wait()</code>), sleeping until the kernel signals
+that one or more descriptors are ready for transmission or receipt.</li>
+</ul>
+<h3 id="resuming-execution">Resuming Execution</h3>
+<p>When the operating system signals that an I/O channel is ready:</p>
+<ol type="1">
+<li>The event loop wakes up and retrieves the active file
+descriptors.</li>
+<li>The scheduler uses an internal lookup table to map the signaled
+descriptor back to the suspended coroutine.</li>
+<li>The scheduler removes the registration from the demultiplexer to
+prevent redundant triggers.</li>
+<li>The scheduler calls <code>coroutine.resume(fiber, io_result)</code>,
+passing the acquired socket data or readiness state back into the
+coroutine.</li>
+<li>The fiber picks up execution directly after the point where it
+yielded, returning the data to the caller as if the operation had
+blocked normally.</li>
+</ol>
+<h3 id="architectural-advantages">Architectural Advantages</h3>
+<p>This pattern eliminates callback hell, deeply nested closures, and
+complex promise chains. Developers write sequential, imperative
+code:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- The underlying framework transparently yields and resumes</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">data</span> <span class="op">=</span> <span class="va">socket</span><span class="op">:</span><span class="fu">read</span><span class="op">(</span><span class="st">&quot;*a&quot;</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>process<span class="op">(</span><span class="va">data</span><span class="op">)</span></span></code></pre></div>
+<p>Because the entire scheduling cycle typically runs on a single OS
+thread, race conditions inherent to pre-emptive multithreading are
+avoided; execution is cooperatively deterministic. Frameworks like
+OpenResty (utilizing Nginx's event core) and Tarantool successfully
+scale to millions of concurrent connections using this exact model,
+proving that stackful coroutine scheduling remains one of the most
+resource-efficient paradigms for network-bound workloads.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

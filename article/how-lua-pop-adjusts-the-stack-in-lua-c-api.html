@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How lua_pop Adjusts the Stack in Lua C API - lua</title>
+    <meta name="description" content="The luapop macro is one of the most frequently used stack-manipulation utilities in the Lua C API, providing a convenient way to remove a specified number of elements from the top of the virtual stack. In this article, you will learn how luapop is defined">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-pop-adjusts-the-stack-in-lua-c-api">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How lua_pop Adjusts the Stack in Lua C API - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-pop-adjusts-the-stack-in-lua-c-api" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The luapop macro is one of the most frequently used stack-manipulation utilities in the Lua C API, providing a convenient way to remove a specified number of elements from the top of the virtual stack. In this article, you will learn how luapop is defined" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua_pop-adjusts-the-stack-in-lua-c-api">How lua_pop Adjusts
+the Stack in Lua C API</h1>
+<p>The <code>lua_pop</code> macro is one of the most frequently used
+stack-manipulation utilities in the Lua C API, providing a convenient
+way to remove a specified number of elements from the top of the virtual
+stack. In this article, you will learn how <code>lua_pop</code> is
+defined under the hood, how it delegates stack manipulation to
+<code>lua_settop</code>, and the exact pointer mechanics the Lua runtime
+uses to adjust the internal stack top.</p>
+<h2 id="definition-of-the-lua_pop-macro">Definition of the lua_pop
+Macro</h2>
+<p>In <code>lua.h</code>, <code>lua_pop</code> is not implemented as an
+independent C function. Instead, it is defined as a preprocessor macro
+wrapping <code>lua_settop</code>:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define lua_pop</span><span class="op">(</span>L<span class="op">,</span><span class="pp"> n</span><span class="op">)</span><span class="pp"> lua_settop</span><span class="op">(</span>L<span class="op">,</span><span class="pp"> </span><span class="op">-(</span><span class="pp">n</span><span class="op">)</span><span class="pp"> </span><span class="op">-</span><span class="pp"> </span><span class="dv">1</span><span class="op">)</span></span></code></pre></div>
+<p>Here, <code>L</code> represents the current <code>lua_State</code>
+pointer, and <code>n</code> represents the number of elements to pop
+from the stack.</p>
+<h2 id="the-negative-index-calculation">The Negative Index
+Calculation</h2>
+<p>Lua uses dual-indexing for its virtual stack: positive indices
+represent absolute positions from the bottom (where <code>1</code> is
+the first element pushed), while negative indices represent relative
+positions from the top (where <code>-1</code> is the topmost
+element).</p>
+<p>When you want to remove <code>n</code> elements, the new topmost
+element must become the element currently sitting <code>n</code>
+positions below the current top:</p>
+<ul>
+<li>Index <code>-1</code> is the current top.</li>
+<li>Index <code>-2</code> is 1 element below the top.</li>
+<li>Index <code>-(n) - 1</code> is the element directly underneath the
+<code>n</code> elements being discarded.</li>
+</ul>
+<p>For example, if the stack contains five elements
+<code>[A, B, C, D, E]</code> and you call
+<code>lua_pop(L, 2)</code>:</p>
+<ol type="1">
+<li><code>-(2) - 1</code> evaluates to <code>-3</code>.</li>
+<li>Relative index <code>-1</code> points to <code>E</code>,
+<code>-2</code> points to <code>D</code>, and <code>-3</code> points to
+<code>C</code>.</li>
+<li>Calling <code>lua_settop(L, -3)</code> sets the top of the stack to
+element <code>C</code>, effectively removing <code>D</code> and
+<code>E</code>.</li>
+</ol>
+<h2 id="internal-pointer-adjustment-in-the-c-core">Internal Pointer
+Adjustment in the C Core</h2>
+<p>Inside the Lua interpreter core, the virtual stack is implemented as
+a contiguous array of <code>TValue</code> structures (Lua's internal
+representation for tagged values). The <code>lua_State</code> structure
+maintains internal pointers tracking this array:</p>
+<ul>
+<li><code>L-&gt;stack</code>: Points to the base of the allocated stack
+memory.</li>
+<li><code>L-&gt;top</code>: Points to the memory slot immediately
+following the highest valid element (in Lua 5.4, represented inside
+<code>StkIdRel</code>).</li>
+</ul>
+<p>When <code>lua_settop</code> receives the calculated target
+index:</p>
+<ol type="1">
+<li><strong>Index Resolution</strong>: Lua converts the relative
+negative index <code>-(n) - 1</code> into an absolute memory address (a
+<code>StkId</code> pointer) corresponding to the new top slot.</li>
+<li><strong>Downward Movement</strong>: Because elements are being
+popped, the resolved address is lower than <code>L-&gt;top</code>.</li>
+<li><strong>Pointer Decrement</strong>: Lua sets <code>L-&gt;top</code>
+directly to this target address. The adjustment effectively subtracts
+<code>n * sizeof(TValue)</code> from the top pointer.</li>
+<li><strong>Garbage Collection Safety</strong>: In modern Lua versions
+(such as Lua 5.3 and 5.4), the runtime clears or invalidates the memory
+slots between the new <code>L-&gt;top</code> and the old
+<code>L-&gt;top</code> to ensure references to discarded Lua objects do
+not remain visible to the garbage collector.</li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

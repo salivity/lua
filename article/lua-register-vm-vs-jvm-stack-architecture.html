@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Register VM vs JVM Stack Architecture - lua</title>
+    <meta name="description" content="Virtual machines generally fall into two architectural categories: stack-based and register-based. While the Java Virtual Machine (JVM), WebAssembly, and early versions of Lua adopted stack-based architectures, Lua transitioned to a register-based virtual">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-register-vm-vs-jvm-stack-architecture">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Register VM vs JVM Stack Architecture - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-register-vm-vs-jvm-stack-architecture" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Virtual machines generally fall into two architectural categories: stack-based and register-based. While the Java Virtual Machine (JVM), WebAssembly, and early versions of Lua adopted stack-based architectures, Lua transitioned to a register-based virtual" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-register-vm-vs-jvm-stack-architecture">Lua Register VM vs
+JVM Stack Architecture</h1>
+<p>Virtual machines generally fall into two architectural categories:
+stack-based and register-based. While the Java Virtual Machine (JVM),
+WebAssembly, and early versions of Lua adopted stack-based
+architectures, Lua transitioned to a register-based virtual machine in
+Lua 5.0. This article compares how Lua's register virtual machine
+contrasts with traditional stack-based engines like the JVM, evaluating
+instruction dispatch, bytecode density, compiler complexity, and
+execution performance.</p>
+<h3 id="fundamental-operational-differences">Fundamental Operational
+Differences</h3>
+<p>A stack-based VM like the JVM operates on a Last-In, First-Out (LIFO)
+operand stack. Operations implicitly take their operands from the top of
+the stack and push the result back onto the stack. For instance,
+computing <code>a = b + c</code> requires multiple instructions: push
+<code>b</code>, push <code>c</code>, execute <code>add</code>, and pop
+the result into <code>a</code>.</p>
+<p>In contrast, Lua’s register VM mimics real hardware architectures. It
+operates on a set of virtual registers that map directly to the
+function's stack frame. Instead of pushing and popping values,
+operations explicitly define source and destination registers in a
+three-address format: <code>ADD R(a), R(b), R(c)</code>. This performs
+the entire addition and assignment in a single instruction.</p>
+<h3 id="instruction-dispatch-and-vm-overhead">Instruction Dispatch and
+VM Overhead</h3>
+<p>In a bytecode interpreter, the primary performance bottleneck is the
+instruction dispatch loop—the overhead of fetching, decoding, and
+jumping to the next instruction handler.</p>
+<ul>
+<li><strong>Stack VMs (JVM):</strong> Require more instructions to
+perform a given task. Because operations rely on pushing and popping
+operands, basic arithmetic and assignment generate multiple discrete
+bytecode steps, repeatedly incurring dispatch overhead.</li>
+<li><strong>Register VMs (Lua):</strong> Require significantly fewer
+instructions to achieve the same result. By reducing the total number of
+executed VM instructions—often by 30% to 50% compared to equivalent
+stack-based code—Lua drastically reduces instruction dispatch cycles and
+branch mispredictions within the interpreter loop.</li>
+</ul>
+<h3 id="bytecode-density-and-instruction-size">Bytecode Density and
+Instruction Size</h3>
+<p>The trade-off for reducing the number of instructions in a register
+VM is instruction size.</p>
+<ul>
+<li><strong>JVM Bytecode:</strong> Instructions are variable-length and
+typically very compact. Many common operations (like
+<code>iload_0</code> or <code>iadd</code>) are just a single byte in
+size because the target operands are implicitly the top of the stack.
+This results in small binary footprints and efficient use of memory
+bandwidth.</li>
+<li><strong>Lua Bytecode:</strong> Instructions are fixed-size 32-bit
+words. Each instruction packs an opcode along with multiple fields
+designating target and source registers (such as <code>A</code>,
+<code>B</code>, and <code>C</code> fields, or a combined <code>Bx</code>
+immediate value). While Lua executes fewer instructions, individual
+instructions occupy more space in memory than basic JVM bytecodes.</li>
+</ul>
+<h3 id="compiler-complexity">Compiler Complexity</h3>
+<p>Generating bytecode for a stack machine is straightforward. An
+abstract syntax tree (AST) can be traversed to emit stack instructions
+using post-order traversal with minimal optimization.</p>
+<p>Compiling to a register VM typically introduces the complex problem
+of register allocation, which requires algorithms like graph coloring to
+map infinite variables to limited hardware registers. Lua circumvents
+this complexity by using an activation frame where registers simply
+represent slots on the call stack. Because Lua allocates a fresh set of
+registers per call frame dynamically (up to 255 registers per function),
+its single-pass compiler generates register bytecode on the fly without
+heavy optimization passes.</p>
+<h3 id="target-objectives-and-performance-context">Target Objectives and
+Performance Context</h3>
+<p>The architectural divergence reflects the different design goals of
+the two systems:</p>
+<ul>
+<li><strong>The JVM:</strong> Designed around portable bytecode with a
+focus on Just-In-Time (JIT) compilation. The compact, simple stack
+format lowers transfer sizes over networks and provides a simple
+intermediate representation that a sophisticated JIT compiler (such as
+HotSpot C2) can transform into optimized machine code.</li>
+<li><strong>Lua:</strong> Designed as a lightweight, embeddable
+scripting language prioritizing pure interpreter execution speed.
+Because many embedded environments lack the memory or resources for a
+heavyweight JIT compiler, optimizing the raw bytecode interpreter via a
+register architecture provides the fastest possible execution with
+minimal resource usage.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua C Dynamic Library Entry Point Naming - lua</title>
+    <meta name="description" content="When writing C dynamic libraries intended to be loaded by the Lua programming language, the entry-point function must adhere to a strict naming pattern so the Lua runtime can locate and execute it during a require call. This article details the naming rul">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-c-dynamic-library-entry-point-naming">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua C Dynamic Library Entry Point Naming - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-c-dynamic-library-entry-point-naming" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="When writing C dynamic libraries intended to be loaded by the Lua programming language, the entry-point function must adhere to a strict naming pattern so the Lua runtime can locate and execute it during a require call. This article details the naming rul" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-c-dynamic-library-entry-point-naming">Lua C Dynamic Library
+Entry Point Naming</h1>
+<p>When writing C dynamic libraries intended to be loaded by the Lua
+programming language, the entry-point function must adhere to a strict
+naming pattern so the Lua runtime can locate and execute it during a
+<code>require</code> call. This article details the naming rules for
+these loader functions, covering basic modules, hierarchical submodule
+paths, hyphenated library names, and essential export requirements.</p>
+<h2 id="the-base-naming-convention">The Base Naming Convention</h2>
+<p>When a Lua script executes <code>require("modulename")</code>, Lua
+attempts to load the corresponding shared library (<code>.so</code>,
+<code>.dll</code>, or <code>.dylib</code>) and searches for an exported
+C initialization function with the prefix <code>luaopen_</code>
+concatenated with the module name.</p>
+<p>The standard convention is:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> luaopen_<span class="op">&lt;</span>modulename<span class="op">&gt;(</span>lua_State <span class="op">*</span>L<span class="op">);</span></span></code></pre></div>
+<p>For example, if the module is loaded via
+<code>require("mymath")</code>, the C dynamic library must export an
+entry point named:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> luaopen_mymath<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">);</span></span></code></pre></div>
+<h2 id="hierarchical-modules-and-dots">Hierarchical Modules and
+Dots</h2>
+<p>Lua modules are frequently organized hierarchically using dot
+notation (such as <code>require("network.http")</code>). Because dots
+are illegal characters in standard C identifiers, Lua automatically
+replaces every dot (<code>.</code>) with an underscore (<code>_</code>)
+when searching for the entry-point symbol.</p>
+<ul>
+<li><p>For <code>require("network.http")</code>, the entry point must
+be:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> luaopen_network_http<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">);</span></span></code></pre></div></li>
+<li><p>For <code>require("a.b.c")</code>, the entry point must be:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> luaopen_a_b_c<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">);</span></span></code></pre></div></li>
+</ul>
+<h2 id="hyphenated-module-names">Hyphenated Module Names</h2>
+<p>Lua also supports a hyphenation rule designed to allow multiple
+versions or distributions of a binary module without changing the C
+source. When a module name contains a hyphen (<code>-</code>), Lua
+searches for the full name first, but if it fails, it strips everything
+up to and including the first hyphen.</p>
+<p>For example, calling <code>require("v1.0-engine")</code> prompts Lua
+to search for:</p>
+<ol type="1">
+<li><code>luaopen_v1_0_engine</code></li>
+<li><code>luaopen_engine</code></li>
+</ol>
+<p>This feature allows a dynamic library file named
+<code>v1.0-engine.so</code> to export only
+<code>luaopen_engine</code>.</p>
+<h2 id="function-signature-and-export-rules">Function Signature and
+Export Rules</h2>
+<p>For the Lua interpreter to successfully call the entry point, the
+function must satisfy three technical criteria:</p>
+<ol type="1">
+<li><p><strong>Exact Signature:</strong> The function must accept a
+single pointer to <code>lua_State</code> and return an integer
+indicating the number of values pushed onto the Lua stack (typically
+<code>1</code>, returning the module's table):</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> luaopen_modulename<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">);</span></span></code></pre></div></li>
+<li><p><strong>C Linkage:</strong> If compiling the library using a C++
+compiler, you must declare the entry point with <code>extern "C"</code>
+to prevent C++ name mangling from altering the symbol name:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="at">extern</span> <span class="st">&quot;C&quot;</span> <span class="op">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">int</span> luaopen_modulename<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">);</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Symbol Visibility:</strong> The entry-point function must
+be exported in the resulting shared library. On Windows, this requires
+the <code>__declspec(dllexport)</code> attribute:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#ifdef _WIN32</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#define EXPORT __declspec</span><span class="op">(</span><span class="pp">dllexport</span><span class="op">)</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="pp">#else</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="pp">#define EXPORT</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="pp">#endif</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>EXPORT <span class="dt">int</span> luaopen_modulename<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">);</span></span></code></pre></div></li>
+</ol></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

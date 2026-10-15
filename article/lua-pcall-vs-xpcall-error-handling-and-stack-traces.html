@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua pcall vs xpcall: Error Handling and Stack Traces - lua</title>
+    <meta name="description" content="In Lua, robust error handling relies on two primary protected-mode functions: pcall and xpcall. While both functions catch runtime exceptions and prevent the application from crashing, they differ fundamentally in how they handle the call stack and proces">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-pcall-vs-xpcall-error-handling-and-stack-traces">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua pcall vs xpcall: Error Handling and Stack Traces - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-pcall-vs-xpcall-error-handling-and-stack-traces" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, robust error handling relies on two primary protected-mode functions: pcall and xpcall. While both functions catch runtime exceptions and prevent the application from crashing, they differ fundamentally in how they handle the call stack and proces" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-pcall-vs-xpcall-error-handling-and-stack-traces">Lua pcall
+vs xpcall: Error Handling and Stack Traces</h1>
+<p>In Lua, robust error handling relies on two primary protected-mode
+functions: <code>pcall</code> and <code>xpcall</code>. While both
+functions catch runtime exceptions and prevent the application from
+crashing, they differ fundamentally in how they handle the call stack
+and process error messages. This article explores the operational
+differences between <code>pcall</code> and <code>xpcall</code>,
+detailing why call stack unwinding limits <code>pcall</code> and how
+<code>xpcall</code> uses custom message handlers to preserve critical
+debugging context.</p>
+<h2 id="the-basic-behavior-of-pcall">The Basic Behavior of pcall</h2>
+<p>The <code>pcall</code> (protected call) function accepts a target
+function and its arguments, executing the call in a protected
+environment:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">result</span> <span class="op">=</span> <span class="fu">pcall</span><span class="op">(</span><span class="va">target_function</span><span class="op">,</span> <span class="va">arg1</span><span class="op">,</span> <span class="va">arg2</span><span class="op">)</span></span></code></pre></div>
+<p>If <code>target_function</code> executes without error,
+<code>pcall</code> returns <code>true</code> followed by the function's
+return values. If an error occurs, <code>pcall</code> catches the error,
+stops execution, and returns <code>false</code> followed by the error
+object (typically a string message).</p>
+<h3 id="stack-unwinding-in-pcall">Stack Unwinding in pcall</h3>
+<p>The primary limitation of <code>pcall</code> involves call stack
+preservation. When an error is raised inside <code>pcall</code>, the Lua
+runtime immediately unwinds the call stack back to the point of the
+<code>pcall</code> invocation before returning control to the
+caller.</p>
+<p>Because the stack has already been destroyed, you cannot capture a
+full stack trace after <code>pcall</code> returns <code>false</code>.
+Calling <code>debug.traceback()</code> outside the <code>pcall</code>
+will only produce a traceback of the current scope, omitting the
+function calls and local variables where the failure originally took
+place.</p>
+<h2 id="the-extended-power-of-xpcall">The Extended Power of xpcall</h2>
+<p>To solve the loss of debugging information caused by stack unwinding,
+Lua provides <code>xpcall</code> (extended protected call). Modern Lua
+(5.2+) defines <code>xpcall</code> with the following signature:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">result</span> <span class="op">=</span> <span class="fu">xpcall</span><span class="op">(</span><span class="va">target_function</span><span class="op">,</span> <span class="va">error_handler</span><span class="op">,</span> <span class="va">arg1</span><span class="op">,</span> <span class="va">arg2</span><span class="op">)</span></span></code></pre></div>
+<p>In Lua 5.1, <code>xpcall</code> does not accept function arguments
+directly, requiring them to be passed via an anonymous wrapper function,
+but the underlying error-handling mechanism remains the same across all
+versions.</p>
+<h3 id="preserving-the-stack-with-message-handlers">Preserving the Stack
+with Message Handlers</h3>
+<p>The defining feature of <code>xpcall</code> is its message handler
+(the second argument). When an error occurs inside
+<code>target_function</code>, Lua does <strong>not</strong> unwind the
+stack immediately. Instead, it pauses execution at the exact point of
+failure and calls the message handler within the active error
+context.</p>
+<p>Because the stack is fully intact when the message handler runs, the
+handler can inspect local variables and generate an accurate stack trace
+using <code>debug.traceback</code>:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> error_handler<span class="op">(</span><span class="va">err</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">debug.traceback</span><span class="op">(</span><span class="va">err</span><span class="op">,</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">result</span> <span class="op">=</span> <span class="fu">xpcall</span><span class="op">(</span><span class="va">failing_function</span><span class="op">,</span> <span class="va">error_handler</span><span class="op">)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">success</span> <span class="cf">then</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- &#39;result&#39; now contains the original error message along with the full stack trace</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>Once the message handler finishes, its return value becomes the
+second return value of <code>xpcall</code>, and only then does the
+runtime unwind the stack.</p>
+<h2 id="key-differences-summary">Key Differences Summary</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;"><code>pcall</code></th>
+<th style="text-align: left;"><code>xpcall</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Error Handler</strong></td>
+<td style="text-align: left;">None</td>
+<td style="text-align: left;">Accepts a custom message handler
+function</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Stack State at
+Handler</strong></td>
+<td style="text-align: left;">Already unwound when control returns</td>
+<td style="text-align: left;">Intact and fully inspectable during
+handler execution</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Traceback Accuracy</strong></td>
+<td style="text-align: left;">Cannot generate an accurate traceback of
+the error site</td>
+<td style="text-align: left;">Accurately generates a full traceback
+using <code>debug.traceback</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Error Transformation</strong></td>
+<td style="text-align: left;">Error object is returned as-is</td>
+<td style="text-align: left;">Handler can modify or wrap the error
+object before return</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Use Case</strong></td>
+<td style="text-align: left;">Simple checks where failure details are
+secondary</td>
+<td style="text-align: left;">Comprehensive logging, debugging, and
+systems requiring tracebacks</td>
+</tr>
+</tbody>
+</table>
+<h2 id="choosing-between-pcall-and-xpcall">Choosing Between pcall and
+xpcall</h2>
+<p>Use <code>pcall</code> when you only need to verify whether an
+operation succeeds or fails, or when handling simple errors where the
+message itself is sufficient to diagnose the issue (such as validating
+user input or parsing data formats).</p>
+<p>Use <code>xpcall</code> in complex systems, asynchronous loops, or
+top-level application boundaries where unhandled errors need to be
+logged with complete stack traces, function names, and line numbers to
+facilitate debugging.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

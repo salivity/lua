@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Bytecode: Boolean Conditions to Conditional Jumps - lua</title>
+    <meta name="description" content="This article explores how the Lua compiler translates boolean expressions within control structures into conditional jump instructions. Rather than generating temporary boolean values in registers, Lua&#39;s register-based virtual machine emits specialized co">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-bytecode-boolean-conditions-to-conditional-jumps">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Bytecode: Boolean Conditions to Conditional Jumps - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-bytecode-boolean-conditions-to-conditional-jumps" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how the Lua compiler translates boolean expressions within control structures into conditional jump instructions. Rather than generating temporary boolean values in registers, Lua&#39;s register-based virtual machine emits specialized co" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-bytecode-boolean-conditions-to-conditional-jumps">Lua
+Bytecode: Boolean Conditions to Conditional Jumps</h1>
+<p>This article explores how the Lua compiler translates boolean
+expressions within control structures into conditional jump
+instructions. Rather than generating temporary boolean values in
+registers, Lua's register-based virtual machine emits specialized
+comparison and testing instructions paired with jumps to achieve
+zero-overhead branching and natural short-circuiting.</p>
+<h3 id="the-test-and-skip-mechanism">The Test-and-Skip Mechanism</h3>
+<p>In the Lua virtual machine (Lua 5.0 and later), conditional branching
+relies on a "test-and-skip" pattern. The compiler pairs a
+condition-testing opcode directly with an unconditional jump
+(<code>OP_JMP</code>). Comparison opcodes do not set a register to
+<code>true</code> or <code>false</code>; instead, they evaluate a
+condition and conditionally skip the instruction immediately following
+them.</p>
+<p>The primary comparison instructions are:</p>
+<ul>
+<li><code>OP_EQ</code> (equality)</li>
+<li><code>OP_LT</code> (less than)</li>
+<li><code>OP_LE</code> (less than or equal to)</li>
+</ul>
+<p>Greater-than (<code>&gt;</code>) and greater-than-or-equal
+(<code>&gt;=</code>) operators are translated by simply swapping the
+operand order to use <code>OP_LT</code> and <code>OP_LE</code>.</p>
+<p>Each comparison instruction takes three main arguments: a boolean
+expectation flag (<code>A</code>), and the two operands to compare
+(<code>B</code> and <code>C</code>). At runtime, the virtual machine
+evaluates the condition <code>(R[B] &lt; R[C]) == A</code>. If the
+result matches the expectation <code>A</code>, the virtual machine
+increments the program counter by one, skipping the next instruction. If
+it does not match, the program counter proceeds normally to execute the
+immediately following <code>OP_JMP</code> instruction.</p>
+<h3 id="truthiness-and-the-op_test-instruction">Truthiness and the
+<code>OP_TEST</code> Instruction</h3>
+<p>When a condition is not an explicit comparison (for example,
+<code>if x then</code>), Lua evaluates the value's truthiness. In Lua,
+only <code>nil</code> and <code>false</code> are considered false;
+everything else evaluates to true.</p>
+<p>The compiler handles these expressions using <code>OP_TEST</code> or
+<code>OP_TESTSET</code>:</p>
+<ul>
+<li><code>OP_TEST</code> checks whether register <code>R[A]</code>
+evaluates to the boolean value specified by flag <code>C</code>. If the
+condition holds, it skips the subsequent <code>OP_JMP</code>.</li>
+<li><code>OP_TESTSET</code> performs the same check, but if the
+condition holds, it also copies the tested value into a destination
+register. This is essential for expressions like
+<code>local a = b or c</code>.</li>
+</ul>
+<h3 id="short-circuiting-with-and-and-or">Short-Circuiting with
+<code>and</code> and <code>or</code></h3>
+<p>Lua implements short-circuit evaluation directly through jump lists.
+The compiler maintains two lists of pending jumps during the compilation
+of expressions: the true-list and the false-list.</p>
+<ol type="1">
+<li><strong>The <code>and</code> Operator</strong>: When compiling
+<code>e1 and e2</code>, if <code>e1</code> evaluates to false, the
+entire expression is false. The compiler emits a test on <code>e1</code>
+and attaches a jump to the false-list. Control only proceeds to
+<code>e2</code> if <code>e1</code> evaluates to true.</li>
+<li><strong>The <code>or</code> Operator</strong>: When compiling
+<code>e1 or e2</code>, if <code>e1</code> evaluates to true, the entire
+expression is true. The compiler emits a test on <code>e1</code> and
+attaches a jump to the true-list. Control falls through to
+<code>e2</code> only if <code>e1</code> is false.</li>
+</ol>
+<p>Once the entire expression is parsed, the compiler uses backpatching
+to resolve the target addresses of all accumulated jumps. For an
+<code>if</code> statement, false-jumps are routed to the
+<code>else</code> block (or to the instruction following the
+<code>end</code>), while true-jumps are routed directly to the
+<code>then</code> block.</p>
+<h3 id="materializing-booleans-into-registers">Materializing Booleans
+into Registers</h3>
+<p>When a boolean expression is assigned to a variable rather than used
+in a control structure (such as
+<code>local is_ready = count &gt; 5</code>), the compiler must
+"materialize" the result into a concrete boolean value.</p>
+<p>In Lua 5.1 through 5.3, the compiler uses <code>OP_LOADBOOL</code>
+with an embedded jump flag. It emits the comparison instruction,
+followed by an <code>OP_JMP</code>, followed by two
+<code>OP_LOADBOOL</code> instructions: one loads <code>false</code> and
+skips the next instruction, while the other loads <code>true</code>.</p>
+<p>In Lua 5.4, this process is optimized through explicit
+<code>OP_LOADTRUE</code> and <code>OP_LOADFALSE</code> instructions
+alongside updated jump handling, but the fundamental paradigm remains
+the same: comparisons drive control flow via instruction skipping rather
+than boolean register values.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coroutine Running States in Nested Lua Coroutines - lua</title>
+    <meta name="description" content="This article explains how the Lua programming language manages coroutine states during nested execution, specifically examining what coroutine.running returns and the respective status of each coroutine in the call hierarchy. You will learn the exact dist">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/coroutine-running-states-in-nested-lua-coroutines">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Coroutine Running States in Nested Lua Coroutines - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/coroutine-running-states-in-nested-lua-coroutines" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains how the Lua programming language manages coroutine states during nested execution, specifically examining what coroutine.running returns and the respective status of each coroutine in the call hierarchy. You will learn the exact dist" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="coroutine-running-states-in-nested-lua-coroutines">Coroutine
+Running States in Nested Lua Coroutines</h1>
+<p>This article explains how the Lua programming language manages
+coroutine states during nested execution, specifically examining what
+<code>coroutine.running</code> returns and the respective status of each
+coroutine in the call hierarchy. You will learn the exact distinction
+between the <code>running</code> and <code>normal</code> states when one
+coroutine resumes another, and how Lua identifies the currently
+executing thread.</p>
+<h3 id="the-role-of-coroutinerunning">The Role of
+<code>coroutine.running</code></h3>
+<p>In Lua, <code>coroutine.running()</code> returns the handle of the
+currently executing coroutine, along with a boolean indicating whether
+the returned coroutine is the main thread (in Lua 5.2 and later).</p>
+<p>When you invoke <code>coroutine.running()</code> inside a nested
+coroutine—meaning a coroutine that was resumed by another coroutine—it
+always returns the innermost, currently executing coroutine. It does not
+return the parent or caller coroutine.</p>
+<h3 id="coroutine-states-in-lua">Coroutine States in Lua</h3>
+<p>A Lua coroutine exists in one of four states at any given moment,
+observable via <code>coroutine.status()</code>:</p>
+<ul>
+<li><strong><code>running</code></strong>: The coroutine is actively
+executing instructions.</li>
+<li><strong><code>normal</code></strong>: The coroutine has resumed
+another coroutine and is waiting for that child coroutine to yield or
+return.</li>
+<li><strong><code>suspended</code></strong>: The coroutine is yielded or
+has been created but not yet started.</li>
+<li><strong><code>dead</code></strong>: The coroutine has finished
+executing its body function or encountered an unhandled error.</li>
+</ul>
+<h3 id="state-breakdown-during-nested-execution">State Breakdown During
+Nested Execution</h3>
+<p>When Coroutine A resumes Coroutine B, and
+<code>coroutine.running()</code> is invoked inside Coroutine B, the
+states of the threads in the chain are assigned as follows:</p>
+<ol type="1">
+<li><strong>The Active Child Coroutine (Coroutine B)</strong>
+<ul>
+<li><strong>State:</strong> <code>running</code></li>
+<li>Because Coroutine B is currently executing the code block containing
+<code>coroutine.running()</code>,
+<code>coroutine.status(coroutine.running())</code> will evaluate to
+<code>"running"</code>.</li>
+</ul></li>
+<li><strong>The Invoking Parent Coroutine (Coroutine A)</strong>
+<ul>
+<li><strong>State:</strong> <code>normal</code></li>
+<li>Coroutine A initiated the call via <code>coroutine.resume(b)</code>.
+Because it is actively waiting for Coroutine B to yield or return,
+Coroutine A is neither <code>running</code> (it is not executing
+instructions) nor <code>suspended</code> (it cannot be resumed directly
+by another thread until B yields). Lua classifies this specific waiting
+condition as <code>normal</code>.</li>
+</ul></li>
+<li><strong>The Main Thread</strong>
+<ul>
+<li><strong>State:</strong> <code>normal</code> (if it resumed Coroutine
+A)</li>
+<li>If Coroutine A was originally resumed by the main thread, the main
+thread also enters the <code>normal</code> state. Every ancestor
+coroutine up the call stack remains in the <code>normal</code> state
+while waiting for downstream coroutines to complete or yield
+control.</li>
+</ul></li>
+</ol>
+<h3 id="practical-example">Practical Example</h3>
+<p>Consider the following execution flow:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">co_b</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">co_a</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="va">co_b</span> <span class="op">=</span> <span class="fu">coroutine.create</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">current</span> <span class="op">=</span> <span class="fu">coroutine.running</span><span class="op">()</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Inside B - Status of B:&quot;</span><span class="op">,</span> <span class="fu">coroutine.status</span><span class="op">(</span><span class="va">current</span><span class="op">))</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Inside B - Status of A:&quot;</span><span class="op">,</span> <span class="fu">coroutine.status</span><span class="op">(</span><span class="va">co_a</span><span class="op">))</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span><span class="op">)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="va">co_a</span> <span class="op">=</span> <span class="fu">coroutine.create</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">coroutine.resume</span><span class="op">(</span><span class="va">co_b</span><span class="op">)</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span><span class="op">)</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="fu">coroutine.resume</span><span class="op">(</span><span class="va">co_a</span><span class="op">)</span></span></code></pre></div>
+<p>In this scenario:</p>
+<ul>
+<li><code>coroutine.running()</code> inside <code>co_b</code> returns
+the thread reference for <code>co_b</code>.</li>
+<li><code>coroutine.status(current)</code> outputs
+<code>running</code>.</li>
+<li><code>coroutine.status(co_a)</code> outputs
+<code>normal</code>.</li>
+</ul>
+<p>Once <code>co_b</code> yields or finishes, control returns to
+<code>co_a</code>. At that point, <code>co_a</code> transitions back
+from <code>normal</code> to <code>running</code>, and <code>co_b</code>
+transitions to either <code>suspended</code> (if it yielded) or
+<code>dead</code> (if it completed).</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strict Type Checking in Lua C API with luaL_checktype - lua</title>
+    <meta name="description" content="Developing C libraries for the Lua programming language requires strict boundaries between Lua&#39;s dynamic typing and C&#39;s static memory management. The auxiliary library function luaLchecktype serves as a fundamental safeguard in this interface, validating">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/strict-type-checking-in-lua-c-api-with-lua-l-checktype">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Strict Type Checking in Lua C API with luaL_checktype - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/strict-type-checking-in-lua-c-api-with-lua-l-checktype" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Developing C libraries for the Lua programming language requires strict boundaries between Lua&#39;s dynamic typing and C&#39;s static memory management. The auxiliary library function luaLchecktype serves as a fundamental safeguard in this interface, validating" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="strict-type-checking-in-lua-c-api-with-lual_checktype">Strict
+Type Checking in Lua C API with luaL_checktype</h1>
+<p>Developing C libraries for the Lua programming language requires
+strict boundaries between Lua's dynamic typing and C's static memory
+management. The auxiliary library function <code>luaL_checktype</code>
+serves as a fundamental safeguard in this interface, validating that
+incoming arguments match specific expected Lua types before any
+operations are executed. By inspecting the virtual stack, comparing type
+tags, and raising standardized runtime errors upon mismatch,
+<code>luaL_checktype</code> prevents memory corruption, eliminates
+undefined behavior, and enforces robust contract validation at the C
+boundary.</p>
+<h3 id="signature-and-core-mechanics">Signature and Core Mechanics</h3>
+<p>The function is defined in the Lua Auxiliary Library
+(<code>lauxlib.h</code>) with the following signature:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> luaL_checktype <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">int</span> arg<span class="op">,</span> <span class="dt">int</span> t<span class="op">);</span></span></code></pre></div>
+<p>It accepts three parameters:</p>
+<ul>
+<li><code>L</code>: The current execution context
+(<code>lua_State</code>).</li>
+<li><code>arg</code>: The index of the argument on the virtual stack to
+inspect.</li>
+<li><code>t</code>: The expected Lua type constant (e.g.,
+<code>LUA_TNUMBER</code>, <code>LUA_TSTRING</code>,
+<code>LUA_TTABLE</code>, <code>LUA_TFUNCTION</code>,
+<code>LUA_TUSERDATA</code>).</li>
+</ul>
+<p>When invoked, <code>luaL_checktype</code> queries the type of the
+value at index <code>arg</code> using the core API function
+<code>lua_type(L, arg)</code>. If the resulting type tag does not match
+the integer tag specified by <code>t</code>, the function immediately
+interrupts execution.</p>
+<h3 id="error-propagation-and-stack-protection">Error Propagation and
+Stack Protection</h3>
+<p>If the validation fails, <code>luaL_checktype</code> does not return
+an error code for manual handling; instead, it raises a formatted Lua
+error by calling <code>luaL_typeerror</code>. This mechanism produces a
+descriptive, standard Lua error message:</p>
+<pre class="text"><code>bad argument #&lt;arg&gt; to &#39;&lt;function_name&gt;&#39; (&lt;expected_type&gt; expected, got &lt;actual_type&gt;)</code></pre>
+<p>Under the hood, this error triggers a non-local jump
+(<code>longjmp</code> in standard C, or an exception throw if Lua is
+compiled with C++ support). The execution of the host C function halts
+immediately, safely unwinding the call stack back to the nearest
+protected Lua call (<code>pcall</code> or <code>xpcall</code>). This
+automated failure model guarantees that subsequent C instructions—which
+rely on the validity of that argument—never execute with invalid
+inputs.</p>
+<h3 id="preventing-implicit-coercions">Preventing Implicit
+Coercions</h3>
+<p>A critical distinction between <code>luaL_checktype</code> and other
+retrieval helpers lies in the prevention of silent type coercion.
+Functions like <code>lua_tostring</code> or
+<code>luaL_checkstring</code> will automatically convert a numeric
+argument into a string directly on the Lua stack. While sometimes
+convenient, this in-place mutation can introduce subtle side effects if
+the C code subsequently assumes the stack slot remains an immutable
+number.</p>
+<p><code>luaL_checktype</code> performs a strict identity check against
+the underlying type descriptor. If a C function requires an explicit
+table, boolean, or function, calling
+<code>luaL_checktype(L, 1, LUA_TTABLE)</code> ensures that values like
+strings or numbers are rejected outright, eliminating unintended
+conversions or ambiguous logic paths.</p>
+<h3 id="practical-implementation">Practical Implementation</h3>
+<p><code>luaL_checktype</code> is standard practice when interacting
+with complex Lua structures such as tables or custom userdata, where
+dereferencing an incorrect type would cause a segmentation fault.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">int</span> custom_process_data<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">/* Enforce that the first argument is strictly a table */</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    luaL_checktype<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> LUA_TTABLE<span class="op">);</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">/* Enforce that the second argument is strictly a callback function */</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    luaL_checktype<span class="op">(</span>L<span class="op">,</span> <span class="dv">2</span><span class="op">,</span> LUA_TFUNCTION<span class="op">);</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">/* Safe to execute table operations */</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    lua_getfield<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="st">&quot;id&quot;</span><span class="op">);</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">/* ... further processing ... */</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>By placing <code>luaL_checktype</code> calls at the entry point of C
+functions, developers establish fail-fast preconditions that protect raw
+C pointers, maintain deterministic state transitions, and provide
+standard debugging feedback to Lua scripts calling native code.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

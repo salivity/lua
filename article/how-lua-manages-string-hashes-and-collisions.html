@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Manages String Hashes and Collisions - lua</title>
+    <meta name="description" content="In the Lua programming language, string handling is optimized for rapid table lookups and minimal memory consumption through string interning, randomized hashing, and separate chaining. Lua categorizes strings into short and long types, ensuring that shor">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-manages-string-hashes-and-collisions">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Manages String Hashes and Collisions - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-manages-string-hashes-and-collisions" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, string handling is optimized for rapid table lookups and minimal memory consumption through string interning, randomized hashing, and separate chaining. Lua categorizes strings into short and long types, ensuring that shor" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-manages-string-hashes-and-collisions">How Lua Manages
+String Hashes and Collisions</h1>
+<p>In the Lua programming language, string handling is optimized for
+rapid table lookups and minimal memory consumption through string
+interning, randomized hashing, and separate chaining. Lua categorizes
+strings into short and long types, ensuring that short strings—which
+frequently serve as identifiers and table keys—are stored uniquely
+inside a global hash table. This article explains how the Lua virtual
+machine (VM) calculates string hashes, resolves collisions using singly
+linked lists, and dynamically scales its internal string table to
+sustain constant-time operations.</p>
+<h3 id="short-vs-long-strings">Short vs. Long Strings</h3>
+<p>Lua (since version 5.2 and refined in 5.3 and 5.4) differentiates
+between two internal string representations based on length, defined by
+the constant <code>LUAI_MAXSHORTSTR</code> (defaulting to 40 bytes):</p>
+<ul>
+<li><strong>Short Strings (<code>LUA_VSHRSTR</code>):</strong> Any
+string of 40 bytes or fewer is automatically interned. The Lua VM
+guarantees that only one instance of any given short string exists in
+memory. This allows string equality comparisons to execute in <span
+class="math inline">\(O(1)\)</span> time via pointer comparison rather
+than <span class="math inline">\(O(n)\)</span> byte-by-byte
+inspection.</li>
+<li><strong>Long Strings (<code>LUA_VLNGSTR</code>):</strong> Strings
+exceeding 40 bytes bypass interning to prevent expensive rehashing and
+memory reallocation overhead. Their hashes are not calculated at
+creation time; instead, they are computed lazily only when the string is
+used as a table key.</li>
+</ul>
+<h3 id="hash-generation-and-randomization">Hash Generation and
+Randomization</h3>
+<p>Lua generates hashes using a seeded hash function to defend against
+collision-based Denial of Service (HashDoS) attacks. When a Lua state
+initializes, it generates a pseudo-random seed stored in
+<code>global_State-&gt;seed</code>.</p>
+<p>For short strings, Lua computes the hash immediately upon creation by
+iterating over each byte:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">unsigned</span> <span class="dt">int</span> luaS_hash <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>str<span class="op">,</span> <span class="dt">size_t</span> l<span class="op">,</span> <span class="dt">unsigned</span> <span class="dt">int</span> seed<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">unsigned</span> <span class="dt">int</span> h <span class="op">=</span> seed <span class="op">^</span> cast_uint<span class="op">(</span>l<span class="op">);</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> <span class="op">(;</span> l <span class="op">&gt;</span> <span class="dv">0</span><span class="op">;</span> l<span class="op">--)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    h <span class="op">^=</span> <span class="op">((</span>h <span class="op">&lt;&lt;</span> <span class="dv">5</span><span class="op">)</span> <span class="op">+</span> <span class="op">(</span>h <span class="op">&gt;&gt;</span> <span class="dv">2</span><span class="op">)</span> <span class="op">+</span> cast_byte<span class="op">(</span>str<span class="op">[</span>l <span class="op">-</span> <span class="dv">1</span><span class="op">]));</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> h<span class="op">;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The algorithm uses bitwise shifts and XOR operations across all bytes
+of the short string, combining the seed, string length, and byte values
+to produce a uniform distribution across hash buckets.</p>
+<h3 id="the-global-string-table-and-collision-chains">The Global String
+Table and Collision Chains</h3>
+<p>All interned short strings reside in a centralized hash table located
+in the global state: <code>global_State-&gt;strt</code> (defined as
+<code>stringtable</code>). The <code>stringtable</code> structure
+consists of an array of bucket pointers (<code>TString **hash</code>),
+the current number of allocated buckets (<code>size</code>), and the
+count of stored strings (<code>nuse</code>).</p>
+<p>Collision handling in the <code>stringtable</code> relies on
+<strong>separate chaining</strong> using singly linked lists:</p>
+<ol type="1">
+<li><strong>Bucket Selection:</strong> The bucket index for a string is
+computed using a bitwise AND between its precomputed hash and the table
+mask: <code>bucket = hash &amp; (size - 1)</code>. Lua ensures the table
+size is always a power of two.</li>
+<li><strong>Chain Traversal:</strong> Lua traverses the singly linked
+list stored at <code>strt-&gt;hash[bucket]</code>. Each
+<code>TString</code> header contains a pointer named <code>hnext</code>,
+which points to the next <code>TString</code> in the same collision
+chain.</li>
+<li><strong>Lookup and Insertion:</strong> Lua checks each node in the
+chain. Because hash values are cached in each <code>TString</code>, Lua
+first compares the 32-bit hash integers. If the hashes match, it
+verifies string length, followed by a raw memory comparison
+(<code>memcmp</code>). If a match is found, the existing string pointer
+is returned. If the end of the chain is reached without a match, a new
+<code>TString</code> is allocated, prepended to the head of the bucket’s
+linked list, and <code>nuse</code> is incremented.</li>
+</ol>
+<h3 id="dynamic-resizing-of-collision-chains">Dynamic Resizing of
+Collision Chains</h3>
+<p>To prevent collision chains from growing too long—which degrades
+lookup performance from <span class="math inline">\(O(1)\)</span> toward
+<span class="math inline">\(O(n)\)</span>—Lua dynamically resizes the
+<code>stringtable</code>:</p>
+<ul>
+<li><strong>Growing:</strong> When the number of interned strings
+(<code>nuse</code>) exceeds the number of buckets (<code>size</code>)
+and <code>size</code> is below the maximum capacity, Lua doubles the
+table size.</li>
+<li><strong>Shrinking:</strong> During garbage collection cycles, if
+<code>nuse</code> drops below <code>size / 4</code>, Lua halves the
+bucket array to reclaim unused memory.</li>
+</ul>
+<p>During a resize operation, Lua allocates a new bucket array and
+re-indexes every short string across all collision chains. Because the
+hash value is already stored in each <code>TString-&gt;hash</code>, Lua
+does not need to recompute byte hashes; it simply recalculates the
+bucket index using the updated bitmask
+(<code>hash &amp; (new_size - 1)</code>) and re-links the
+<code>hnext</code> pointers into the new chains.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

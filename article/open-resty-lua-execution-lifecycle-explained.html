@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenResty Lua Execution Lifecycle Explained - lua</title>
+    <meta name="description" content="This article provides an overview of the OpenResty execution lifecycle, detailing how embedded Lua code executes sequentially within Nginx request-processing phases. By understanding the execution order of key directives such as rewritebylua, accessbylua,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/open-resty-lua-execution-lifecycle-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="OpenResty Lua Execution Lifecycle Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/open-resty-lua-execution-lifecycle-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of the OpenResty execution lifecycle, detailing how embedded Lua code executes sequentially within Nginx request-processing phases. By understanding the execution order of key directives such as rewritebylua, accessbylua," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="openresty-lua-execution-lifecycle-explained">OpenResty Lua
+Execution Lifecycle Explained</h1>
+<p>This article provides an overview of the OpenResty execution
+lifecycle, detailing how embedded Lua code executes sequentially within
+Nginx request-processing phases. By understanding the execution order of
+key directives such as <code>rewrite_by_lua</code>,
+<code>access_by_lua</code>, and <code>content_by_lua</code>, developers
+can properly architect routing rules, authentication mechanisms,
+proxying, and response generation without introducing race conditions or
+unintended side effects.</p>
+<h3 id="the-openresty-phase-model">The OpenResty Phase Model</h3>
+<p>OpenResty integrates LuaJIT directly into the Nginx event loop.
+Instead of executing Lua code in a single generic block, it exposes
+specific phases of Nginx's internal request-processing lifecycle as
+configurable directives. Each phase serves a distinct architectural
+purpose and executes in a deterministic order.</p>
+<p>Below is the chronological execution order for an HTTP request
+handled by OpenResty.</p>
+<hr />
+<h3 id="1-initialization-phases-server-startup">1. Initialization Phases
+(Server Startup)</h3>
+<p>These phases execute outside the context of individual client
+requests:</p>
+<ul>
+<li><strong><code>init_by_lua*</code></strong>: Runs when the Nginx
+master process loads or reloads the configuration file. It is used to
+initialize global Lua modules, pre-load libraries, and set up read-only
+shared state.</li>
+<li><strong><code>init_worker_by_lua*</code></strong>: Runs immediately
+after a worker process is created. It is commonly used to establish
+background timers (via <code>ngx.timer.at</code>) for periodic tasks
+like health checking or metric scraping.</li>
+</ul>
+<hr />
+<h3 id="2-request-handling-phases-per-request">2. Request Handling
+Phases (Per Request)</h3>
+<p>When a client initiates an HTTP request, OpenResty processes it
+through the following operational phases:</p>
+<h4
+id="ssl_certificate_by_lua"><code>ssl_certificate_by_lua*</code></h4>
+<p>Executes during the SSL/TLS handshake before any HTTP data is parsed.
+It allows dynamic loading of SSL certificates and private keys based on
+Server Name Indication (SNI).</p>
+<h4 id="set_by_lua"><code>set_by_lua*</code></h4>
+<p>Executes alongside standard Nginx <code>rewrite</code> module
+directives. It is designed to compute dynamic values and assign them
+directly to standard Nginx variables. It executes synchronously and does
+not support non-blocking I/O operations (cosockets).</p>
+<h4 id="rewrite_by_lua"><code>rewrite_by_lua*</code></h4>
+<p>Executes early in the request processing pipeline, directly after URI
+matching.</p>
+<ul>
+<li><strong>Primary Use Cases</strong>: Rewriting URIs, internal
+redirects, manipulating request headers, or short-circuiting requests
+early.</li>
+<li><strong>Characteristics</strong>: Supports non-blocking I/O
+(cosockets). Calling <code>ngx.redirect()</code> or
+<code>ngx.exit(status)</code> here terminates further phase execution
+and immediately sends the response to the client.</li>
+</ul>
+<h4 id="access_by_lua"><code>access_by_lua*</code></h4>
+<p>Executes after the rewrite phase has determined the final URI and
+location block, but before the response payload is produced.</p>
+<ul>
+<li><strong>Primary Use Cases</strong>: Authentication, authorization,
+rate limiting, and IP blacklisting/whitelisting.</li>
+<li><strong>Characteristics</strong>: Acts as a security gatekeeper. If
+access checks pass, execution proceeds to the content generation phase.
+If an access check fails, an <code>ngx.exit(ngx.HTTP_FORBIDDEN)</code>
+or <code>ngx.exit(ngx.HTTP_UNAUTHORIZED)</code> call terminates the
+request cleanly.</li>
+</ul>
+<h4 id="content_by_lua"><code>content_by_lua*</code></h4>
+<p>Acts as the primary content generation handler. In Nginx, only one
+content handler can run per location.</p>
+<ul>
+<li><strong>Primary Use Cases</strong>: Generating dynamic HTTP
+responses, querying upstream databases/caches directly using Lua
+cosockets, and serving API payloads.</li>
+<li><strong>Characteristics</strong>: If <code>content_by_lua*</code> is
+specified in a location, standard content handlers (such as
+<code>proxy_pass</code> or <code>root</code>) in the same location are
+bypassed. The response body is typically produced here using
+<code>ngx.say()</code> or <code>ngx.print()</code>.</li>
+</ul>
+<hr />
+<h3 id="3-upstream-and-response-processing-phases">3. Upstream and
+Response Processing Phases</h3>
+<p>Once the content handler finishes or delegates work to an upstream
+server, the response enters the downstream delivery pipeline:</p>
+<h4 id="balancer_by_lua"><code>balancer_by_lua*</code></h4>
+<p>Executes when <code>proxy_pass</code>, <code>fastcgi_pass</code>, or
+similar upstream modules require an endpoint address. It enables
+programmable, dynamic load-balancing logic (e.g., consistent hashing,
+round-robin) per request.</p>
+<h4 id="header_filter_by_lua"><code>header_filter_by_lua*</code></h4>
+<p>Executes as soon as all response status codes and headers are
+assembled, but before any part of the response body is streamed to the
+client.</p>
+<ul>
+<li><strong>Primary Use Cases</strong>: Adding, removing, or modifying
+HTTP response headers (e.g., adding security headers like
+<code>Content-Security-Policy</code>).</li>
+<li><strong>Characteristics</strong>: Cosocket operations are disabled
+in this phase.</li>
+</ul>
+<h4 id="body_filter_by_lua"><code>body_filter_by_lua*</code></h4>
+<p>Executes iteratively for each chunk of the response body as it
+streams through Nginx.</p>
+<ul>
+<li><strong>Primary Use Cases</strong>: Data transformations on the fly,
+streaming compression, or response truncation.</li>
+<li><strong>Characteristics</strong>: Operates as a streaming filter. It
+can be invoked multiple times per request as data buffers are flushed to
+the client.</li>
+</ul>
+<hr />
+<h3 id="4-post-request-phase">4. Post-Request Phase</h3>
+<h4 id="log_by_lua"><code>log_by_lua*</code></h4>
+<p>Executes after the request has completely finished sending data to
+the client.</p>
+<ul>
+<li><strong>Primary Use Cases</strong>: Structured access logging,
+custom metric reporting (e.g., Prometheus counters), and latency
+tracking.</li>
+<li><strong>Characteristics</strong>: Occurs asynchronously relative to
+client latency; failures here do not affect the client response.
+Cosocket operations are not supported, though operations on shared
+memory dictionaries (<code>ngx.shared.DICT</code>) are permitted.</li>
+</ul>
+<hr />
+<h3 id="execution-flow-summary">Execution Flow Summary</h3>
+<pre class="text"><code>[Client Request]
+       │
+       ▼
+   set_by_lua*
+       │
+       ▼
+rewrite_by_lua*  ──(early exit)──┐
+       │                         │
+       ▼                         │
+ access_by_lua*  ──(denied)──────┤
+       │                         │
+       ▼                         │
+content_by_lua* (or proxy_pass)  │
+       │                         │
+       ▼                         │
+header_filter_by_lua* ◄──────────┘
+       │
+       ▼
+ body_filter_by_lua* (streamed chunks)
+       │
+       ▼
+  log_by_lua*</code></pre>
+<p>By mapping logic strictly according to this execution path—rewriting
+parameters in <code>rewrite_by_lua</code>, validating tokens in
+<code>access_by_lua</code>, and producing payloads in
+<code>content_by_lua</code>—applications running on OpenResty maintain
+high throughput and predictable execution behavior.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

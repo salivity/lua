@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How os.remove Deletes Files and Directories in Lua - lua</title>
+    <meta name="description" content="In the Lua programming language, file system deletion is handled by the standard library function os.remove. This function provides a unified, cross-platform method to delete files and empty directories from your system. This article explains the syntax,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-os-remove-deletes-files-and-directories-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How os.remove Deletes Files and Directories in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-os-remove-deletes-files-and-directories-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, file system deletion is handled by the standard library function os.remove. This function provides a unified, cross-platform method to delete files and empty directories from your system. This article explains the syntax," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-osremove-deletes-files-and-directories-in-lua">How os.remove
+Deletes Files and Directories in Lua</h1>
+<p>In the Lua programming language, file system deletion is handled by
+the standard library function <code>os.remove</code>. This function
+provides a unified, cross-platform method to delete files and empty
+directories from your system. This article explains the syntax,
+underlying mechanisms, limitations, and error-handling strategies
+associated with using <code>os.remove</code> effectively in your Lua
+scripts.</p>
+<h2 id="syntax-and-core-functionality">Syntax and Core
+Functionality</h2>
+<p>The <code>os.remove</code> function accepts a single string argument
+representing the path to the file or directory you wish to delete:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">os.remove</span><span class="op">(</span><span class="va">filename</span><span class="op">)</span></span></code></pre></div>
+<p>Under the hood, Lua delegates this operation to the standard C
+library function <code>remove()</code> defined in
+<code>&lt;stdio.h&gt;</code>. Because it wraps the C implementation,
+<code>os.remove</code> behaves according to the underlying operating
+system's filesystem rules (such as POSIX or Windows).</p>
+<h2 id="deleting-files">Deleting Files</h2>
+<p>To delete a standard file, pass the relative or absolute path of the
+target file to the function.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">os.remove</span><span class="op">(</span><span class="st">&quot;example.txt&quot;</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">success</span> <span class="cf">then</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;File deleted successfully.&quot;</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Failed to delete file: &quot;</span> <span class="op">..</span> <span class="va">err</span><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>If the file exists and the running process has sufficient
+permissions, the file is unlinked and removed from the filesystem.</p>
+<h2 id="deleting-directories">Deleting Directories</h2>
+<p>The <code>os.remove</code> function can also delete directories, but
+only if they are completely empty.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">os.remove</span><span class="op">(</span><span class="st">&quot;my_empty_folder&quot;</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">success</span> <span class="cf">then</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Directory removed.&quot;</span><span class="op">)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Error: &quot;</span> <span class="op">..</span> <span class="va">err</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>If the target directory contains any files or subdirectories, the
+operation will fail. Lua does not include a built-in function for
+recursive directory deletion. To remove a non-empty directory tree, you
+must either iterate through its contents and delete them individually
+using an external library like LuaFileSystem (<code>lfs</code>) or
+invoke system-level commands using <code>os.execute</code>.</p>
+<h2 id="return-values-and-error-handling">Return Values and Error
+Handling</h2>
+<p>The <code>os.remove</code> function returns values following Lua's
+standard I/O error protocol:</p>
+<ul>
+<li><strong>On Success:</strong> Returns <code>true</code>.</li>
+<li><strong>On Failure:</strong> Returns <code>nil</code>, followed by
+an error message string and a system-dependent error code (number).</li>
+</ul>
+<p>Common failure reasons include:</p>
+<ul>
+<li><strong>File Not Found:</strong> The specified path does not
+exist.</li>
+<li><strong>Permission Denied:</strong> The current user lacks write or
+execute permissions on the parent directory or the target file.</li>
+<li><strong>Directory Not Empty:</strong> Attempting to delete a
+directory that still contains items.</li>
+<li><strong>File in Use:</strong> On systems like Windows, attempting to
+delete an open or locked file.</li>
+</ul>
+<p>To write resilient code, always capture and evaluate both return
+values to gracefully handle filesystem errors.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

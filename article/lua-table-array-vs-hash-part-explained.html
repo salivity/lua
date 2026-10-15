@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Table Array vs Hash Part Explained - lua</title>
+    <meta name="description" content="In the Lua programming language, tables are the sole data structuring mechanism, serving as arrays, dictionaries, sets, and objects through a single unified interface. Internally, the standard Lua C runtime splits this single abstraction into two distinct">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-table-array-vs-hash-part-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Table Array vs Hash Part Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-table-array-vs-hash-part-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, tables are the sole data structuring mechanism, serving as arrays, dictionaries, sets, and objects through a single unified interface. Internally, the standard Lua C runtime splits this single abstraction into two distinct" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-table-array-vs-hash-part-explained">Lua Table Array vs Hash
+Part Explained</h1>
+<p>In the Lua programming language, tables are the sole data structuring
+mechanism, serving as arrays, dictionaries, sets, and objects through a
+single unified interface. Internally, the standard Lua C runtime splits
+this single abstraction into two distinct physical representations: the
+array part and the hash part. This hybrid implementation allows Lua to
+optimize memory consumption and execution speed automatically, using
+flat, contiguous memory for sequential integer keys and a
+collision-handled hash table for arbitrary or sparse keys without
+requiring any explicit configuration from the programmer.</p>
+<h3 id="the-internal-dual-architecture">The Internal Dual
+Architecture</h3>
+<p>Under the hood, a Lua table is represented as a C structure
+containing two primary memory segments:</p>
+<ul>
+<li><strong><code>TValue *array</code></strong>: A pointer to a
+contiguous block of values representing the array part.</li>
+<li><strong><code>Node *node</code></strong>: A pointer to an array of
+nodes representing the hash part, where each node stores a key, a value,
+and a pointer to the next element in a collision chain.</li>
+</ul>
+<p>When a value is read from or written to a table, Lua inspects the key
+to decide whether to query the array segment or the hash segment.</p>
+<h3 id="the-array-part">The Array Part</h3>
+<p>The array part is designed for dense, 1-based sequential integer keys
+(<code>1, 2, ..., n</code>).</p>
+<ul>
+<li><strong>Memory Efficiency</strong>: The array part only stores
+values. The keys are implicit based on their offset in memory, requiring
+zero overhead for key storage.</li>
+<li><strong>Access Performance</strong>: Lookups and assignments run in
+constant time (<span class="math inline">\(O(1)\)</span>) through direct
+pointer arithmetic (e.g., <code>array[key - 1]</code>), making it
+significantly faster than the hash part.</li>
+<li><strong>Boundary Operations</strong>: The length operator
+(<code>#</code>) operates most predictably when keys form an unbroken
+sequence inside this contiguous segment.</li>
+</ul>
+<h3 id="the-hash-part">The Hash Part</h3>
+<p>The hash part is a generic associative array capable of storing
+values indexed by any valid Lua value, except <code>nil</code> and
+<code>NaN</code>.</p>
+<ul>
+<li><strong>Key Types</strong>: It holds non-integer keys (such as
+strings, functions, and nested tables), floating-point numbers, negative
+integers, zero, and integer keys that are too sparse to justify array
+storage.</li>
+<li><strong>Memory Overhead</strong>: Each entry in the hash part
+requires a <code>Node</code> structure that holds the explicit key, the
+stored value, and a link field to manage collisions. Consequently,
+elements in the hash part consume substantially more memory than
+elements in the array part.</li>
+<li><strong>Lookup Mechanism</strong>: Key access requires running the
+key through a hash function, mapping it to a main position in the node
+buffer, and potentially traversing a linked collision list (resolved via
+an internal open-addressing variation known as Brent’s method). While
+average access time is still <span class="math inline">\(O(1)\)</span>,
+it incurs higher CPU overhead than direct array indexing.</li>
+</ul>
+<h3 id="automatic-allocation-and-rehashing">Automatic Allocation and
+Rehashing</h3>
+<p>Lua dynamically determines the division between the array and hash
+parts during table creation and resizing via an internal routine called
+<em>rehashing</em>.</p>
+<p>When a table grows and requires more space:</p>
+<ol type="1">
+<li>Lua counts all existing keys, identifying integer keys and arbitrary
+keys.</li>
+<li>It calculates the optimal power-of-two size for the array part such
+that more than half of the allocated array slots will be populated
+(ensuring at least 50% density).</li>
+<li>Integer keys that fit within this dense range are allocated to the
+array part.</li>
+<li>Any remaining keys—including integers outside the dense boundary and
+all non-integer keys—are allocated to the hash part.</li>
+</ol>
+<p>This dynamic division allows Lua tables to provide the simplicity of
+a universal mapping type while retaining the raw execution performance
+of native C arrays for list-based data.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

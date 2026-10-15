@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LDoc Tag Syntax for Lua Parameters and Types - lua</title>
+    <meta name="description" content="LDoc is a widely used documentation generator for Lua that relies on Javadoc-like comment tags to inspect code and produce structured documentation. This guide details the specific tag syntax used by LDoc to document function parameters, return values, an">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/l-doc-tag-syntax-for-lua-parameters-and-types">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="LDoc Tag Syntax for Lua Parameters and Types - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/l-doc-tag-syntax-for-lua-parameters-and-types" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="LDoc is a widely used documentation generator for Lua that relies on Javadoc-like comment tags to inspect code and produce structured documentation. This guide details the specific tag syntax used by LDoc to document function parameters, return values, an" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="ldoc-tag-syntax-for-lua-parameters-and-types">LDoc Tag Syntax
+for Lua Parameters and Types</h1>
+<p>LDoc is a widely used documentation generator for Lua that relies on
+Javadoc-like comment tags to inspect code and produce structured
+documentation. This guide details the specific tag syntax used by LDoc
+to document function parameters, return values, and data types, allowing
+developers to create precise, type-annotated Lua APIs.</p>
+<h3 id="documenting-parameters">Documenting Parameters</h3>
+<p>LDoc provides two primary tags for function arguments:
+<code>@param</code> and <code>@tparam</code>.</p>
+<ul>
+<li><p><strong><code>@param</code></strong>: Specifies a parameter name
+followed by its description.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">--- Adds two numbers.</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- @param x The first number</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- @param y The second number</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> add<span class="op">(</span><span class="va">x</span><span class="op">,</span> <span class="va">y</span><span class="op">)</span> <span class="kw">end</span></span></code></pre></div></li>
+<li><p><strong><code>@tparam</code></strong>: Directly attaches a type
+to the parameter before the parameter name.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">--- Sets the user&#39;s age.</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- @tparam number age The age in years</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> set_age<span class="op">(</span><span class="va">age</span><span class="op">)</span> <span class="kw">end</span></span></code></pre></div></li>
+<li><p><strong>Inline Types with <code>@param</code></strong>: You can
+also embed types into the <code>@param</code> tag using bracket
+syntax:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- @param[type=string] name The user&#39;s name</span></span></code></pre></div></li>
+<li><p><strong>Optional Parameters and Defaults</strong>: Optional
+parameters are denoted with <code>[opt]</code> or
+<code>[opt=default_value]</code>:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- @tparam[opt=1] number step The increment step</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- @param[type=string,opt] prefix Optional string prefix</span></span></code></pre></div></li>
+</ul>
+<h3 id="documenting-returns">Documenting Returns</h3>
+<p>Return values are documented using <code>@return</code> or the
+type-specific <code>@treturn</code>.</p>
+<ul>
+<li><p><strong><code>@return</code></strong>: Describes a returned
+value. For multiple returns, use multiple tags in order of
+appearance.</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">--- Divides two numbers.</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- @return The quotient, or nil on failure</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- @return An error message if division by zero occurs</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> divide<span class="op">(</span><span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">)</span> <span class="kw">end</span></span></code></pre></div></li>
+<li><p><strong><code>@treturn</code></strong>: Prefixes the return
+description with its explicit type.</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">--- Generates a unique identifier.</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- @treturn string The generated UUID</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> generate_uuid<span class="op">()</span> <span class="kw">end</span></span></code></pre></div></li>
+</ul>
+<h3 id="type-expression-syntax">Type Expression Syntax</h3>
+<p>LDoc supports a flexible type specification syntax across
+<code>@tparam</code>, <code>@treturn</code>, and custom types:</p>
+<ul>
+<li><p><strong>Basic Types</strong>: Standard Lua types like
+<code>string</code>, <code>number</code>, <code>boolean</code>,
+<code>table</code>, <code>function</code>, or
+<code>thread</code>.</p></li>
+<li><p><strong>Alternative/Union Types</strong>: Separated by vertical
+bars (<code>|</code>).</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- @tparam string|number id The identifier</span></span></code></pre></div></li>
+<li><p><strong>Nullable Types</strong>: Prefixing a type with
+<code>?</code> marks it as allowing <code>nil</code>.</p>
+<div class="sourceCode" id="cb8"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- @tparam ?string label An optional label that can be nil</span></span></code></pre></div></li>
+<li><p><strong>Tables and Lists</strong>: Curly braces define array
+types or map structures:</p>
+<ul>
+<li>Array list: <code>{string,...}</code> denotes a sequence of
+strings.</li>
+<li>Key-value map: <code>{string=number,...}</code> denotes a table
+mapping string keys to number values.</li>
+</ul></li>
+</ul>
+<h3 id="defining-custom-types-and-tables">Defining Custom Types and
+Tables</h3>
+<p>To document structured tables, classes, or configuration objects,
+LDoc uses <code>@table</code> or <code>@class</code> along with
+<code>@field</code> (or <code>@tfield</code> for typed fields):</p>
+<div class="sourceCode" id="cb9"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co">--- User profile settings.</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- @table UserConfig</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- @tfield string username The display name</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- @tfield[opt=false] boolean active Account status</span></span></code></pre></div>
+<p>Once defined, <code>UserConfig</code> can be referenced as a valid
+type within any subsequent <code>@tparam</code> or <code>@treturn</code>
+tag across your documentation.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

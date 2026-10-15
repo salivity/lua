@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Formatting and Layout Style Guide - lua</title>
+    <meta name="description" content="This guide provides an overview of the widely accepted formatting and layout conventions within the Lua programming community. While Lua itself is syntactically flexible and lacks an official formatting tool like Go&#39;s gofmt, the community predominantly ad">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-formatting-and-layout-style-guide">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Formatting and Layout Style Guide - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-formatting-and-layout-style-guide" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This guide provides an overview of the widely accepted formatting and layout conventions within the Lua programming community. While Lua itself is syntactically flexible and lacks an official formatting tool like Go&#39;s gofmt, the community predominantly ad" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-formatting-and-layout-style-guide">Lua Formatting and Layout
+Style Guide</h1>
+<p>This guide provides an overview of the widely accepted formatting and
+layout conventions within the Lua programming community. While Lua
+itself is syntactically flexible and lacks an official formatting tool
+like Go's <code>gofmt</code>, the community predominantly adheres to
+conventions established by the Lua-users wiki and the popular
+Olivine-Labs style guide. Following these standards ensures consistency,
+readability, and maintainability across Lua codebases.</p>
+<h2 id="indentation-and-line-length">Indentation and Line Length</h2>
+<ul>
+<li><strong>Indentation:</strong> Use two spaces per indentation level.
+Avoid using tab characters to prevent rendering inconsistencies across
+different editors.</li>
+<li><strong>Line Length:</strong> Restrict lines to a maximum of 80 to
+120 characters. If a statement exceeds this limit, break it into
+multiple lines using logical continuation points (such as after commas
+or operators).</li>
+</ul>
+<h2 id="whitespace-and-blank-lines">Whitespace and Blank Lines</h2>
+<ul>
+<li><p><strong>Binary Operators:</strong> Place a single space before
+and after binary operators (<code>+</code>, <code>-</code>,
+<code>*</code>, <code>/</code>, <code>==</code>, <code>~=</code>,
+<code>=</code>, <code>..</code>).</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">total</span> <span class="op">=</span> <span class="va">price</span> <span class="op">+</span> <span class="va">tax</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">message</span> <span class="op">=</span> <span class="st">&quot;Hello, &quot;</span> <span class="op">..</span> <span class="va">name</span></span></code></pre></div></li>
+<li><p><strong>Unary Operators:</strong> Do not place a space between a
+unary operator and its operand (e.g., <code>-x</code>,
+<code>#my_table</code>).</p></li>
+<li><p><strong>Commas and Semicolons:</strong> Always place a space
+directly after a comma, with no space preceding it. Semicolons are
+generally discouraged at the end of lines unless used to separate
+multiple statements on a single line.</p></li>
+<li><p><strong>Parentheses and Brackets:</strong> Do not add spaces
+directly inside parentheses, square brackets, or table braces.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Good</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">items</span> <span class="op">=</span> <span class="op">{</span><span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span><span class="op">}</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">items</span><span class="op">[</span><span class="dv">1</span><span class="op">])</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- Avoid</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">items</span> <span class="op">=</span> <span class="op">{</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span> <span class="op">}</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span> <span class="va">items</span><span class="op">[</span> <span class="dv">1</span> <span class="op">]</span> <span class="op">)</span></span></code></pre></div></li>
+<li><p><strong>Vertical Spacing:</strong> Use a single blank line
+between function definitions and logical code blocks. Avoid consecutive
+blank lines.</p></li>
+</ul>
+<h2 id="table-formatting">Table Formatting</h2>
+<p>Tables are central to Lua and require consistent layout rules:</p>
+<ul>
+<li><p><strong>Single-line Tables:</strong> Use for short, simple
+structures with minimal elements.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">point</span> <span class="op">=</span> <span class="op">{</span><span class="va">x</span> <span class="op">=</span> <span class="dv">10</span><span class="op">,</span> <span class="va">y</span> <span class="op">=</span> <span class="dv">20</span><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Multi-line Tables:</strong> Indent elements by one level.
+Place the opening brace on the declaration line and the closing brace on
+its own line, aligned with the variable definition. Always include a
+trailing comma on the final field to facilitate clean diffs when adding
+new entries.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">user</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="va">id</span> <span class="op">=</span> <span class="dv">101</span><span class="op">,</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="va">name</span> <span class="op">=</span> <span class="st">&quot;Alice&quot;</span><span class="op">,</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="va">role</span> <span class="op">=</span> <span class="st">&quot;Admin&quot;</span><span class="op">,</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+</ul>
+<h2 id="control-structures">Control Structures</h2>
+<ul>
+<li><p><strong>Conditionals:</strong> Do not enclose conditional
+expressions in parentheses unless required for operator precedence.</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Good</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">isActive</span> <span class="kw">and</span> <span class="va">count</span> <span class="op">&gt;</span> <span class="dv">0</span> <span class="cf">then</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  process<span class="op">()</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- Avoid</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">(</span><span class="va">isActive</span> <span class="kw">and</span> <span class="op">(</span><span class="va">count</span> <span class="op">&gt;</span> <span class="dv">0</span><span class="op">))</span> <span class="cf">then</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  process<span class="op">()</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div></li>
+<li><p><strong>Blocks:</strong> Align <code>then</code>,
+<code>do</code>, and <code>repeat</code> with their corresponding
+closing keywords (<code>end</code> or <code>until</code>). Do not write
+statements on the same line as the conditional keyword.</p></li>
+</ul>
+<h2 id="function-syntax-and-calls">Function Syntax and Calls</h2>
+<ul>
+<li><p><strong>Syntactic Sugar:</strong> Omit parentheses when calling a
+function with a single literal string or table argument, provided it
+enhances readability.</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span> <span class="st">&quot;Quick message&quot;</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>render <span class="op">{</span><span class="va">width</span> <span class="op">=</span> <span class="dv">800</span><span class="op">,</span> <span class="va">height</span> <span class="op">=</span> <span class="dv">600</span><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Method Definitions:</strong> Use the colon syntax
+(<code>:</code>) when defining and invoking methods on object tables to
+automatically pass the <code>self</code> reference.</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Account</span><span class="op">:</span>deposit<span class="op">(</span><span class="va">amount</span><span class="op">)</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="va">self</span><span class="op">.</span><span class="va">balance</span> <span class="op">=</span> <span class="va">self</span><span class="op">.</span><span class="va">balance</span> <span class="op">+</span> <span class="va">amount</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div></li>
+</ul>
+<h2 id="string-literals">String Literals</h2>
+<ul>
+<li>Use single quotes (<code>'</code>) for short string literals and
+identifiers.</li>
+<li>Use double quotes (<code>"</code>) when the string itself contains
+single quotes to avoid escaping.</li>
+<li>Use long brackets (<code>[[...]]</code>) for multiline strings or
+raw text blocks.</li>
+</ul>
+<h2 id="comments">Comments</h2>
+<ul>
+<li>Place single-line comments on their own line preceding the code they
+describe, indented to the same level.</li>
+<li>Insert a single space between the comment dashes and the text
+(<code>-- This is a comment</code>).</li>
+<li>Reserve block comments (<code>--[[ ... ]]</code>) for multi-line
+documentation or temporarily disabling blocks of code.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

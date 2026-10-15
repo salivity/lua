@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LPeg vs Lua Patterns: Parsing Expressive Power - lua</title>
+    <meta name="description" content="This article compares the expressive power of LPeg (Parsing Expression Grammars for Lua) against the standard pattern matching facilities built directly into the Lua programming language. While Lua&#39;s native patterns provide an exceptionally lightweight, f">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/l-peg-vs-lua-patterns-parsing-expressive-power">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="LPeg vs Lua Patterns: Parsing Expressive Power - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/l-peg-vs-lua-patterns-parsing-expressive-power" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article compares the expressive power of LPeg (Parsing Expression Grammars for Lua) against the standard pattern matching facilities built directly into the Lua programming language. While Lua&#39;s native patterns provide an exceptionally lightweight, f" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lpeg-vs-lua-patterns-parsing-expressive-power">LPeg vs Lua
+Patterns: Parsing Expressive Power</h1>
+<p>This article compares the expressive power of LPeg (Parsing
+Expression Grammars for Lua) against the standard pattern matching
+facilities built directly into the Lua programming language. While Lua's
+native patterns provide an exceptionally lightweight, fast mechanism for
+simple text searching and replacement, LPeg offers a mathematically
+robust parsing system capable of recognizing context-free and recursive
+languages. By evaluating their theoretical limits, compositional
+abilities, and capture mechanisms, this guide clarifies why LPeg
+dramatically supersedes standard Lua patterns for non-trivial parsing
+tasks.</p>
+<h3 id="theoretical-foundation-and-language-classes">Theoretical
+Foundation and Language Classes</h3>
+<p>Lua’s standard pattern matching engine is not a full regular
+expression engine. It lacks alternation (the <code>|</code> operator)
+and alternation-based backtracking, instead providing custom character
+classes, basic repetition operators (<code>*</code>, <code>+</code>,
+<code>-</code>, <code>?</code>), and anchoring. Consequently, standard
+Lua patterns are restricted to a subset of regular languages. They excel
+at straightforward string tokenization, prefix checking, and delimited
+value extraction, but cannot recognize structures requiring state or
+memory.</p>
+<p>LPeg is based on Parsing Expression Grammars (PEGs). Theoretically,
+PEGs describe a superset of deterministic context-free languages as well
+as some context-sensitive languages. Instead of non-deterministic
+choice, PEGs introduce ordered choice (<code>/</code> or <code>+</code>
+in LPeg), which evaluates alternatives sequentially and commits to the
+first match. This model eliminates ambiguity and empowers LPeg to parse
+complex syntax far beyond the reach of standard regular expressions.</p>
+<h3 id="recursion-and-nested-structures">Recursion and Nested
+Structures</h3>
+<p>The most significant gap in expressive power between the two
+approaches is the ability to handle recursion:</p>
+<ul>
+<li><strong>Lua Patterns:</strong> Cannot recognize nested or balanced
+constructs of arbitrary depth. For example, matching nested parentheses,
+balanced HTML/XML tags, or mathematical expressions with arbitrary
+operator precedence is mathematically impossible using standard patterns
+alone.</li>
+<li><strong>LPeg:</strong> Natively supports mutually recursive
+grammars. By using LPeg’s <code>lpeg.V</code> (variable) mechanism
+within grammar tables, developers can define rules that reference
+themselves or other rules. This allows LPeg to parse fully fledged
+programming languages, nested JSON objects, balanced brackets, and
+complex arithmetic expressions directly in a single pass.</li>
+</ul>
+<h3 id="composition-and-modularity">Composition and Modularity</h3>
+<p>Standard Lua patterns are expressed as monolithic strings (such as
+<code>"%a[%w_]*%s*=%s*(%d+)"</code>). As rules grow in complexity, these
+strings become opaque, difficult to test in isolation, and prone to
+duplication. They cannot easily be split into reusable sub-patterns and
+recombined without manual string concatenation.</p>
+<p>In contrast, LPeg treats patterns as first-class Lua values. Patterns
+are composed using standard Lua operators overloaded by the library:</p>
+<ul>
+<li><strong>Sequence (<code>*</code>):</strong>
+<code>pattern1 * pattern2</code> matches <code>pattern1</code> followed
+by <code>pattern2</code>.</li>
+<li><strong>Ordered Choice (<code>+</code>):</strong>
+<code>pattern1 + pattern2</code> matches <code>pattern1</code>, or
+<code>pattern2</code> if the first fails.</li>
+<li><strong>Negation and Difference (<code>-</code>):</strong>
+<code>pattern1 - pattern2</code> matches <code>pattern1</code> only if
+<code>pattern2</code> does not match.</li>
+<li><strong>Lookahead (<code>#</code>):</strong> Syntactic predicates
+that inspect the input ahead without consuming characters.</li>
+</ul>
+<p>This algebraic composition allows developers to build clear, modular,
+and self-documenting grammars from small, reusable components.</p>
+<h3 id="semantic-captures-and-ast-generation">Semantic Captures and AST
+Generation</h3>
+<p>Extracting data from matches differs fundamentally between the two
+engines:</p>
+<ul>
+<li><strong>Lua Patterns:</strong> Captures are limited to substrings
+(<code>()</code>) or character positions. Processing the extracted text
+into complex data structures requires external control flow, manual
+loops, and explicit state tracking in surrounding Lua code.</li>
+<li><strong>LPeg:</strong> Features an extensive capture system that
+operates during the parsing phase:
+<ul>
+<li><strong>String Captures (<code>lpeg.C</code>):</strong> Extract the
+matched text.</li>
+<li><strong>Table Captures (<code>lpeg.Ct</code>):</strong> Aggregate
+multiple inner captures into a Lua table, facilitating automatic list
+creation.</li>
+<li><strong>Function Captures (<code>pattern / fn</code>):</strong> Pipe
+captured values directly into a transformation function as
+arguments.</li>
+<li><strong>Fold Captures (<code>lpeg.Cf</code>):</strong> Apply
+cumulative operations directly to a sequence of captures, ideal for
+evaluating arithmetic expressions on the fly.</li>
+</ul></li>
+</ul>
+<p>Through these mechanisms, an LPeg grammar can parse text and emit a
+fully populated Abstract Syntax Tree (AST) or evaluated result in a
+single, unified declaration.</p>
+<h3 id="summary-of-differences">Summary of Differences</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;">Standard Lua Patterns</th>
+<th style="text-align: left;">LPeg</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Formal Model</strong></td>
+<td style="text-align: left;">Subset of Regular Expressions</td>
+<td style="text-align: left;">Parsing Expression Grammars (PEGs)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Language Class</strong></td>
+<td style="text-align: left;">Regular subsets</td>
+<td style="text-align: left;">Deterministic Context-Free /
+Context-Sensitive</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Recursive Parsing</strong></td>
+<td style="text-align: left;">No</td>
+<td style="text-align: left;">Yes (Grammar tables via
+<code>lpeg.V</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Alternation</strong></td>
+<td style="text-align: left;">No</td>
+<td style="text-align: left;">Yes (Ordered choice via
+<code>+</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Syntactic Lookahead</strong></td>
+<td style="text-align: left;">No</td>
+<td style="text-align: left;">Yes (Positive <code>#</code>, Negative
+<code>-</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>AST Generation</strong></td>
+<td style="text-align: left;">Requires manual post-processing</td>
+<td style="text-align: left;">Built-in via advanced capture types</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Memory Footprint</strong></td>
+<td style="text-align: left;">Extremely low (built into standard
+library)</td>
+<td style="text-align: left;">Requires external C library
+dependency</td>
+</tr>
+</tbody>
+</table></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

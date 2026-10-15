@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PICO-8 Lua: Understanding the Custom Scripting Dialect - lua</title>
+    <meta name="description" content="The PICO-8 fantasy console integrates a specialized dialect of Lua by combining an altered Lua runtime with strict hardware-style constraints and unique syntactic shorthand. This article breaks down how PICO-8 adapts standard Lua, detailing its custom syn">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/pico-8-lua-understanding-the-custom-scripting-dialect">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="PICO-8 Lua: Understanding the Custom Scripting Dialect - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/pico-8-lua-understanding-the-custom-scripting-dialect" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The PICO-8 fantasy console integrates a specialized dialect of Lua by combining an altered Lua runtime with strict hardware-style constraints and unique syntactic shorthand. This article breaks down how PICO-8 adapts standard Lua, detailing its custom syn" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="pico-8-lua-understanding-the-custom-scripting-dialect">PICO-8
+Lua: Understanding the Custom Scripting Dialect</h1>
+<p>The PICO-8 fantasy console integrates a specialized dialect of Lua by
+combining an altered Lua runtime with strict hardware-style constraints
+and unique syntactic shorthand. This article breaks down how PICO-8
+adapts standard Lua, detailing its custom syntax additions, fixed-point
+numeric architecture, strict token and memory boundaries, and the
+specialized application programming interface (API) that replaces
+standard Lua libraries to emulate retro computing limits.</p>
+<h3 id="modified-syntax-and-shorthand">Modified Syntax and
+Shorthand</h3>
+<p>PICO-8 modifies standard Lua syntax to help developers write more
+compact code, conserving both space and readability within a 128x128
+pixel display environment. Key modifications include:</p>
+<ul>
+<li><strong>Compound Assignment Operators:</strong> PICO-8 supports
+C-style compound operators such as <code>+=</code>, <code>-=</code>,
+<code>*=</code>, <code>/=</code>, <code>%=</code>, and bitwise operators
+like <code>&amp;=</code> and <code>|=</code>, which are absent in
+standard Lua.</li>
+<li><strong>Alternative Comparison Operators:</strong> Developers can
+use <code>!=</code> as an alternative to Lua’s traditional
+<code>~=</code> inequality operator.</li>
+<li><strong>Single-Line Statements:</strong> PICO-8 allows concise,
+single-line conditional statements without an explicit <code>then</code>
+or <code>end</code>, structured as
+<code>if (condition) statement</code>.</li>
+<li><strong>Short-Form Print:</strong> The <code>?</code> character
+functions as an alias for the console's built-in <code>print()</code>
+function.</li>
+</ul>
+<h3 id="fixed-point-arithmetic">Fixed-Point Arithmetic</h3>
+<p>Standard Lua implementations typically rely on standard
+double-precision or single-precision floating-point numbers. In
+contrast, PICO-8 implements a 32-bit fixed-point number format
+consisting of a 16:16 representation (16 bits for the integer part and
+16 bits for the fractional part).</p>
+<p>Because of this system, numbers range strictly from
+<code>-32768.0</code> to <code>32767.99998</code>. Arithmetic operations
+mimic the behavior and overflow limits of authentic 16-bit computational
+hardware, preventing true floating-point errors while requiring
+programmers to account for precision limits and integer wrapping.</p>
+<h3 id="artificial-resource-constraints">Artificial Resource
+Constraints</h3>
+<p>To enforce its "fantasy console" identity, PICO-8 restricts code size
+and execution complexity using an internal token-counting engine rather
+than relying purely on file size:</p>
+<ul>
+<li><strong>The 8,192 Token Limit:</strong> PICO-8 parses Lua code into
+tokens (identifiers, operators, brackets, and literals). Each cartridge
+is hard-capped at 8,192 tokens regardless of the actual code layout or
+compression.</li>
+<li><strong>Character and Size Limits:</strong> Raw source code cannot
+exceed 65,536 characters, and saved cartridges utilize compressed
+formats that cannot exceed 32,768 bytes.</li>
+<li><strong>Cycle Limits:</strong> PICO-8 measures processor usage
+relative to a simulated 8 MHz CPU. If a script executes too many
+operations within a single frame, the engine throttles the frame rate
+from 60 or 30 frames per second down to lower rates to simulate CPU
+bottlenecks.</li>
+</ul>
+<h3 id="replaced-standard-library-and-core-lifecycle">Replaced Standard
+Library and Core Lifecycle</h3>
+<p>PICO-8 sandboxes the runtime by completely removing Lua's default
+operating system, file system, and standard input/output libraries (such
+as <code>io</code>, <code>os</code>, and standard <code>math</code>). In
+their place, it exposes a specialized set of functions divided into:</p>
+<ul>
+<li><strong>Lifecycle Hooks:</strong> The console looks for three
+developer-defined functions: <code>_init()</code> for setup,
+<code>_update()</code> or <code>_update60()</code> for game logic, and
+<code>_draw()</code> for rendering.</li>
+<li><strong>Direct Hardware Emulation:</strong> Access to graphics,
+sprites, audio, and map data is handled via low-level primitives like
+<code>spr()</code>, <code>sfx()</code>, <code>mget()</code>, and
+<code>pget()</code>.</li>
+<li><strong>Memory Peeking and Poking:</strong> PICO-8 maps all video
+memory, sprite sheets, palette data, and audio channels to a 32-kilobyte
+virtual RAM layout. The Lua dialect provides <code>peek()</code>,
+<code>poke()</code>, <code>memcpy()</code>, and <code>memset()</code>
+functions, enabling direct, low-level manipulation of game state in a
+manner identical to early home computers.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding LClosure and CClosure in Lua Internals - lua</title>
+    <meta name="description" content="In the Lua programming language, all functions are first-class values represented internally as closures rather than bare function pointers. To handle the execution of both interpreted script logic and native extensions efficiently, the Lua runtime bifurc">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/understanding-l-closure-and-c-closure-in-lua-internals">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding LClosure and CClosure in Lua Internals - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/understanding-l-closure-and-c-closure-in-lua-internals" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, all functions are first-class values represented internally as closures rather than bare function pointers. To handle the execution of both interpreted script logic and native extensions efficiently, the Lua runtime bifurc" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="understanding-lclosure-and-cclosure-in-lua-internals">Understanding
+LClosure and CClosure in Lua Internals</h1>
+<p>In the Lua programming language, all functions are first-class values
+represented internally as closures rather than bare function pointers.
+To handle the execution of both interpreted script logic and native
+extensions efficiently, the Lua runtime bifurcates functions into two
+distinct data structures: <code>LClosure</code> (Lua closures) and
+<code>CClosure</code> (C closures). While both adhere to a shared
+closure header to facilitate unified garbage collection and runtime type
+inspection, they differ fundamentally in how they store executable
+logic, manage upvalues, and interact with the Lua virtual machine
+(VM).</p>
+<h3 id="the-common-closure-foundation">The Common Closure
+Foundation</h3>
+<p>At the C implementation level (defined primarily in
+<code>lobject.h</code>), Lua unifies function instances through the
+<code>Closure</code> union. Both <code>LClosure</code> and
+<code>CClosure</code> embed a common header composed of garbage
+collection flags (<code>GCObject</code>), an internal type tag
+(<code>LUA_VLCL</code> or <code>LUA_VCCL</code>), and metadata such as
+the number of associated upvalues (<code>nupvalues</code>).</p>
+<p>Because they share this foundation, the Lua runtime treats both
+variants uniformly as the basic type <code>LUA_TFUNCTION</code> from the
+perspective of user-facing scripts. However, when the VM invokes a
+closure, it inspects the internal subtype tag to route execution either
+through the bytecode interpreter loop or into native C code.</p>
+<h3 id="the-function-of-lclosure">The Function of LClosure</h3>
+<p>An <code>LClosure</code> represents a function written in Lua and
+compiled down to Lua virtual machine bytecode. Its primary
+responsibility is to pair executable bytecode with the lexical
+environment in which the function was defined.</p>
+<p>An <code>LClosure</code> contains two critical members:</p>
+<ol type="1">
+<li><strong>A Pointer to a Function Prototype
+(<code>Proto* p</code>):</strong> The <code>Proto</code> struct contains
+the immutable blueprint of the function, including the array of bytecode
+instructions, the constant table (<code>k</code>), debugging
+information, and descriptions of expected upvalues. Because multiple
+closure instances can share the same compiled code (such as functions
+generated inside a loop), the <code>Proto</code> is read-only and shared
+across all instances.</li>
+<li><strong>An Array of Upvalue Pointers
+(<code>UpVal* upvals[]</code>):</strong> Unlike native languages that
+use stack-copying or full heap frames for closures, Lua manages
+closed-over local variables via <code>UpVal</code> objects. While an
+outer function is executing, an upvalue is "open" and points directly to
+a register on the execution stack. Once the outer function returns, the
+runtime "closes" the upvalue by copying the value into the
+<code>UpVal</code> struct itself. The <code>LClosure</code> holds an
+array of pointers to these shared <code>UpVal</code> structures,
+maintaining precise lexical scope across function boundaries.</li>
+</ol>
+<p>Execution of an <code>LClosure</code> triggers the central VM loop
+(<code>luaV_execute</code>), which allocates a new activation frame
+(<code>CallInfo</code>) on the Lua thread stack and steps through the
+instructions defined in the underlying <code>Proto</code>.</p>
+<h3 id="the-function-of-cclosure">The Function of CClosure</h3>
+<p>A <code>CClosure</code> represents a native function written in C
+that adheres to the <code>lua_CFunction</code> signature
+(<code>int (*lua_CFunction) (lua_State *L)</code>). It provides the
+bridge between the Lua runtime and native host code, allowing developers
+to extend the environment with native libraries and low-level system
+bindings.</p>
+<p>Unlike its Lua counterpart, a <code>CClosure</code> has no
+<code>Proto</code> and contains no Lua bytecode. Instead, its structure
+consists of:</p>
+<ol type="1">
+<li><strong>A Native Function Pointer
+(<code>lua_CFunction f</code>):</strong> The direct memory address of
+the C function to be invoked.</li>
+<li><strong>An Inline Value Array
+(<code>TValue upvalue[]</code>):</strong> Rather than referencing
+mutable, shared <code>UpVal</code> objects, a <code>CClosure</code>
+stores a contiguous array of <code>TValue</code> structs directly inside
+its memory allocation. When creating a C closure via
+<code>lua_pushcclosure</code>, any arguments passed on the stack are
+converted into persistent upvalues stored inside this array.</li>
+</ol>
+<p>When the VM calls a <code>CClosure</code>, it bypasses the bytecode
+evaluation engine entirely. The runtime prepares a standard C call
+boundary, passes the active <code>lua_State*</code>, and immediately
+executes the function pointer. The C function accesses its stored
+upvalues using the pseudo-index API (<code>lua_upvalueindex</code>),
+which maps directly to the <code>upvalue</code> array embedded in the
+<code>CClosure</code>.</p>
+<h3 id="key-differences-and-architectural-purpose">Key Differences and
+Architectural Purpose</h3>
+<p>The architectural separation between <code>LClosure</code> and
+<code>CClosure</code> serves specific runtime requirements:</p>
+<ul>
+<li><strong>Execution Pipeline:</strong> <code>LClosure</code> requires
+the interpreter dispatch loop, instruction decoding, and software
+register allocation. <code>CClosure</code> maps directly to host
+hardware instructions via an ABI-compliant native function call.</li>
+<li><strong>Upvalue Semantics:</strong> Upvalues in an
+<code>LClosure</code> are indirect and dynamic, supporting shared
+mutable state across multiple closures via the <code>UpVal</code>
+abstraction. Upvalues in a <code>CClosure</code> are static values owned
+exclusively by that closure instance, optimized for persistent state
+caching between native calls without garbage-collection tracking
+overhead for external stack frames.</li>
+<li><strong>Memory Layout:</strong> <code>LClosure</code> separates code
+(<code>Proto</code>) from state (<code>UpVal</code> pointers) to
+minimize memory usage across repeated function instantiations.
+<code>CClosure</code> combines the function pointer and upvalues into a
+single contiguous block of memory allocated dynamically on the Lua
+heap.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

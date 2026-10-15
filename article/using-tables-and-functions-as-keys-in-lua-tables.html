@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Using Tables and Functions as Keys in Lua Tables - lua</title>
+    <meta name="description" content="In the Lua programming language, tables are associative arrays capable of using virtually any value as an index, including complex types such as tables and functions. When non-string reference types are used as keys, Lua performs lookups strictly based on">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/using-tables-and-functions-as-keys-in-lua-tables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Using Tables and Functions as Keys in Lua Tables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/using-tables-and-functions-as-keys-in-lua-tables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, tables are associative arrays capable of using virtually any value as an index, including complex types such as tables and functions. When non-string reference types are used as keys, Lua performs lookups strictly based on" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="using-tables-and-functions-as-keys-in-lua-tables">Using Tables
+and Functions as Keys in Lua Tables</h1>
+<p>In the Lua programming language, tables are associative arrays
+capable of using virtually any value as an index, including complex
+types such as tables and functions. When non-string reference types are
+used as keys, Lua performs lookups strictly based on reference identity
+rather than structural or content equality. This article explains the
+core mechanics of non-string key lookups, detailing how pointer-based
+equality works, how Lua hashes reference types, the deliberate bypass of
+equality metamethods during indexing, and the memory management
+implications involving garbage collection and weak tables.</p>
+<h3 id="reference-identity-and-pointer-equality">Reference Identity and
+Pointer Equality</h3>
+<p>Lua treats tables, functions, threads, and full userdata as reference
+types (objects). When using a table or a function as a key in another
+table, the associative lookup evaluates the object's specific memory
+address.</p>
+<p>Two tables with identical key-value contents do not resolve to the
+same entry because they occupy different locations in memory:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">map</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">keyA</span> <span class="op">=</span> <span class="op">{</span> <span class="va">id</span> <span class="op">=</span> <span class="dv">1</span> <span class="op">}</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">keyB</span> <span class="op">=</span> <span class="op">{</span> <span class="va">id</span> <span class="op">=</span> <span class="dv">1</span> <span class="op">}</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="va">map</span><span class="op">[</span><span class="va">keyA</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;Alpha&quot;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="va">map</span><span class="op">[</span><span class="va">keyB</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;Beta&quot;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">map</span><span class="op">[</span><span class="va">keyA</span><span class="op">])</span> <span class="co">-- Outputs: Alpha</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">map</span><span class="op">[</span><span class="va">keyB</span><span class="op">])</span> <span class="co">-- Outputs: Beta</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">map</span><span class="op">[{</span> <span class="va">id</span> <span class="op">=</span> <span class="dv">1</span> <span class="op">}])</span> <span class="co">-- Outputs: nil</span></span></code></pre></div>
+<p>Because <code>{ id = 1 }</code> creates a new table instance in
+memory upon execution, accessing the array with an anonymous table
+literal results in <code>nil</code>. A lookup succeeds only if the exact
+same reference is supplied.</p>
+<p>Functions follow the exact same rule. Assigning an entry to a
+function reference requires that precise reference for subsequent
+retrieval. If a function is defined inside a loop or closure generator,
+each generated closure is a distinct instance with its own
+reference:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">handlers</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> createHandler<span class="op">()</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">function</span><span class="op">()</span> <span class="kw">end</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">fn1</span> <span class="op">=</span> createHandler<span class="op">()</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">fn2</span> <span class="op">=</span> createHandler<span class="op">()</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="va">handlers</span><span class="op">[</span><span class="va">fn1</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;Active&quot;</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">handlers</span><span class="op">[</span><span class="va">fn1</span><span class="op">])</span> <span class="co">-- Outputs: Active</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">handlers</span><span class="op">[</span><span class="va">fn2</span><span class="op">])</span> <span class="co">-- Outputs: nil</span></span></code></pre></div>
+<h3 id="bypass-of-the-__eq-metamethod">Bypass of the <code>__eq</code>
+Metamethod</h3>
+<p>In Lua, developers can customize equality checks between two tables
+by defining the <code>__eq</code> metamethod. However, Lua completely
+bypasses <code>__eq</code> during internal table indexing and
+associative lookups.</p>
+<p>The hash table implementation relies entirely on raw equality
+(<code>rawequal</code>). Even if two distinct tables implement a
+metatable where <code>__eq</code> returns <code>true</code>, Lua treats
+them as separate keys in an associative array. This design choice
+ensures internal consistency and avoids performance degradation, as
+invoking Lua-level metamethods during low-level hash collisions would
+introduce significant overhead and recursive complexity.</p>
+<h3 id="hashing-mechanics-and-lookup-performance">Hashing Mechanics and
+Lookup Performance</h3>
+<p>Internally, Lua tables consist of an array part and a hash part.
+Lookups for non-string objects occur within the hash part.</p>
+<p>When a table or function serves as a key, Lua hashes the internal
+pointer address of that object. Because pointers are fixed integers
+representing memory locations, computing the hash of a table or function
+is instantaneous and requires no traversal of elements or bytecode
+analysis. Consequently, lookups using tables or functions as keys
+operate at constant amortized time, <span
+class="math inline">\(O(1)\)</span>, matching the performance of integer
+and string key operations.</p>
+<h3 id="garbage-collection-and-weak-tables">Garbage Collection and Weak
+Tables</h3>
+<p>Using objects as keys directly impacts the Lua garbage collector.
+Under standard behavior, storing an object as a key creates a strong
+reference to that object, preventing it from being collected even if all
+other references to it elsewhere in the program have gone out of
+scope.</p>
+<p>To associate metadata with tables or functions without preventing
+their destruction, Lua provides weak tables. By configuring the
+<code>__mode</code> field in a metatable to <code>"k"</code>, the table
+is marked to have weak keys:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">metadata</span> <span class="op">=</span> <span class="fu">setmetatable</span><span class="op">({},</span> <span class="op">{</span> <span class="bu">__mode</span> <span class="op">=</span> <span class="st">&quot;k&quot;</span> <span class="op">})</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="cf">do</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">obj</span> <span class="op">=</span> <span class="op">{</span> <span class="va">data</span> <span class="op">=</span> <span class="st">&quot;sensitive&quot;</span> <span class="op">}</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">metadata</span><span class="op">[</span><span class="va">obj</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;additional info&quot;</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- obj is valid here</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- At this point, obj has no strong references outside &#39;metadata&#39;.</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">()</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co">-- metadata[obj] has been automatically removed by the collector</span></span></code></pre></div>
+<p>In a table with weak keys, if the only remaining reference to a table
+or function is its role as a key, the garbage collector reclaims the
+object and automatically purges the corresponding key-value pair from
+the associative array.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coroutine.create vs Coroutine.wrap in Lua - lua</title>
+    <meta name="description" content="In Lua, both coroutine.create and coroutine.wrap instantiate coroutines for cooperative multitasking, but they differ significantly in how they are invoked, how they return values, and how they handle errors. While coroutine.create provides low-level cont">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/coroutine-create-vs-coroutine-wrap-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Coroutine.create vs Coroutine.wrap in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/coroutine-create-vs-coroutine-wrap-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, both coroutine.create and coroutine.wrap instantiate coroutines for cooperative multitasking, but they differ significantly in how they are invoked, how they return values, and how they handle errors. While coroutine.create provides low-level cont" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="coroutinecreate-vs-coroutinewrap-in-lua">Coroutine.create vs
+Coroutine.wrap in Lua</h1>
+<p>In Lua, both <code>coroutine.create</code> and
+<code>coroutine.wrap</code> instantiate coroutines for cooperative
+multitasking, but they differ significantly in how they are invoked, how
+they return values, and how they handle errors. While
+<code>coroutine.create</code> provides low-level control by returning a
+thread object that requires explicit management via
+<code>coroutine.resume</code>, <code>coroutine.wrap</code> offers a
+higher-level abstraction by returning a callable function that conceals
+the underlying thread mechanics.</p>
+<h3 id="return-type-and-invocation">Return Type and Invocation</h3>
+<p>The most apparent distinction between the two functions is the type
+of value returned upon creation:</p>
+<ul>
+<li><strong><code>coroutine.create(fn)</code></strong> returns an object
+of type <code>thread</code>. To execute or continue the coroutine, you
+must pass this thread handle to
+<code>coroutine.resume(co, ...)</code>.</li>
+<li><strong><code>coroutine.wrap(fn)</code></strong> returns a standard
+Lua function. Resuming the coroutine is achieved by calling the returned
+function directly, such as <code>my_coroutine(...)</code>, without
+referencing the <code>coroutine</code> library again.</li>
+</ul>
+<h3 id="error-handling">Error Handling</h3>
+<p>The two functions handle runtime errors inside the coroutine in
+fundamentally different ways:</p>
+<ul>
+<li><strong>Protected Mode (<code>coroutine.create</code>):</strong>
+Resuming a thread created with <code>coroutine.create</code> behaves
+like a protected call (<code>pcall</code>).
+<code>coroutine.resume</code> intercepts errors instead of crashing the
+program. Its first return value is always a boolean: <code>true</code>
+if execution succeeded, or <code>false</code> if an error occurred. In
+the event of an error, the second return value contains the error
+message.</li>
+<li><strong>Direct Propagation (<code>coroutine.wrap</code>):</strong>
+The function returned by <code>coroutine.wrap</code> does not capture
+errors. If an error occurs inside the coroutine, Lua halts execution and
+throws an unhandled error at the call site, precisely as a normal
+function call would.</li>
+</ul>
+<h3 id="return-values-on-success">Return Values on Success</h3>
+<p>Because <code>coroutine.create</code> relies on
+<code>coroutine.resume</code>, its return values always include the
+status flag:</p>
+<ul>
+<li><strong><code>coroutine.create</code>:</strong> When the coroutine
+yields or completes, <code>coroutine.resume</code> returns
+<code>true</code> followed by any arguments passed to
+<code>coroutine.yield()</code> or returned by the main coroutine
+function.</li>
+<li><strong><code>coroutine.wrap</code>:</strong> The wrapper function
+omits any status boolean and returns only the yielded or returned values
+directly.</li>
+</ul>
+<h3 id="introspection-and-state-tracking">Introspection and State
+Tracking</h3>
+<p>Thread objects created with <code>coroutine.create</code> can be
+inspected at any point using <code>coroutine.status(co)</code>, which
+reports states such as <code>"suspended"</code>, <code>"running"</code>,
+<code>"normal"</code>, or <code>"dead"</code>.</p>
+<p>In contrast, <code>coroutine.wrap</code> hides the underlying thread
+object inside a closure. Because the caller only receives a function
+handle, <code>coroutine.status</code> cannot be used directly to monitor
+its lifecycle.</p>
+<h3 id="practical-use-cases">Practical Use Cases</h3>
+<ul>
+<li><strong>Use <code>coroutine.wrap</code></strong> when writing custom
+iterators for <code>for</code> loops or when you want coroutines to
+blend seamlessly into interfaces that expect regular functions.</li>
+<li><strong>Use <code>coroutine.create</code></strong> when building
+complex concurrency systems, schedulers, or state machines where you
+must inspect the thread's status and handle errors gracefully without
+aborting execution.</li>
+</ul></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

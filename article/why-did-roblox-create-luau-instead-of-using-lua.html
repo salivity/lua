@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why Did Roblox Create Luau Instead of Using Lua? - lua</title>
+    <meta name="description" content="Roblox developed Luau—a fast, typed derivative of Lua 5.1—because the standard PUC-Rio Lua implementation could no longer meet the platform&#39;s scaling, security, and performance demands. While standard Lua provided a lightweight, embeddable scripting engin">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-did-roblox-create-luau-instead-of-using-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why Did Roblox Create Luau Instead of Using Lua? - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-did-roblox-create-luau-instead-of-using-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Roblox developed Luau—a fast, typed derivative of Lua 5.1—because the standard PUC-Rio Lua implementation could no longer meet the platform&#39;s scaling, security, and performance demands. While standard Lua provided a lightweight, embeddable scripting engin" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-did-roblox-create-luau-instead-of-using-lua">Why Did Roblox
+Create Luau Instead of Using Lua?</h1>
+<p>Roblox developed Luau—a fast, typed derivative of Lua 5.1—because the
+standard PUC-Rio Lua implementation could no longer meet the platform's
+scaling, security, and performance demands. While standard Lua provided
+a lightweight, embeddable scripting engine during Roblox's early years,
+the growth of complex, developer-built 3D experiences revealed
+significant bottlenecks. Luau was engineered to introduce gradual
+typing, aggressive interpreter performance optimizations, cross-platform
+security hardening, and modern syntax features while preserving absolute
+backward compatibility for billions of existing Roblox scripts.</p>
+<h3 id="severe-performance-bottlenecks">Severe Performance
+Bottlenecks</h3>
+<p>Standard PUC-Rio Lua relies on a relatively straightforward bytecode
+interpreter. As Roblox games evolved from basic scripts into complex
+simulations with custom physics, animation systems, and UI logic, the
+CPU overhead of standard Lua became a major limiter.</p>
+<p>While alternative solutions like LuaJIT offer near-native execution
+speed through Just-In-Time compilation, LuaJIT was unsuitable for
+Roblox. Many key platforms—most notably iOS and various game
+consoles—strictly forbid writable, executable memory pages for security
+reasons, making JIT compilation impossible. Furthermore, LuaJIT is
+difficult to maintain and extend across diverse hardware
+architectures.</p>
+<p>Roblox built Luau to include a heavily optimized bytecode
+interpreter, custom vector math optimizations native to the VM, and
+eventually an Ahead-of-Time (AOT) and platform-compliant native code
+generator. This architecture delivers massive performance gains without
+violating platform security policies.</p>
+<h3 id="need-for-type-safety-and-tooling">Need for Type Safety and
+Tooling</h3>
+<p>PUC-Rio Lua is a dynamically typed language. In large-scale
+codebases, dynamic typing often leads to runtime errors that could
+otherwise be caught during development.</p>
+<p>Luau solved this by introducing an optional, gradual type system.
+Developers can write code with explicit type annotations or rely on
+Luau’s type inference engine. This enables:</p>
+<ul>
+<li>Compile-time bug detection before code executes.</li>
+<li>IDE autocompletion and Language Server Protocol (LSP)
+integration.</li>
+<li>Smarter compiler optimizations derived from known types.</li>
+</ul>
+<h3 id="sandboxing-and-security-requirements">Sandboxing and Security
+Requirements</h3>
+<p>Roblox runs untrusted, user-generated code on both client devices and
+central game servers. Standard Lua lacks fine-grained safeguards against
+resource exhaustion attacks, such as scripts allocating unbounded memory
+or locking CPU threads inside infinite loops.</p>
+<p>Luau redesigns the runtime environment with native sandboxing:</p>
+<ul>
+<li><strong>Interrupt Handlers:</strong> The VM can pause or terminate
+runaway execution threads without destabilizing the host engine.</li>
+<li><strong>Memory Tracking:</strong> The host engine can strictly track
+and limit allocations per script.</li>
+<li><strong>Deterministic Limits:</strong> Call stacks and recursion
+depths are strictly governed to prevent stack overflow exploits.</li>
+</ul>
+<h3 id="complete-control-over-compatibility">Complete Control Over
+Compatibility</h3>
+<p>The PUC-Rio Lua team routinely introduces breaking changes between
+major versions (such as differences between 5.1, 5.2, 5.3, and 5.4).
+Upgrading to a newer PUC-Rio version would have broken millions of
+legacy games published on Roblox over the past two decades.</p>
+<p>By completely forking and building Luau in-house, Roblox decoupled
+itself from upstream language changes. The company gained full control
+over language evolution, allowing them to add modern quality-of-life
+syntax—such as compound assignments (<code>+=</code>, <code>-=</code>),
+string interpolation, the <code>continue</code> keyword, and generalized
+iteration—while ensuring that code written in 2008 continues to run
+alongside code written today.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

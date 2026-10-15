@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua os.tmpname Works Across Platforms - lua</title>
+    <meta name="description" content="This article explores how the Lua programming language generates temporary file identifiers using the standard os.tmpname function across different operating systems. It covers the underlying reliance on the ISO C standard library, platform-specific path">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-os-tmpname-works-across-platforms">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua os.tmpname Works Across Platforms - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-os-tmpname-works-across-platforms" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how the Lua programming language generates temporary file identifiers using the standard os.tmpname function across different operating systems. It covers the underlying reliance on the ISO C standard library, platform-specific path" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-ostmpname-works-across-platforms">How Lua os.tmpname
+Works Across Platforms</h1>
+<p>This article explores how the Lua programming language generates
+temporary file identifiers using the standard <code>os.tmpname</code>
+function across different operating systems. It covers the underlying
+reliance on the ISO C standard library, platform-specific path formats,
+security implications such as race conditions, and how behavior diverges
+between POSIX systems and Windows.</p>
+<h2 id="the-c-runtime-foundation">The C Runtime Foundation</h2>
+<p>Lua is designed to be lightweight and highly portable, relying
+directly on the standard ANSI/ISO C runtime library for its operating
+system interfaces. The <code>os.tmpname</code> function is a direct
+wrapper around the standard C library function
+<code>tmpnam()</code>.</p>
+<p>When called in Lua, <code>os.tmpname()</code> takes no arguments and
+returns a string representing a file path that does not match the name
+of any existing file at the time of generation:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">temp_path</span> <span class="op">=</span> <span class="fu">os.tmpname</span><span class="op">()</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">temp_path</span><span class="op">)</span></span></code></pre></div>
+<p>Because Lua delegates this process to the underlying C implementation
+rather than maintaining its own filename generation logic, the
+structure, location, and behavior of the generated identifier depend
+entirely on the host operating system's C runtime (CRT).</p>
+<h2 id="generation-on-posix-platforms-linux-and-macos">Generation on
+POSIX Platforms (Linux and macOS)</h2>
+<p>On Unix-like platforms such as Linux and macOS, the C
+<code>tmpnam()</code> implementation generates absolute file paths
+rooted in a standard temporary directory, commonly defined by the C
+macro <code>P_tmpdir</code> (typically <code>/tmp</code>).</p>
+<ol type="1">
+<li><strong>Path Construction:</strong> The generated identifier usually
+looks like <code>/tmp/lua_XXXXXX</code> or <code>/tmp/fileXXXXXX</code>,
+where <code>XXXXXX</code> is derived using a mix of the process
+identifier (PID), a timestamp, and an internal counter or pseudo-random
+characters.</li>
+<li><strong>File State:</strong> The function produces only a valid path
+string; it does not open or create the file on the filesystem.</li>
+<li><strong>Compiler Warnings:</strong> Because <code>tmpnam</code>
+creates a name without atomically reserving the file, modern POSIX
+linkers often produce a compile-time warning (e.g.,
+<code>"warning: the use of tmpnam is dangerous"</code>) when building
+the Lua interpreter, flagging the potential for Time-of-Check to
+Time-of-Use (TOCTOU) race conditions.</li>
+</ol>
+<h2 id="generation-on-windows">Generation on Windows</h2>
+<p>On Microsoft Windows environments (using the Microsoft Visual C++ CRT
+or MinGW), <code>os.tmpname</code> behaves noticeably different from its
+Unix counterpart:</p>
+<ol type="1">
+<li><strong>Root Directory Behavior:</strong> Standard Windows CRT
+implementations of <code>tmpnam</code> often generate paths relative to
+the root of the current working drive (for example, <code>\s12a.4</code>
+or <code>\text.1</code>), rather than resolving the user's defined
+<code>%TEMP%</code> or <code>%TMP%</code> environment directories.</li>
+<li><strong>Permissions Issues:</strong> Because the path defaults to
+the root of the active drive (such as <code>C:\</code>), standard
+non-administrative users may lack the write permissions required to
+create a file using the returned path string.</li>
+<li><strong>File Prefixing:</strong> Some Windows C runtimes may
+automatically generate a zero-byte placeholder file to prevent
+collisions, while others merely return the reserved string, requiring
+explicit creation by the programmer via <code>io.open</code>.</li>
+</ol>
+<h2 id="security-implications-and-limitations">Security Implications and
+Limitations</h2>
+<p>Relying on <code>os.tmpname</code> introduces specific operational
+vulnerabilities due to the decoupling of name generation and file
+creation:</p>
+<ul>
+<li><strong>Race Conditions (TOCTOU):</strong> In the interval between
+when <code>os.tmpname</code> returns a filename and when the Lua script
+opens that file via <code>io.open(name, "w")</code>, another process can
+create a file or symlink with that exact name, potentially hijacking
+data or leading to privilege escalation.</li>
+<li><strong>Cleanup Responsibility:</strong> Files created via paths
+generated by <code>os.tmpname</code> persist on the filesystem until
+explicitly removed using <code>os.remove(name)</code>.</li>
+</ul>
+<h2 id="alternatives-in-lua">Alternatives in Lua</h2>
+<p>For applications where secure file creation or automatic cleanup is
+required, Lua provides the <code>io.tmpfile()</code> function. Unlike
+<code>os.tmpname</code>, <code>io.tmpfile()</code> delegates to the C
+<code>tmpfile()</code> function, which securely creates and opens an
+anonymous temporary file in read/write binary mode (<code>w+b</code>).
+This file is automatically deleted when it is closed or when the Lua
+program terminates, mitigating race conditions and avoiding directory
+permission conflicts across both POSIX and Windows platforms.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

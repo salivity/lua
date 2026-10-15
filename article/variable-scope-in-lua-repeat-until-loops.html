@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Variable Scope in Lua Repeat Until Loops - lua</title>
+    <meta name="description" content="In the Lua programming language, the repeat ... until loop features a unique scoping rule where the termination condition is considered part of the loop&#39;s inner scope. Unlike loops in many other languages where variables defined inside the loop body canno">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/variable-scope-in-lua-repeat-until-loops">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Variable Scope in Lua Repeat Until Loops - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/variable-scope-in-lua-repeat-until-loops" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the repeat ... until loop features a unique scoping rule where the termination condition is considered part of the loop&#39;s inner scope. Unlike loops in many other languages where variables defined inside the loop body canno" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="variable-scope-in-lua-repeat-until-loops">Variable Scope in Lua
+Repeat Until Loops</h1>
+<p>In the Lua programming language, the <code>repeat ... until</code>
+loop features a unique scoping rule where the termination condition is
+considered part of the loop's inner scope. Unlike loops in many other
+languages where variables defined inside the loop body cannot be seen by
+the exit condition, Lua extends the lexical scope of the loop block
+through the <code>until</code> clause. This allows variables declared
+locally inside the body of the loop to be directly accessed and
+evaluated within the termination condition without requiring declaration
+outside the loop.</p>
+<h2 id="lexical-scoping-in-the-termination-condition">Lexical Scoping in
+the Termination Condition</h2>
+<p>According to the Lua reference manual, a block in a
+<code>repeat ... until</code> statement does not end at the
+<code>until</code> keyword; it ends after the condition expression
+itself.</p>
+<p>Because the condition is technically evaluated inside the scope of
+the loop block, any local variable declared using the <code>local</code>
+keyword anywhere within the loop remains in scope for the
+<code>until</code> evaluation:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="cf">repeat</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">input</span> <span class="op">=</span> <span class="fu">io.read</span><span class="op">()</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">isValid</span> <span class="op">=</span> <span class="op">(</span><span class="va">input</span> <span class="op">~=</span> <span class="st">&quot;&quot;</span><span class="op">)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="cf">until</span> <span class="va">isValid</span></span></code></pre></div>
+<p>In this example, both <code>input</code> and <code>isValid</code> are
+declared within the loop body. In languages like C, C++, or Java, a
+similar <code>do ... while</code> construct would produce a compilation
+error because block-scoped variables fall out of scope before the
+condition is reached. Lua treats the condition as the final statement
+within the local scope of that iteration.</p>
+<h2 id="iteration-lifecycles">Iteration Lifecycles</h2>
+<p>Although the condition has access to loop-local variables, each cycle
+of a <code>repeat ... until</code> statement is an independent iteration
+with its own fresh local scope:</p>
+<ol type="1">
+<li>When the loop starts an iteration, local variables are allocated and
+initialized.</li>
+<li>The body executes.</li>
+<li>The <code>until</code> condition evaluates the local variables bound
+to that specific iteration.</li>
+<li>If the condition evaluates to <code>false</code> or
+<code>nil</code>, the iteration ends, the local variables are destroyed
+(or left for garbage collection if not captured in a closure), and a new
+scope begins for the next iteration.</li>
+</ol>
+<h2 id="contrast-with-the-while-loop">Contrast with the
+<code>while</code> Loop</h2>
+<p>The behavior of <code>repeat ... until</code> contrasts with Lua's
+<code>while ... do ... end</code> loop. In a <code>while</code> loop,
+the condition precedes the block:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- This will cause an error or reference a global:</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="cf">while</span> <span class="kw">not</span> <span class="va">done</span> <span class="cf">do</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">done</span> <span class="op">=</span> checkStatus<span class="op">()</span> <span class="co">-- &#39;done&#39; cannot be seen by the while condition</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>To make a variable accessible to a <code>while</code> condition, it
+must be declared in an outer scope before the loop begins. The
+<code>repeat ... until</code> construct eliminates this requirement,
+preventing unnecessary variable pollution in the enclosing scope.</p>
+<h2 id="practical-advantages">Practical Advantages</h2>
+<p>This scoping design simplifies code patterns involving user input,
+polling, and retry mechanisms. Developers can encapsulate transient
+data, calculations, and exit flags entirely within the loop
+structure:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">attempts</span> <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="cf">repeat</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">attempts</span> <span class="op">=</span> <span class="va">attempts</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">response</span> <span class="op">=</span> <span class="fu">pcall</span><span class="op">(</span><span class="va">fetchData</span><span class="op">)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="cf">until</span> <span class="va">success</span> <span class="kw">or</span> <span class="va">attempts</span> <span class="op">&gt;=</span> <span class="dv">3</span></span></code></pre></div>
+<p>Here, <code>success</code> and <code>response</code> exist only
+within the context of the loop execution, maintaining clean boundaries
+and preventing external scopes from retaining stale state.</p></article>
+        <div id="comments-container"></div>
+        <script>
+            const utterancesScript = document.createElement('script');
+            utterancesScript.setAttribute('src', 'https://utteranc.es/client.js');
+            utterancesScript.setAttribute('repo', 'salivity/lua'); 
+            utterancesScript.setAttribute('issue-term', 'pathname'); 
+            const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            utterancesScript.setAttribute('theme', currentTheme === 'dark' ? 'github-dark' : 'github-light'); 
+            utterancesScript.setAttribute('crossorigin', 'anonymous');
+            utterancesScript.async = true;
+            document.getElementById('comments-container').appendChild(utterancesScript);
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>
