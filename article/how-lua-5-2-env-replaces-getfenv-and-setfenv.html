@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua 5.2 _ENV Replaces getfenv and setfenv - lua</title>
+    <meta name="description" content="In Lua 5.1, variable scope and sandboxing relied on dynamic runtime inspection through the getfenv and setfenv functions, which manipulated the environment tables assigned to functions or execution stack levels. Lua 5.2 eliminated these functions and intr">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-5-2-env-replaces-getfenv-and-setfenv">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua 5.2 _ENV Replaces getfenv and setfenv - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-5-2-env-replaces-getfenv-and-setfenv" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua 5.1, variable scope and sandboxing relied on dynamic runtime inspection through the getfenv and setfenv functions, which manipulated the environment tables assigned to functions or execution stack levels. Lua 5.2 eliminated these functions and intr" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-52-_env-replaces-getfenv-and-setfenv">How Lua 5.2 _ENV
+Replaces getfenv and setfenv</h1>
+<p>In Lua 5.1, variable scope and sandboxing relied on dynamic runtime
+inspection through the <code>getfenv</code> and <code>setfenv</code>
+functions, which manipulated the environment tables assigned to
+functions or execution stack levels. Lua 5.2 eliminated these functions
+and introduced lexical scoping for environments through the special
+variable <code>_ENV</code>. This article explains how the transition
+from dynamic function environments to the lexically scoped
+<code>_ENV</code> table works, why this change was made, and how to
+adapt legacy environment-manipulation patterns to modern Lua.</p>
+<h3 id="the-legacy-model-getfenv-and-setfenv">The Legacy Model:
+<code>getfenv</code> and <code>setfenv</code></h3>
+<p>In Lua 5.1 and earlier, every function had an associated environment
+table. By default, this was the global table <code>_G</code>. The global
+lookup mechanism worked at runtime: when a function accessed an
+undeclared variable, the Lua virtual machine looked up the variable name
+in that function's associated environment table.</p>
+<p>Developers modified these environments using
+<code>setfenv</code>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Lua 5.1</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> sandbox<span class="op">()</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Inside sandbox&quot;</span><span class="op">)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">custom_env</span> <span class="op">=</span> <span class="op">{</span> <span class="fu">print</span> <span class="op">=</span> <span class="fu">print</span> <span class="op">}</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>setfenv<span class="op">(</span><span class="va">sandbox</span><span class="op">,</span> <span class="va">custom_env</span><span class="op">)</span></span></code></pre></div>
+<p><code>setfenv</code> could also accept a stack level as its first
+argument (e.g., <code>setfenv(1, new_env)</code>). This allowed a
+function to mutate the environment of its caller at runtime.</p>
+<p>While flexible, this model had major disadvantages:</p>
+<ul>
+<li><strong>Optimization barriers:</strong> Because any function could
+arbitrarily alter the environment of any call frame on the stack, the
+compiler and Just-In-Time (JIT) engines could not safely optimize
+variable lookups.</li>
+<li><strong>Security vulnerabilities:</strong> A sandboxed function
+could use stack-based <code>setfenv</code> or <code>getfenv</code> to
+escape its restricted environment and alter parent frames.</li>
+<li><strong>Violation of lexical scoping:</strong> Variable resolution
+depended on runtime call stacks rather than where code was written in
+the source text.</li>
+</ul>
+<h3 id="the-modern-paradigm-_env-as-a-lexical-upvalue">The Modern
+Paradigm: <code>_ENV</code> as a Lexical Upvalue</h3>
+<p>Lua 5.2 resolved these problems by turning the concept of an
+"environment" from a dynamic runtime attribute into a purely lexical
+compile-time mechanism.</p>
+<p>In Lua 5.2 and later, there is no internal concept of a "global
+variable." Instead, the compiler automatically rewrites any access to an
+undeclared variable <code>var</code> as an indexing operation on a
+variable named <code>_ENV</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- What you write:</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="va">x</span> <span class="op">=</span> <span class="dv">10</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- What the compiler translates it to:</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="cn">_ENV</span><span class="op">.</span><span class="va">x</span> <span class="op">=</span> <span class="dv">10</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="cn">_ENV</span><span class="op">.</span>print<span class="op">(</span><span class="cn">_ENV</span><span class="op">.</span><span class="va">x</span><span class="op">)</span></span></code></pre></div>
+<p>When Lua compiles a chunk of code, it implicitly wraps the entire
+chunk in a vararg function with a single external local variable (an
+upvalue) named <code>_ENV</code>:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="kw">function</span><span class="op">(...)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="cn">_ENV</span> <span class="op">=</span> <span class="op">...</span> <span class="co">-- initialized to the global environment table</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Your chunk&#39;s code runs here</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Because <code>_ENV</code> is an ordinary variable, it follows
+standard Lua lexical scoping rules.</p>
+<h3 id="how-_env-replaces-setfenv">How <code>_ENV</code> Replaces
+<code>setfenv</code></h3>
+<p>Under the modern model, changing an environment is accomplished by
+declaring a new <code>_ENV</code> variable within a specific scope or
+passing an environment table when loading code.</p>
+<h4 id="1-lexical-scoping-and-shadowing">1. Lexical Scoping and
+Shadowing</h4>
+<p>To change the environment for a block of code, you shadow
+<code>_ENV</code> with a local variable:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">custom_env</span> <span class="op">=</span> <span class="op">{</span> <span class="fu">print</span> <span class="op">=</span> <span class="fu">print</span><span class="op">,</span> <span class="va">message</span> <span class="op">=</span> <span class="st">&quot;Sandboxed&quot;</span> <span class="op">}</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> run<span class="op">()</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="cn">_ENV</span> <span class="op">=</span> <span class="va">custom_env</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">message</span><span class="op">)</span> <span class="co">-- Resolves to custom_env.print(custom_env.message)</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>run<span class="op">()</span></span></code></pre></div>
+<p>Any code inside <code>run</code> that resolves global names now uses
+<code>custom_env</code>. The surrounding environment remains
+untouched.</p>
+<h4 id="2-sandboxing-dynamically-loaded-code">2. Sandboxing Dynamically
+Loaded Code</h4>
+<p>In Lua 5.1, sandboxing external code required loading the chunk and
+then calling <code>setfenv</code>:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Lua 5.1 pattern</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">chunk</span> <span class="op">=</span> <span class="fu">loadfile</span><span class="op">(</span><span class="st">&quot;script.lua&quot;</span><span class="op">)</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>setfenv<span class="op">(</span><span class="va">chunk</span><span class="op">,</span> <span class="va">sandbox_env</span><span class="op">)</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>chunk<span class="op">()</span></span></code></pre></div>
+<p>In Lua 5.2+, the <code>load</code> and <code>loadfile</code>
+functions accept an optional parameter directly defining the chunk's
+initial <code>_ENV</code> upvalue:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Lua 5.2+ pattern</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">chunk</span> <span class="op">=</span> <span class="fu">loadfile</span><span class="op">(</span><span class="st">&quot;script.lua&quot;</span><span class="op">,</span> <span class="st">&quot;bt&quot;</span><span class="op">,</span> <span class="va">sandbox_env</span><span class="op">)</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>chunk<span class="op">()</span></span></code></pre></div>
+<p>This ensures that the loaded chunk never has access to the standard
+global environment, closing security gaps before execution begins.</p>
+<h3 id="how-_env-replaces-getfenv">How <code>_ENV</code> Replaces
+<code>getfenv</code></h3>
+<p>In Lua 5.1, <code>getfenv()</code> was commonly used to inspect the
+current environment or determine what global state a function was
+using.</p>
+<p>In Lua 5.2+:</p>
+<ul>
+<li>To get the current environment, reference <code>_ENV</code>
+directly.</li>
+<li>To inspect or manipulate the environment of an existing closure, use
+the <code>debug</code> library to interact with its upvalues:</li>
+</ul>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> get_function_env<span class="op">(</span><span class="va">fn</span><span class="op">)</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">while</span> <span class="kw">true</span> <span class="cf">do</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">name</span><span class="op">,</span> <span class="va">val</span> <span class="op">=</span> <span class="fu">debug.getupvalue</span><span class="op">(</span><span class="va">fn</span><span class="op">,</span> <span class="va">i</span><span class="op">)</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> <span class="va">name</span> <span class="cf">then</span> <span class="cf">break</span> <span class="cf">end</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">name</span> <span class="op">==</span> <span class="st">&quot;_ENV&quot;</span> <span class="cf">then</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="va">val</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">i</span> <span class="op">=</span> <span class="va">i</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">nil</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Using <code>debug.upvaluejoin</code> and
+<code>debug.setupvalue</code>, external environments can still be
+changed if strictly necessary, but this functionality is isolated to
+debugging contexts rather than everyday program logic.</p>
+<h3 id="summary">Summary</h3>
+<p>The introduction of <code>_ENV</code> in Lua 5.2 eliminated runtime
+stack manipulation by translating all global accesses to lexical
+operations on <code>_ENV</code>. By replacing <code>setfenv</code> and
+<code>getfenv</code> with lexical shadowing and the <code>load</code>
+function's environment parameter, Lua achieved greater execution speed,
+stricter sandboxing security, and consistency with its lexical scoping
+rules.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-5-2-env-replaces-getfenv-and-setfenv';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

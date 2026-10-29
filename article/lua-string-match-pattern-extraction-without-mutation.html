@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua string.match: Pattern Extraction Without Mutation - lua</title>
+    <meta name="description" content="In the Lua programming language, the string.match function extracts substrings by scanning an input string against a specified pattern and returning the matched segments without altering the original source data. This non-destructive behavior is rooted in">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-string-match-pattern-extraction-without-mutation">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua string.match: Pattern Extraction Without Mutation - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-string-match-pattern-extraction-without-mutation" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the string.match function extracts substrings by scanning an input string against a specified pattern and returning the matched segments without altering the original source data. This non-destructive behavior is rooted in" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-stringmatch-pattern-extraction-without-mutation">Lua
+string.match: Pattern Extraction Without Mutation</h1>
+<p>In the Lua programming language, the <code>string.match</code>
+function extracts substrings by scanning an input string against a
+specified pattern and returning the matched segments without altering
+the original source data. This non-destructive behavior is rooted in
+Lua's core architecture, where all strings are strictly immutable and
+pattern operations are read-only. This article explains the internal
+mechanics of <code>string.match</code>, how it identifies and retrieves
+captured patterns, and why the source data is guaranteed to remain
+untouched throughout the extraction process.</p>
+<h3 id="string-immutability-in-lua">String Immutability in Lua</h3>
+<p>To understand why <code>string.match</code> does not modify source
+data, one must understand how Lua handles strings. In Lua, strings are
+immutable values and are interned into a central hash table. Once a
+string is created, its byte sequence cannot be modified, resized, or
+overwritten in place by any standard library function. Whenever a
+function appears to change a string, it actually constructs an entirely
+new string in memory and returns a reference to that new object. Because
+the underlying memory of the source string cannot be written to,
+operations like <code>string.match</code> are structurally incapable of
+mutating their input.</p>
+<h3 id="the-mechanics-of-stringmatch">The Mechanics of
+<code>string.match</code></h3>
+<p>The <code>string.match</code> function takes a source string, a
+pattern, and an optional starting position index:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">string.match</span><span class="op">(</span><span class="va">s</span><span class="op">,</span> <span class="va">pattern</span> <span class="op">[,</span> <span class="va">init</span><span class="op">])</span></span></code></pre></div>
+<p>When invoked, the Lua runtime executes the following sequence:</p>
+<ol type="1">
+<li><strong>Read-Only Traversal:</strong> Lua's pattern-matching engine
+receives a pointer to the source string's byte buffer. Starting from
+index <code>init</code> (defaulting to 1), the engine advances through
+the string byte-by-byte, evaluating the rules defined in the pattern. It
+merely reads and compares characters; it never writes to the
+buffer.</li>
+<li><strong>State Tracking:</strong> The engine maintains internal state
+offsets indicating where a match begins and ends, as well as the
+boundaries of any capture groups defined by parentheses
+<code>()</code>.</li>
+<li><strong>Extraction and Allocation:</strong> Once a match succeeds:
+<ul>
+<li>If the pattern contains captures, <code>string.match</code> copies
+the byte sequences corresponding to each capture group and instantiates
+them as new Lua strings.</li>
+<li>If the pattern contains no captures, it copies the entire matched
+span and instantiates that as a single new Lua string.</li>
+</ul></li>
+<li><strong>Return Execution:</strong> The function returns the newly
+allocated string(s) to the caller. If no match is found, the function
+returns <code>nil</code> without allocating new string objects.</li>
+</ol>
+<h3 id="pattern-extraction-in-practice">Pattern Extraction in
+Practice</h3>
+<p>Consider extracting components from a structured string:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">source</span> <span class="op">=</span> <span class="st">&quot;Status: 200 OK&quot;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">code</span><span class="op">,</span> <span class="va">message</span> <span class="op">=</span> <span class="fu">string.match</span><span class="op">(</span><span class="va">source</span><span class="op">,</span> <span class="st">&quot;(%d+)%s+(%a+)&quot;</span><span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">code</span><span class="op">)</span>    <span class="co">-- Output: 200</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">message</span><span class="op">)</span> <span class="co">-- Output: OK</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">source</span><span class="op">)</span>  <span class="co">-- Output: Status: 200 OK</span></span></code></pre></div>
+<p>During this operation, the variable <code>source</code> remains
+intact. The variables <code>code</code> and <code>message</code> receive
+references to brand-new string objects created from the matched byte
+spans (<code>200</code> and <code>OK</code>). The original variable
+retains its exact identity and memory address, guaranteeing zero side
+effects on the source data.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-string-match-pattern-extraction-without-mutation';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

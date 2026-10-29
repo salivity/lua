@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Native Lua Code Profiling Using debug.sethook - lua</title>
+    <meta name="description" content="Profiling Lua code natively allows developers to diagnose performance bottlenecks without compiling external C extensions or deploying heavyweight third-party tools. By leveraging Lua&#39;s built-in debug.sethook function, the runtime can intercept function c">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/native-lua-code-profiling-using-debug-sethook">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Native Lua Code Profiling Using debug.sethook - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/native-lua-code-profiling-using-debug-sethook" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Profiling Lua code natively allows developers to diagnose performance bottlenecks without compiling external C extensions or deploying heavyweight third-party tools. By leveraging Lua&#39;s built-in debug.sethook function, the runtime can intercept function c" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="native-lua-code-profiling-using-debugsethook">Native Lua Code
+Profiling Using debug.sethook</h1>
+<p>Profiling Lua code natively allows developers to diagnose performance
+bottlenecks without compiling external C extensions or deploying
+heavyweight third-party tools. By leveraging Lua's built-in
+<code>debug.sethook</code> function, the runtime can intercept function
+calls and returns to track execution duration, invocation frequency, and
+call hierarchy directly within pure Lua. This article demonstrates how
+<code>debug.sethook</code> works, provides a complete implementation of
+a functional profiler, and details techniques for managing profiling
+overhead.</p>
+<h2 id="understanding-debugsethook">Understanding debug.sethook</h2>
+<p>The <code>debug.sethook</code> function registers a callback that Lua
+invokes whenever specific runtime events occur. Its signature is:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">debug.sethook</span><span class="op">([</span><span class="va">thread</span><span class="op">,]</span> <span class="va">hook_function</span><span class="op">,</span> <span class="va">mask</span> <span class="op">[,</span> <span class="va">count</span><span class="op">])</span></span></code></pre></div>
+<p>The <code>mask</code> string dictates which execution events trigger
+the hook:</p>
+<ul>
+<li><code>"c"</code>: Invoked every time Lua enters a function
+call.</li>
+<li><code>"r"</code>: Invoked every time Lua exits a function via
+return.</li>
+<li><code>"l"</code>: Invoked every time Lua switches execution to a new
+line of code.</li>
+<li><code>count</code>: An optional integer specifying that the hook
+should run after executing every <em>N</em> virtual machine
+instructions.</li>
+</ul>
+<p>For standard function-level profiling (measuring execution times and
+call counts), setting the mask to <code>"cr"</code> (call and return) is
+the most efficient choice, avoiding the substantial overhead generated
+by <code>"l"</code>.</p>
+<h2 id="architecture-of-a-native-profiler">Architecture of a Native
+Profiler</h2>
+<p>A native profiler requires three primary components:</p>
+<ol type="1">
+<li><strong>A Data Store:</strong> A table aggregating performance
+metrics per function (call count, total execution time, and
+exclusive/self time).</li>
+<li><strong>A Call Stack:</strong> A LIFO (last-in, first-out) data
+structure tracking timestamps and function references during nested
+calls to calculate elapsed intervals upon return.</li>
+<li><strong>The Hook Callback:</strong> A dispatcher that updates the
+call stack on <code>"call"</code> events and tallies elapsed times into
+the data store on <code>"return"</code> events using
+<code>os.clock()</code>.</li>
+</ol>
+<h3 id="implementation">Implementation</h3>
+<p>The following complete script defines, runs, and reports on a
+self-contained Lua profiler:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Profiler</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">records</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">call_stack</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> get_func_id<span class="op">(</span><span class="va">level</span><span class="op">)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">info</span> <span class="op">=</span> <span class="fu">debug.getinfo</span><span class="op">(</span><span class="va">level</span><span class="op">,</span> <span class="st">&quot;nS&quot;</span><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="va">info</span> <span class="cf">then</span> <span class="cf">return</span> <span class="st">&quot;unknown&quot;</span> <span class="cf">end</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">source</span> <span class="op">=</span> <span class="va">info</span><span class="op">.</span><span class="va">short_src</span> <span class="kw">or</span> <span class="va">info</span><span class="op">.</span><span class="va">source</span> <span class="kw">or</span> <span class="st">&quot;?&quot;</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">line</span> <span class="op">=</span> <span class="va">info</span><span class="op">.</span><span class="va">linedefined</span> <span class="kw">or</span> <span class="op">-</span><span class="dv">1</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">name</span> <span class="op">=</span> <span class="va">info</span><span class="op">.</span><span class="va">name</span> <span class="kw">or</span> <span class="st">&quot;(anonymous)&quot;</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;%s:%d [%s]&quot;</span><span class="op">,</span> <span class="va">source</span><span class="op">,</span> <span class="va">line</span><span class="op">,</span> <span class="va">name</span><span class="op">)</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> hook<span class="op">(</span><span class="va">event</span><span class="op">)</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">now</span> <span class="op">=</span> <span class="fu">os.clock</span><span class="op">()</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">event</span> <span class="op">==</span> <span class="st">&quot;call&quot;</span> <span class="kw">or</span> <span class="va">event</span> <span class="op">==</span> <span class="st">&quot;tail call&quot;</span> <span class="cf">then</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- debug.getinfo level 2 points to the function being called</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">func_id</span> <span class="op">=</span> get_func_id<span class="op">(</span><span class="dv">2</span><span class="op">)</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> <span class="va">records</span><span class="op">[</span><span class="va">func_id</span><span class="op">]</span> <span class="cf">then</span></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>            <span class="va">records</span><span class="op">[</span><span class="va">func_id</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span> <span class="va">count</span> <span class="op">=</span> <span class="dv">0</span><span class="op">,</span> <span class="va">total_time</span> <span class="op">=</span> <span class="dv">0</span><span class="op">,</span> <span class="va">self_time</span> <span class="op">=</span> <span class="dv">0</span> <span class="op">}</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>        <span class="va">records</span><span class="op">[</span><span class="va">func_id</span><span class="op">].</span><span class="va">count</span> <span class="op">=</span> <span class="va">records</span><span class="op">[</span><span class="va">func_id</span><span class="op">].</span><span class="va">count</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>        <span class="fu">table.insert</span><span class="op">(</span><span class="va">call_stack</span><span class="op">,</span> <span class="op">{</span></span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>            <span class="va">id</span> <span class="op">=</span> <span class="va">func_id</span><span class="op">,</span></span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>            <span class="va">start_time</span> <span class="op">=</span> <span class="va">now</span><span class="op">,</span></span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>            <span class="va">child_time</span> <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>        <span class="op">})</span></span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>    <span class="cf">elseif</span> <span class="va">event</span> <span class="op">==</span> <span class="st">&quot;return&quot;</span> <span class="cf">then</span></span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">frame</span> <span class="op">=</span> <span class="fu">table.remove</span><span class="op">(</span><span class="va">call_stack</span><span class="op">)</span></span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> <span class="va">frame</span> <span class="cf">then</span> <span class="cf">return</span> <span class="cf">end</span></span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">elapsed</span> <span class="op">=</span> <span class="va">now</span> <span class="op">-</span> <span class="va">frame</span><span class="op">.</span><span class="va">start_time</span></span>
+<span id="cb2-39"><a href="#cb2-39" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">self_time</span> <span class="op">=</span> <span class="va">elapsed</span> <span class="op">-</span> <span class="va">frame</span><span class="op">.</span><span class="va">child_time</span></span>
+<span id="cb2-40"><a href="#cb2-40" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb2-41"><a href="#cb2-41" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Guard against negative delta due to system clock resolution</span></span>
+<span id="cb2-42"><a href="#cb2-42" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">self_time</span> <span class="op">&lt;</span> <span class="dv">0</span> <span class="cf">then</span> <span class="va">self_time</span> <span class="op">=</span> <span class="dv">0</span> <span class="cf">end</span></span>
+<span id="cb2-43"><a href="#cb2-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-44"><a href="#cb2-44" aria-hidden="true" tabindex="-1"></a>        <span class="va">records</span><span class="op">[</span><span class="va">frame</span><span class="op">.</span><span class="va">id</span><span class="op">].</span><span class="va">total_time</span> <span class="op">=</span> <span class="va">records</span><span class="op">[</span><span class="va">frame</span><span class="op">.</span><span class="va">id</span><span class="op">].</span><span class="va">total_time</span> <span class="op">+</span> <span class="va">elapsed</span></span>
+<span id="cb2-45"><a href="#cb2-45" aria-hidden="true" tabindex="-1"></a>        <span class="va">records</span><span class="op">[</span><span class="va">frame</span><span class="op">.</span><span class="va">id</span><span class="op">].</span><span class="va">self_time</span> <span class="op">=</span> <span class="va">records</span><span class="op">[</span><span class="va">frame</span><span class="op">.</span><span class="va">id</span><span class="op">].</span><span class="va">self_time</span> <span class="op">+</span> <span class="va">self_time</span></span>
+<span id="cb2-46"><a href="#cb2-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-47"><a href="#cb2-47" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Propagate child time to the caller frame if one exists</span></span>
+<span id="cb2-48"><a href="#cb2-48" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="op">#</span><span class="va">call_stack</span> <span class="op">&gt;</span> <span class="dv">0</span> <span class="cf">then</span></span>
+<span id="cb2-49"><a href="#cb2-49" aria-hidden="true" tabindex="-1"></a>            <span class="va">call_stack</span><span class="op">[#</span><span class="va">call_stack</span><span class="op">].</span><span class="va">child_time</span> <span class="op">=</span> <span class="va">call_stack</span><span class="op">[#</span><span class="va">call_stack</span><span class="op">].</span><span class="va">child_time</span> <span class="op">+</span> <span class="va">elapsed</span></span>
+<span id="cb2-50"><a href="#cb2-50" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb2-51"><a href="#cb2-51" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-52"><a href="#cb2-52" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-53"><a href="#cb2-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-54"><a href="#cb2-54" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Profiler</span><span class="op">.</span>start<span class="op">()</span></span>
+<span id="cb2-55"><a href="#cb2-55" aria-hidden="true" tabindex="-1"></a>    <span class="va">records</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-56"><a href="#cb2-56" aria-hidden="true" tabindex="-1"></a>    <span class="va">call_stack</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-57"><a href="#cb2-57" aria-hidden="true" tabindex="-1"></a>    <span class="fu">debug.sethook</span><span class="op">(</span><span class="va">hook</span><span class="op">,</span> <span class="st">&quot;cr&quot;</span><span class="op">)</span></span>
+<span id="cb2-58"><a href="#cb2-58" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-59"><a href="#cb2-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-60"><a href="#cb2-60" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Profiler</span><span class="op">.</span>stop<span class="op">()</span></span>
+<span id="cb2-61"><a href="#cb2-61" aria-hidden="true" tabindex="-1"></a>    <span class="fu">debug.sethook</span><span class="op">()</span></span>
+<span id="cb2-62"><a href="#cb2-62" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-63"><a href="#cb2-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-64"><a href="#cb2-64" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Profiler</span><span class="op">.</span>report<span class="op">()</span></span>
+<span id="cb2-65"><a href="#cb2-65" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">sorted</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-66"><a href="#cb2-66" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="va">id</span><span class="op">,</span> <span class="va">data</span> <span class="kw">in</span> <span class="fu">pairs</span><span class="op">(</span><span class="va">records</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb2-67"><a href="#cb2-67" aria-hidden="true" tabindex="-1"></a>        <span class="fu">table.insert</span><span class="op">(</span><span class="va">sorted</span><span class="op">,</span> <span class="op">{</span></span>
+<span id="cb2-68"><a href="#cb2-68" aria-hidden="true" tabindex="-1"></a>            <span class="va">id</span> <span class="op">=</span> <span class="va">id</span><span class="op">,</span></span>
+<span id="cb2-69"><a href="#cb2-69" aria-hidden="true" tabindex="-1"></a>            <span class="va">count</span> <span class="op">=</span> <span class="va">data</span><span class="op">.</span><span class="va">count</span><span class="op">,</span></span>
+<span id="cb2-70"><a href="#cb2-70" aria-hidden="true" tabindex="-1"></a>            <span class="va">total</span> <span class="op">=</span> <span class="va">data</span><span class="op">.</span><span class="va">total_time</span><span class="op">,</span></span>
+<span id="cb2-71"><a href="#cb2-71" aria-hidden="true" tabindex="-1"></a>            <span class="va">self_time</span> <span class="op">=</span> <span class="va">data</span><span class="op">.</span><span class="va">self_time</span></span>
+<span id="cb2-72"><a href="#cb2-72" aria-hidden="true" tabindex="-1"></a>        <span class="op">})</span></span>
+<span id="cb2-73"><a href="#cb2-73" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-74"><a href="#cb2-74" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-75"><a href="#cb2-75" aria-hidden="true" tabindex="-1"></a>    <span class="fu">table.sort</span><span class="op">(</span><span class="va">sorted</span><span class="op">,</span> <span class="kw">function</span><span class="op">(</span><span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">)</span> <span class="cf">return</span> <span class="va">a</span><span class="op">.</span><span class="va">self_time</span> <span class="op">&gt;</span> <span class="va">b</span><span class="op">.</span><span class="va">self_time</span> <span class="kw">end</span><span class="op">)</span></span>
+<span id="cb2-76"><a href="#cb2-76" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-77"><a href="#cb2-77" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;%-45s | %-8s | %-10s | %-10s&quot;</span><span class="op">,</span> <span class="st">&quot;Function&quot;</span><span class="op">,</span> <span class="st">&quot;Calls&quot;</span><span class="op">,</span> <span class="st">&quot;Total (s)&quot;</span><span class="op">,</span> <span class="st">&quot;Self (s)&quot;</span><span class="op">))</span></span>
+<span id="cb2-78"><a href="#cb2-78" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="fu">string.rep</span><span class="op">(</span><span class="st">&quot;-&quot;</span><span class="op">,</span> <span class="dv">80</span><span class="op">))</span></span>
+<span id="cb2-79"><a href="#cb2-79" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="cn">_</span><span class="op">,</span> <span class="va">row</span> <span class="kw">in</span> <span class="fu">ipairs</span><span class="op">(</span><span class="va">sorted</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb2-80"><a href="#cb2-80" aria-hidden="true" tabindex="-1"></a>        <span class="fu">print</span><span class="op">(</span><span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;%-45s | %-8d | %-10.4f | %-10.4f&quot;</span><span class="op">,</span> </span>
+<span id="cb2-81"><a href="#cb2-81" aria-hidden="true" tabindex="-1"></a>            <span class="va">row</span><span class="op">.</span><span class="va">id</span><span class="op">:</span><span class="fu">sub</span><span class="op">(</span><span class="dv">1</span><span class="op">,</span> <span class="dv">45</span><span class="op">),</span> <span class="va">row</span><span class="op">.</span><span class="va">count</span><span class="op">,</span> <span class="va">row</span><span class="op">.</span><span class="va">total</span><span class="op">,</span> <span class="va">row</span><span class="op">.</span><span class="va">self_time</span><span class="op">))</span></span>
+<span id="cb2-82"><a href="#cb2-82" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-83"><a href="#cb2-83" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-84"><a href="#cb2-84" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-85"><a href="#cb2-85" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">Profiler</span></span></code></pre></div>
+<h3 id="usage-example">Usage Example</h3>
+<p>To profile a target block of code, wrap the execution between
+<code>Profiler.start()</code> and <code>Profiler.stop()</code>:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Profiler</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;profiler&quot;</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> heavy_work<span class="op">()</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">sum</span> <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">1e6</span> <span class="cf">do</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">sum</span> <span class="op">=</span> <span class="va">sum</span> <span class="op">+</span> <span class="fu">math.sqrt</span><span class="op">(</span><span class="va">i</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">sum</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> compute<span class="op">()</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    heavy_work<span class="op">()</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    heavy_work<span class="op">()</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="va">Profiler</span><span class="op">.</span>start<span class="op">()</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>compute<span class="op">()</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="va">Profiler</span><span class="op">.</span>stop<span class="op">()</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="va">Profiler</span><span class="op">.</span>report<span class="op">()</span></span></code></pre></div>
+<h2 id="key-considerations-and-limitations">Key Considerations and
+Limitations</h2>
+<h3 id="the-observer-effect">The Observer Effect</h3>
+<p>Executing Lua code within the hook alters the performance
+characteristics of the host program. Running <code>debug.getinfo</code>
+incurs substantial VM overhead on every call. In high-frequency,
+low-latency loops, the measurement overhead can exceed the execution
+time of the functions being measured. To mitigate this:</p>
+<ul>
+<li>Cache metadata: Use the function pointer itself (retrieved via
+<code>debug.getinfo(2, "f").func</code>) as a key in a lookup cache to
+avoid repeating string formatting on every call.</li>
+<li>Avoid inspecting unused fields: Always constrain
+<code>debug.getinfo</code> using the string specifier argument (such as
+<code>"nS"</code>) rather than calling it with no flags.</li>
+</ul>
+<h3 id="clock-resolution">Clock Resolution</h3>
+<p>The standard <code>os.clock()</code> returns CPU time in seconds.
+Depending on the operating system and C runtime implementation, its
+resolution may be coarse (typically between 1 millisecond and 1
+microsecond). Leaf functions that execute in sub-microsecond intervals
+may register as zero seconds unless invoked thousands of times.</p>
+<h3 id="tail-calls">Tail Calls</h3>
+<p>Lua optimizes tail calls by reusing the current stack frame. When a
+tail call occurs, the runtime emits a <code>"tail call"</code> event
+without a corresponding standard <code>"return"</code> event for the
+calling function. Profiler implementations must account for this
+behavior by matching stack depths correctly or capturing the
+<code>"tail call"</code> event to avoid stack imbalance.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/native-lua-code-profiling-using-debug-sethook';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapping Lua string.format to C sprintf - lua</title>
+    <meta name="description" content="Lua’s string.format function provides string interpolation and templating modeled directly after ISO C&#39;s sprintf, sharing the majority of its format specifiers, flags, and precision options. This article outlines how Lua mirrors standard C sprintf behavio">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/mapping-lua-string-format-to-c-sprintf">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Mapping Lua string.format to C sprintf - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/mapping-lua-string-format-to-c-sprintf" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua’s string.format function provides string interpolation and templating modeled directly after ISO C&#39;s sprintf, sharing the majority of its format specifiers, flags, and precision options. This article outlines how Lua mirrors standard C sprintf behavio" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="mapping-lua-stringformat-to-c-sprintf">Mapping Lua string.format
+to C sprintf</h1>
+<p>Lua’s <code>string.format</code> function provides string
+interpolation and templating modeled directly after ISO C's
+<code>sprintf</code>, sharing the majority of its format specifiers,
+flags, and precision options. This article outlines how Lua mirrors
+standard C <code>sprintf</code> behavior, details the common specifiers
+and modifiers, and highlights key distinctions, including Lua-specific
+options, memory safety, and unsupported C constructs.</p>
+<h3 id="core-architectural-relationship">Core Architectural
+Relationship</h3>
+<p>Under the hood, Lua delegates much of <code>string.format</code>'s
+formatting logic directly to the C standard library's formatting
+functions (traditionally <code>sprintf</code> or <code>snprintf</code>).
+When Lua parses the format string, it extracts conversion specifications
+and forwards them, along with the supplied arguments converted to their
+native C representations, to the underlying C runtime.</p>
+<p>Because Lua manages memory dynamically, it eliminates the buffer
+overflow vulnerabilities inherent to classic C <code>sprintf</code>. Lua
+calculates the necessary space or uses dynamic reallocation buffers to
+return a newly created Lua string object without requiring manual buffer
+sizing.</p>
+<h3 id="shared-conversion-specifiers">Shared Conversion Specifiers</h3>
+<p>Lua supports the standard set of C conversion specifiers, mapping
+native Lua types to corresponding C data types:</p>
+<ul>
+<li><strong>Integers (<code>%d</code>, <code>%i</code>, <code>%o</code>,
+<code>%u</code>, <code>%x</code>, <code>%X</code>)</strong>: Format
+integer numbers. Lua converts the number argument to a standard C
+integer type (typically <code>lua_Integer</code>, which is equivalent to
+<code>long long</code> or <code>int64_t</code> in modern 64-bit Lua
+builds). <code>%o</code>, <code>%u</code>, and
+<code>%x</code>/<code>%X</code> format unsigned octal, decimal, and
+hexadecimal representations, respectively.</li>
+<li><strong>Floating-Point Numbers (<code>%f</code>, <code>%e</code>,
+<code>%E</code>, <code>%g</code>, <code>%G</code>, <code>%a</code>,
+<code>%A</code>)</strong>: Format floating-point values. Lua maps these
+to standard C <code>double</code> representations. Modern Lua versions
+(5.3+) also support <code>%a</code> and <code>%A</code> for hexadecimal
+floating-point notation.</li>
+<li><strong>Characters (<code>%c</code>)</strong>: Expects a number
+representing an ASCII or byte code and maps directly to C's
+<code>int</code> character output.</li>
+<li><strong>Strings (<code>%s</code>)</strong>: Expects a Lua string or
+a number (which Lua automatically coerces to a string) and passes it as
+a standard character sequence. Unlike standard C <code>sprintf</code>,
+modern Lua safely formats strings containing embedded null bytes
+(<code>\0</code>).</li>
+</ul>
+<h3 id="flags-width-and-precision-modifiers">Flags, Width, and Precision
+Modifiers</h3>
+<p>Lua reproduces standard C modifier behavior positioned between the
+<code>%</code> character and the conversion letter:</p>
+<ul>
+<li><strong>Flags</strong>: Supports <code>-</code> (left-justify),
+<code>+</code> (always show sign), space (insert a space before positive
+numbers), <code>#</code> (alternative form, such as prefixing
+<code>0x</code> to hex), and <code>0</code> (zero-padding).</li>
+<li><strong>Width</strong>: An integer value defining the minimum field
+width. If the converted value has fewer characters, it is padded on the
+left (or right, if <code>-</code> is used).</li>
+<li><strong>Precision</strong>: Specified with a period (<code>.</code>)
+followed by an integer. For floating-point specifiers (<code>%f</code>,
+<code>%e</code>), it dictates the number of digits after the decimal
+point. For <code>%g</code>, it sets the maximum number of significant
+digits. For integers, it defines the minimum number of digits to appear.
+For <code>%s</code>, it truncates the string to the specified
+length.</li>
+</ul>
+<h3 id="lua-specific-extensions">Lua-Specific Extensions</h3>
+<p>Lua introduces specialized specifiers not present in standard C:</p>
+<ul>
+<li><strong>The <code>%q</code> Specifier</strong>: Safely formats a
+boolean, number, or string between double quotes, escaping newlines,
+double quotes, and control characters. This output can be safely
+evaluated or parsed back into the Lua interpreter via <code>load</code>
+or <code>loadstring</code>.</li>
+<li><strong>The <code>%p</code> Specifier</strong>: While standard C
+formats pointer addresses, Lua adapts <code>%p</code> to output the
+memory address of reference types (tables, functions, userdata, and
+threads).</li>
+</ul>
+<h3 id="differences-and-unsupported-c-features">Differences and
+Unsupported C Features</h3>
+<p>While <code>string.format</code> closely matches
+<code>sprintf</code>, several C features are omitted or modified to
+align with Lua's runtime semantics:</p>
+<ul>
+<li><strong>No Length Modifiers</strong>: Modifiers such as
+<code>h</code>, <code>l</code>, <code>ll</code>, <code>j</code>, or
+<code>z</code> (e.g., <code>%ld</code>, <code>%zu</code>) are not
+supported or needed. Lua automatically chooses the appropriate
+underlying integer or float width based on its build configuration.</li>
+<li><strong>No Dynamic Width/Precision (<code>*</code>)</strong>:
+Standard Lua does not support passing <code>*</code> to specify field
+width or precision via an argument (e.g.,
+<code>string.format("%*d", 5, 42)</code> is invalid in standard Lua).
+Widths and precisions must be hardcoded or concatenated into the format
+string beforehand.</li>
+<li><strong>No <code>%n</code> Specifier</strong>: The C <code>%n</code>
+specifier, which writes the number of characters formatted so far back
+into an integer pointer, is omitted entirely for security and design
+reasons.</li>
+<li><strong>Strict Type Checking</strong>: Unlike C, where passing a
+mismatched type causes undefined behavior, Lua validates argument types
+against the specifier before execution and raises a runtime error on
+mismatch (e.g., passing a table to <code>%d</code>).</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/mapping-lua-string-format-to-c-sprintf';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

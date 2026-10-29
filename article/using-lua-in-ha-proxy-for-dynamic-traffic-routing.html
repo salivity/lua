@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Using Lua in HAProxy for Dynamic Traffic Routing - lua</title>
+    <meta name="description" content="HAProxy leverages an embedded Lua engine to extend its core capabilities, allowing developers to execute custom procedural code directly within the proxy&#39;s event-driven architecture. This article explains how HAProxy uses Lua to inspect payloads, execute">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/using-lua-in-ha-proxy-for-dynamic-traffic-routing">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Using Lua in HAProxy for Dynamic Traffic Routing - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/using-lua-in-ha-proxy-for-dynamic-traffic-routing" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="HAProxy leverages an embedded Lua engine to extend its core capabilities, allowing developers to execute custom procedural code directly within the proxy&#39;s event-driven architecture. This article explains how HAProxy uses Lua to inspect payloads, execute" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="using-lua-in-haproxy-for-dynamic-traffic-routing">Using Lua in
+HAProxy for Dynamic Traffic Routing</h1>
+<p>HAProxy leverages an embedded Lua engine to extend its core
+capabilities, allowing developers to execute custom procedural code
+directly within the proxy's event-driven architecture. This article
+explains how HAProxy uses Lua to inspect payloads, execute non-blocking
+network calls, and dynamically alter routing decisions and traffic
+filters beyond the limitations of standard configuration directives and
+Access Control Lists (ACLs).</p>
+<h3 id="the-embedded-lua-engine-in-haproxy">The Embedded Lua Engine in
+HAProxy</h3>
+<p>HAProxy includes an embedded Lua 5.3+ runtime designed to run
+cooperatively within HAProxy’s single-threaded, event-driven engine.
+Instead of spawning external processes or relying on heavy middleware,
+HAProxy exposes internal hooks and APIs directly to the Lua
+environment.</p>
+<p>To maintain HAProxy's high throughput and low latency, Lua scripts
+run cooperatively. HAProxy provides a custom socket API
+(<code>core.tcp()</code>) that yields execution to the main event loop
+while waiting for I/O operations to complete, preventing external calls
+from blocking other concurrent connections.</p>
+<h3 id="core-mechanisms-for-dynamic-traffic-filtering">Core Mechanisms
+for Dynamic Traffic Filtering</h3>
+<p>Lua interacts with HAProxy traffic through three primary interfaces:
+actions, sample fetches, and converters. For filtering traffic, actions
+and converters are the most commonly employed.</p>
+<ol type="1">
+<li><strong>Custom Action Registration
+(<code>core.register_action</code>)</strong>:<br />
+Lua scripts can register actions that execute during specific processing
+phases, such as <code>http-request</code> or <code>http-response</code>.
+These actions receive a transaction object (<code>txn</code>) that
+allows scripts to:
+<ul>
+<li>Inspect and alter HTTP headers and paths.</li>
+<li>Read request payloads for deep packet inspection.</li>
+<li>Query external datastores (such as Redis or Memcached) to evaluate
+IP reputation or token validity.</li>
+<li>Terminate requests early by returning custom HTTP status codes and
+payloads (e.g., rejecting an unauthenticated request with a
+<code>403 Forbidden</code>).</li>
+</ul></li>
+<li><strong>Complex Authentication and WAF Rules</strong>:<br />
+Native ACLs can struggle with multi-step validation, such as decoding
+JSON Web Tokens (JWT) or verifying cryptographic signatures. A Lua
+filter can parse incoming headers, verify cryptographic payloads, check
+claims, and immediately deny or sanitize the request before it reaches
+the backend.</li>
+</ol>
+<h3 id="dynamic-traffic-routing">Dynamic Traffic Routing</h3>
+<p>Standard HAProxy configurations rely on static backend mappings
+defined by map files or ACL rules. Lua enables real-time, algorithmic
+routing decisions based on runtime state, external metadata, or internal
+metrics.</p>
+<ol type="1">
+<li><p><strong>Sample Fetches
+(<code>core.register_fetches</code>)</strong>:<br />
+Lua functions can be registered as sample fetches that return a string,
+integer, or boolean. These functions compute a value based on
+transaction data or external state. Within the HAProxy configuration,
+the result can be passed directly to routing directives:</p>
+<pre class="haproxy"><code>use_backend %[lua.select_backend]</code></pre>
+<p>In this scenario, the Lua function <code>select_backend</code>
+evaluates request characteristics, checks external service registries,
+or assesses backend health, returning the exact name of the target
+backend dynamically.</p></li>
+<li><p><strong>Service Discovery and Canary Deployments</strong>:<br />
+Lua scripts can periodically poll service discovery endpoints (such as
+Consul or Kubernetes APIs) in the background using
+<code>core.register_task</code>. The script updates internal routing
+tables in memory, routing specific percentages of traffic or designated
+user segments to new application versions without reloading
+HAProxy.</p></li>
+</ol>
+<h3 id="configuration-integration">Configuration Integration</h3>
+<p>To activate Lua scripts, HAProxy references them in the
+<code>global</code> section of <code>haproxy.cfg</code>:</p>
+<pre class="haproxy"><code>global
+    lua-load /etc/haproxy/routing_logic.lua
+
+frontend http_in
+    bind *:80
+    mode http
+    
+    # Execute a Lua filter for authorization
+    http-request lua.authenticate_request
+    
+    # Route dynamically using a Lua sample fetch
+    use_backend %[lua.resolve_tenant_backend]</code></pre>
+<p>Within the script, the Lua API ties into these directives:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="va">core</span><span class="op">.</span>register_action<span class="op">(</span><span class="st">&quot;authenticate_request&quot;</span><span class="op">,</span> <span class="op">{</span> <span class="st">&quot;http-req&quot;</span> <span class="op">},</span> <span class="kw">function</span><span class="op">(</span><span class="va">txn</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">auth_header</span> <span class="op">=</span> <span class="va">txn</span><span class="op">.</span><span class="va">sf</span><span class="op">:</span>req_fhdr<span class="op">(</span><span class="st">&quot;Authorization&quot;</span><span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="va">auth_header</span> <span class="kw">or</span> <span class="kw">not</span> validate_token<span class="op">(</span><span class="va">auth_header</span><span class="op">)</span> <span class="cf">then</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">txn</span><span class="op">:</span>done<span class="op">({</span> <span class="va">status</span> <span class="op">=</span> <span class="dv">401</span><span class="op">,</span> <span class="va">content</span> <span class="op">=</span> <span class="st">&quot;Unauthorized&quot;</span> <span class="op">})</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="va">core</span><span class="op">.</span>register_fetches<span class="op">(</span><span class="st">&quot;resolve_tenant_backend&quot;</span><span class="op">,</span> <span class="kw">function</span><span class="op">(</span><span class="va">txn</span><span class="op">)</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">host</span> <span class="op">=</span> <span class="va">txn</span><span class="op">.</span><span class="va">sf</span><span class="op">:</span>req_fhdr<span class="op">(</span><span class="st">&quot;Host&quot;</span><span class="op">)</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">tenant_id</span> <span class="op">=</span> extract_tenant<span class="op">(</span><span class="va">host</span><span class="op">)</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">&quot;backend_&quot;</span> <span class="op">..</span> <span class="va">tenant_id</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span><span class="op">)</span></span></code></pre></div>
+<h3 id="performance-best-practices">Performance Best Practices</h3>
+<ul>
+<li><strong>Use Asynchronous Sockets</strong>: Always use the native
+<code>core.tcp()</code> API for network communication rather than
+standard blocking Lua libraries (<code>luasocket</code>), which halt the
+entire HAProxy process.</li>
+<li><strong>Minimize State Locking</strong>: Minimize heavy CPU-bound
+operations inside request-path actions to ensure latency metrics remain
+predictable.</li>
+<li><strong>Cache External Queries</strong>: Store lookup results in
+HAProxy’s native stick tables or an in-memory Lua cache to avoid
+querying external databases on every request.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/using-lua-in-ha-proxy-for-dynamic-traffic-routing';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

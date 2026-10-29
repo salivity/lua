@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Error Handling: longjmp vs C++ Exceptions - lua</title>
+    <meta name="description" content="When integrating Lua with C++, handling errors during stack unwinding requires choosing between Lua’s native setjmp/longjmp mechanism and C++ exceptions. The fundamental risk of using longjmp is that it bypasses the C++ runtime, completely skipping destru">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-error-handling-longjmp-vs-c-exceptions">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Error Handling: longjmp vs C++ Exceptions - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-error-handling-longjmp-vs-c-exceptions" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="When integrating Lua with C++, handling errors during stack unwinding requires choosing between Lua’s native setjmp/longjmp mechanism and C++ exceptions. The fundamental risk of using longjmp is that it bypasses the C++ runtime, completely skipping destru" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-error-handling-longjmp-vs-c-exceptions">Lua Error Handling:
+longjmp vs C++ Exceptions</h1>
+<p>When integrating Lua with C++, handling errors during stack unwinding
+requires choosing between Lua’s native
+<code>setjmp</code>/<code>longjmp</code> mechanism and C++ exceptions.
+The fundamental risk of using <code>longjmp</code> is that it bypasses
+the C++ runtime, completely skipping destructors for stack-allocated
+objects and causing resource leaks or undefined behavior. Conversely,
+using C++ exceptions restores RAII compliance but introduces risks
+related to ABI mismatches, binary bloat, and improper handling of
+non-C++ frames.</p>
+<h3 id="how-lua-handles-errors-by-default">How Lua Handles Errors by
+Default</h3>
+<p>In standard ANSI C builds, Lua handles errors and flow control using
+the standard C library functions <code>setjmp</code> and
+<code>longjmp</code>. When a protected call (such as
+<code>lua_pcall</code>) is initiated, Lua saves the execution context
+using <code>setjmp</code>. If a runtime error occurs,
+<code>lua_error</code> calls <code>longjmp</code>, instantly resetting
+the stack pointer and instruction pointer back to the saved jump
+buffer.</p>
+<p>While this mechanism is fast and portable in pure C environments, it
+is entirely unaware of C++ object lifecycles.</p>
+<h3 id="critical-risks-of-using-longjmp-in-c">Critical Risks of Using
+<code>longjmp</code> in C++</h3>
+<h4 id="1-raii-destruction-failure">1. RAII Destruction Failure</h4>
+<p>The primary hazard of <code>longjmp</code> in C++ code is that it
+executes a low-level register and stack restore. It does not invoke
+destructors for automatic (stack-allocated) objects residing in
+intermediate frames between the <code>setjmp</code> call and the
+<code>longjmp</code> call.</p>
+<p>If a C++ function calls into a Lua function that triggers an
+error:</p>
+<ul>
+<li>Heap allocations managed by smart pointers
+(<code>std::unique_ptr</code>, <code>std::shared_ptr</code>) are
+leaked.</li>
+<li>Mutex guards (<code>std::lock_guard</code>,
+<code>std::unique_lock</code>) fail to unlock, causing immediate
+deadlocks.</li>
+<li>File descriptors, database connections, and OS handles remain open
+indefinitely.</li>
+</ul>
+<h4 id="2-undefined-behavior">2. Undefined Behavior</h4>
+<p>Under the ISO C++ standard, using <code>longjmp</code> to bypass the
+destruction of non-trivial objects (objects with non-trivial
+destructors) is explicitly undefined behavior. Even if an application
+appears to run without immediate crashes, the compiler's optimizer
+assumes destructors run at their normal scope exits, which can lead to
+unpredictable memory corruption and state inconsistency.</p>
+<h3 id="risks-and-trade-offs-of-c-exceptions">Risks and Trade-offs of
+C++ Exceptions</h3>
+<p>To solve the RAII problem, Lua can be compiled as C++ (often by
+compiling the source with a C++ compiler rather than a C compiler). In
+this configuration, Lua defines internal error macros
+(<code>LUAI_THROW</code>, <code>LUAI_TRY</code>) using
+<code>throw</code> and <code>try ... catch</code> rather than
+<code>longjmp</code> and <code>setjmp</code>. While this preserves
+destructors, it introduces its own set of technical risks:</p>
+<h4 id="1-abi-and-compiler-mismatches">1. ABI and Compiler
+Mismatches</h4>
+<p>If the Lua runtime is compiled as C (using <code>longjmp</code>) but
+linked against a C++ host or C++ extension modules, throwing an
+exception across Lua frames will cause a crash. A C++ exception
+traversing a C-compiled Lua frame often results in
+<code>std::terminate</code> because the C frames lack the unwind tables
+required by the C++ personality routine. Every binary component
+interacting with the Lua state must strictly agree on the unwinding
+ABI.</p>
+<h4 id="2-uncaught-foreign-exceptions">2. Uncaught Foreign
+Exceptions</h4>
+<p>If native C++ code throws an exception inside a C function exposed to
+Lua, Lua cannot handle it natively unless the runtime was explicitly
+compiled with C++ exception support. In a standard C Lua build, an
+uncaught C++ exception escaping into Lua’s core will immediately abort
+the process rather than converting into a recoverable Lua runtime
+error.</p>
+<h4 id="3-performance-and-memory-overhead">3. Performance and Memory
+Overhead</h4>
+<p>C++ exception implementations (typically table-based unwinding like
+DWARF or Windows Structured Exception Handling) impose virtually zero
+runtime overhead during standard execution. However, when an error
+occurs, the unwinding process is substantially slower than a raw
+<code>longjmp</code> register restore. Additionally, the unwind tables
+required for stack tracing increase the final binary footprint.</p>
+<h3 id="choosing-the-right-strategy">Choosing the Right Strategy</h3>
+<ul>
+<li><strong>Use C++ Exceptions (Compile Lua as C++):</strong> Required
+if your Lua-exposed C++ functions instantiate non-trivial objects, use
+RAII wrappers, or call standard library containers. Ensure the entire
+toolchain compiles Lua using the C++ compiler.</li>
+<li><strong>Use <code>longjmp</code> (Standard C Build):</strong>
+Acceptable only if your integration layer strictly isolates C++ objects
+from Lua frames using manual cleanup idioms, or if Lua communicates
+solely through pure C boundary wrappers where no C++ destructors exist
+between <code>pcall</code> boundaries.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-error-handling-longjmp-vs-c-exceptions';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Multi-Line Strings and Bracket Comments - lua</title>
+    <meta name="description" content="In Lua, managing multi-line text and extended comments is handled through a versatile syntax known as &quot;long brackets.&quot; By placing matching pairs of square brackets with an arbitrary number of equal signs between them, Lua allows developers to define multi">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-multi-line-strings-and-bracket-comments">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Multi-Line Strings and Bracket Comments - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-multi-line-strings-and-bracket-comments" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, managing multi-line text and extended comments is handled through a versatile syntax known as &quot;long brackets.&quot; By placing matching pairs of square brackets with an arbitrary number of equal signs between them, Lua allows developers to define multi" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-multi-line-strings-and-bracket-comments">Lua Multi-Line
+Strings and Bracket Comments</h1>
+<p>In Lua, managing multi-line text and extended comments is handled
+through a versatile syntax known as "long brackets." By placing matching
+pairs of square brackets with an arbitrary number of equal signs between
+them, Lua allows developers to define multi-line string literals and
+block comments that can safely contain nested brackets or arbitrary code
+without requiring escape characters. This article explains how long
+bracket syntax operates, how the equal sign mechanism prevents parsing
+collisions, and how to apply these rules to both strings and
+comments.</p>
+<h3 id="multi-line-string-literals">Multi-Line String Literals</h3>
+<p>The basic syntax for a multi-line string in Lua uses double opening
+and closing square brackets:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">text</span> <span class="op">=</span> <span class="vs">[[</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="vs">This is a multi-line</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="vs">string in Lua.</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="vs">It preserves line breaks automatically.</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="vs">]]</span></span></code></pre></div>
+<p>When using double brackets, Lua does not interpret escape sequences
+such as <code>\n</code>, <code>\t</code>, or <code>\"</code>. Everything
+between the brackets is treated as raw text. Additionally, if the first
+character immediately following the opening bracket is a newline, Lua
+automatically discards it, making code formatting cleaner.</p>
+<h3 id="using-equal-signs-to-avoid-delimiter-collisions">Using Equal
+Signs to Avoid Delimiter Collisions</h3>
+<p>A common issue occurs when the string itself contains closing
+brackets (<code>]]</code>), such as when storing Lua code, regular
+expressions, or XML/HTML snippets. Lua solves this by allowing any
+number of equal signs (<code>=</code>) between the opening and closing
+brackets:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">code_snippet</span> <span class="op">=</span> <span class="vs">[=[</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="vs">local array = data[items[1]]</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="vs">print(&quot;Finished!&quot;)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="vs">]=]</span></span></code></pre></div>
+<p>To close the string, Lua searches strictly for a closing bracket
+sequence containing the exact same number of equal signs.</p>
+<ul>
+<li><code>[==[</code> opens a string that can only be closed by
+<code>]==]</code></li>
+<li><code>[===[</code> opens a string that can only be closed by
+<code>]===]</code></li>
+</ul>
+<p>Any sequence with fewer or more equal signs (such as <code>]]</code>
+or <code>]=]</code>) will be treated as literal content:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">nested_example</span> <span class="op">=</span> <span class="vs">[==[</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="vs">Here is a string with [=[ mismatched ]=] brackets inside it.</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="vs">It will only terminate at the matching tag.</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="vs">]==]</span></span></code></pre></div>
+<h3 id="multi-line-comments">Multi-Line Comments</h3>
+<p>Lua comments mirror the string literal syntax. Single-line comments
+begin with <code>--</code>, while multi-line (block) comments prepend
+<code>--</code> to the long bracket syntax:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">--[[</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co">This is a multi-line comment.</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">All lines within these brackets are ignored by the compiler.</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co">]]</span></span></code></pre></div>
+<p>Just like string literals, long bracket comments can use equal signs
+to enclose code blocks that already contain multi-line comments:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">--[=[</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="co">--[[</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co">This inner comment does not prematurely close the outer comment.</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">]]</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co">local x = 10</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co">--]=]</span></span></code></pre></div>
+<h3 id="key-rules-and-behavior">Key Rules and Behavior</h3>
+<ol type="1">
+<li><strong>Equal Sign Symmetry:</strong> The number of equal signs in
+the opening delimiter must match the number of equal signs in the
+closing delimiter precisely.</li>
+<li><strong>Leading Newlines:</strong> If the content starts immediately
+with a newline right after the opening delimiter (<code>[[</code>,
+<code>[=[</code>, etc.), that single newline is stripped. Any subsequent
+newlines are preserved.</li>
+<li><strong>No Escaping:</strong> Backslash escaping is completely
+disabled inside long bracket literals. A sequence like <code>\n</code>
+remains two distinct characters: a backslash followed by the letter
+'n'.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-multi-line-strings-and-bracket-comments';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

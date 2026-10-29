@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Prevents Symbol Collisions in C Projects - lua</title>
+    <meta name="description" content="When embedding the Lua runtime into C and C++ applications, developers must avoid symbol collisions, namespace pollution, and conflicting type definitions. Lua solves these interoperability challenges through a strict architectural approach: rigid namespa">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-prevents-symbol-collisions-in-c-projects">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Prevents Symbol Collisions in C Projects - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-prevents-symbol-collisions-in-c-projects" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="When embedding the Lua runtime into C and C++ applications, developers must avoid symbol collisions, namespace pollution, and conflicting type definitions. Lua solves these interoperability challenges through a strict architectural approach: rigid namespa" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-prevents-symbol-collisions-in-c-projects">How Lua
+Prevents Symbol Collisions in C Projects</h1>
+<p>When embedding the Lua runtime into C and C++ applications,
+developers must avoid symbol collisions, namespace pollution, and
+conflicting type definitions. Lua solves these interoperability
+challenges through a strict architectural approach: rigid namespace
+prefixing across all public APIs, isolation of internal implementations
+via opaque pointers, modular header file organization, and customizable
+compile-time linkage macros defined in its configuration layer.</p>
+<h3 id="strict-namespace-prefixing">Strict Namespace Prefixing</h3>
+<p>Lua eliminates global namespace pollution by enforcing a strict
+prefixing convention across every public identifier declared in its C
+API:</p>
+<ul>
+<li><strong><code>lua_</code></strong>: Reserved for core functions,
+macros, and public types defined in <code>lua.h</code> (for example,
+<code>lua_pushinteger</code>, <code>lua_pcall</code>, and
+<code>lua_State</code>).</li>
+<li><strong><code>luaL_</code></strong>: Reserved for the auxiliary
+library declared in <code>lauxlib.h</code>, which provides higher-level
+convenience functions such as <code>luaL_newstate</code> and
+<code>luaL_checkstring</code>.</li>
+<li><strong><code>LUA_</code></strong>: Reserved for public preprocessor
+constants, status codes, and type enumerations (such as
+<code>LUA_OK</code>, <code>LUA_TNIL</code>, and
+<code>LUA_MULTRET</code>).</li>
+<li><strong><code>LUAI_</code></strong>: Reserved for internal macros
+and platform-dependent hooks that should not be consumed directly by
+host applications.</li>
+</ul>
+<p>By requiring every exposed function, constant, and macro to carry one
+of these standardized prefixes, Lua minimizes the risk of clashing with
+user code, third-party libraries, or operating system headers.</p>
+<h3 id="modular-header-architecture">Modular Header Architecture</h3>
+<p>The Lua public interface is split into specialized headers to allow
+host applications to include only the surface area they require:</p>
+<ol type="1">
+<li><strong><code>lua.h</code></strong>: Declares the pure core API. It
+contains no standard library references, keeping dependencies to a
+minimum.</li>
+<li><strong><code>lauxlib.h</code></strong>: Defines the auxiliary
+library, providing higher-level abstractions built on top of the core
+API.</li>
+<li><strong><code>lualib.h</code></strong>: Declares functions for
+opening standard Lua libraries (such as <code>luaopen_base</code> or
+<code>luaopen_table</code>).</li>
+<li><strong><code>luaconf.h</code></strong>: Contains all
+platform-specific definitions, limits, and linkage rules.</li>
+</ol>
+<p>Applications that embed Lua can include only <code>lua.h</code> to
+access the execution engine without pulling in standard libraries that
+might declare conflicting utility names.</p>
+<h3 id="state-encapsulation-via-opaque-structures">State Encapsulation
+via Opaque Structures</h3>
+<p>Lua does not rely on global or static C variables to track runtime
+context. Instead, the runtime state is encapsulated entirely within an
+opaque structure referenced by the pointer <code>lua_State*</code>.</p>
+<p>Because internal fields, memory allocators, and interpreter
+configurations are hidden inside non-exported implementation files (such
+as <code>lstate.h</code>), host projects cannot accidentally clash with
+Lua's internal data definitions. Multiple distinct Lua universes can
+operate simultaneously inside the same process without cross-talk or
+identifier overlap.</p>
+<h3 id="linkage-configuration-with-luaconfh">Linkage Configuration with
+<code>luaconf.h</code></h3>
+<p>To manage symbol visibility at the binary and linker level, Lua
+routes all public function declarations through internal linkage
+macros:</p>
+<ul>
+<li><code>LUA_API</code>: Prepended to all core functions.</li>
+<li><code>LUALIB_API</code>: Prepended to auxiliary library
+functions.</li>
+</ul>
+<p>By modifying <code>luaconf.h</code>, developers can adjust these
+macros to match their build environment. For example, when building Lua
+as a shared library (DLL or dynamic shared object), <code>LUA_API</code>
+can be mapped to compiler-specific visibility attributes like
+<code>__declspec(dllexport)</code>, <code>__declspec(dllimport)</code>,
+or <code>__attribute__((visibility("default")))</code>. This prevents
+unexported internal symbols from leaking into the global dynamic symbol
+table of the host application.</p>
+<h3 id="c-name-mangling-prevention">C++ Name Mangling Prevention</h3>
+<p>Because C++ compilers mangle function names to support function
+overloading, Lua provides a convenience wrapper, <code>lua.hpp</code>.
+This header wraps <code>lua.h</code>, <code>lauxlib.h</code>, and
+<code>lualib.h</code> in an <code>extern "C"</code> block:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="at">extern</span> <span class="st">&quot;C&quot;</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#include </span><span class="im">&quot;lua.h&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="pp">#include </span><span class="im">&quot;lauxlib.h&quot;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="pp">#include </span><span class="im">&quot;lualib.h&quot;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>This prevents the host C++ compiler from mangling Lua's symbols,
+ensuring that linkers resolve the exact unmangled C function signatures
+when linking the C runtime library against C++ host binaries.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-prevents-symbol-collisions-in-c-projects';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

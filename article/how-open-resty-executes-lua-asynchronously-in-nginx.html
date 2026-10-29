@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How OpenResty Executes Lua Asynchronously in Nginx - lua</title>
+    <meta name="description" content="This article explores how the OpenResty web platform integrates Lua with Nginx to deliver ultra-fast, non-blocking web applications. It details the underlying architecture, focusing on the ngxhttpluamodule, Lua coroutines, and the &quot;cosocket&quot; mechanism tha">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-open-resty-executes-lua-asynchronously-in-nginx">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How OpenResty Executes Lua Asynchronously in Nginx - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-open-resty-executes-lua-asynchronously-in-nginx" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how the OpenResty web platform integrates Lua with Nginx to deliver ultra-fast, non-blocking web applications. It details the underlying architecture, focusing on the ngxhttpluamodule, Lua coroutines, and the &quot;cosocket&quot; mechanism tha" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-openresty-executes-lua-asynchronously-in-nginx">How
+OpenResty Executes Lua Asynchronously in Nginx</h1>
+<p>This article explores how the OpenResty web platform integrates Lua
+with Nginx to deliver ultra-fast, non-blocking web applications. It
+details the underlying architecture, focusing on the
+<code>ngx_http_lua_module</code>, Lua coroutines, and the "cosocket"
+mechanism that together allow synchronous-style Lua code to run
+completely asynchronously within Nginx’s event-driven loop.</p>
+<h2 id="the-nginx-foundation-event-driven-architecture">The Nginx
+Foundation: Event-Driven Architecture</h2>
+<p>At its core, Nginx avoids the traditional model of creating a new
+operating system thread or process for each incoming request. Instead,
+it relies on a small number of single-threaded worker processes running
+an asynchronous, non-blocking event loop (using low-level kernel
+abstractions like <code>epoll</code> on Linux or <code>kqueue</code> on
+BSD).</p>
+<p>In standard Nginx, blocking tasks must be avoided because a single
+blocked worker halts the execution of thousands of concurrent
+connections assigned to that worker.</p>
+<h2 id="the-integration-ngx_http_lua_module">The Integration:
+<code>ngx_http_lua_module</code></h2>
+<p>OpenResty is not a separate web server; it is an enhanced bundle of
+Nginx packaged with key third-party modules and libraries. The primary
+component enabling Lua execution is the
+<code>ngx_http_lua_module</code>.</p>
+<p>This module embeds the LuaJIT (Just-In-Time compiler) virtual machine
+directly inside each Nginx worker process. Instead of executing Lua code
+via an external process or CGI-like protocol, the code is executed
+in-memory. The module hooks into various phases of the Nginx HTTP
+request lifecycle—such as <code>rewrite_by_lua_block</code>,
+<code>access_by_lua_block</code>, and
+<code>content_by_lua_block</code>—allowing developers to execute Lua
+code during distinct stages of request processing.</p>
+<h2 id="the-bridge-lua-coroutines-and-non-blocking-io">The Bridge: Lua
+Coroutines and Non-Blocking I/O</h2>
+<p>The challenge of running high-level application logic inside an
+event-driven server is performing Input/Output (I/O) operations—such as
+querying a database, reading a file, or calling an upstream API—without
+blocking the event loop. OpenResty solves this using Lua coroutines.</p>
+<p>A coroutine is a light, user-space thread of execution that can pause
+(yield) and resume explicitly. OpenResty binds the lifecycle of a
+request to a dedicated Lua coroutine:</p>
+<ol type="1">
+<li><strong>Request Dispatch:</strong> When an HTTP request reaches an
+Nginx phase handled by Lua, a new coroutine is spawned to execute the
+relevant Lua code.</li>
+<li><strong>I/O Initiation:</strong> When the Lua script initiates an
+I/O operation (such as reading from a TCP socket), OpenResty registers
+the socket's file descriptor with the Nginx event loop
+(<code>epoll</code>/<code>kqueue</code>).</li>
+<li><strong>Yielding:</strong> Instead of waiting for data to arrive,
+the Lua coroutine immediately yields control back to Nginx. The worker
+process does not block; it resumes handling other pending events,
+network connections, or timers.</li>
+<li><strong>Resumption:</strong> When the kernel notifies Nginx that the
+socket has finished its operation (data has arrived or is ready to
+write), Nginx locates the yielded coroutine, passes the retrieved data
+back into it, and resumes execution where it paused.</li>
+</ol>
+<h2 id="the-cosocket-mechanism">The Cosocket Mechanism</h2>
+<p>OpenResty abstracts this yield-and-resume behavior through its
+"cosocket" (coroutine-based socket) API. Cosockets expose a familiar,
+sequential programming interface that resembles synchronous network
+code:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">sock</span> <span class="op">=</span> <span class="va">ngx</span><span class="op">.</span><span class="va">socket</span><span class="op">.</span>tcp<span class="op">()</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ok</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">sock</span><span class="op">:</span><span class="fu">connect</span><span class="op">(</span><span class="st">&quot;127.0.0.1&quot;</span><span class="op">,</span> <span class="dv">6379</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="va">sock</span><span class="op">:</span>send<span class="op">(</span><span class="st">&quot;PING</span><span class="sc">\r\n</span><span class="st">&quot;</span><span class="op">)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">line</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">sock</span><span class="op">:</span>receive<span class="op">()</span></span></code></pre></div>
+<p>While the code appears blocking and linear, every network call
+(<code>connect</code>, <code>send</code>, <code>receive</code>) is
+fundamentally non-blocking. The cosocket implementation calls the
+internal Nginx socket APIs and manages the coroutine yielding and
+resumption automatically behind the scenes. This eliminates "callback
+hell" while retaining the performance and low memory footprint of
+asynchronous I/O.</p>
+<h2 id="high-performance-with-luajit">High Performance with LuaJIT</h2>
+<p>By pairing coroutine-based scheduling with LuaJIT, OpenResty avoids
+the overhead of context switching between OS-level threads. Lua
+coroutines are extremely lightweight, consuming only a few kilobytes of
+memory each. Furthermore, LuaJIT compiles frequently executed Lua
+bytecode into native machine code at runtime, allowing computationally
+intensive tasks to achieve performance comparable to compiled C code
+while running asynchronously inside Nginx.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-open-resty-executes-lua-asynchronously-in-nginx';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

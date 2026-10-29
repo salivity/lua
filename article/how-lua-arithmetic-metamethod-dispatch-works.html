@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Arithmetic Metamethod Dispatch Works - lua</title>
+    <meta name="description" content="In the Lua programming language, metamethod dispatch for arithmetic operations allows developers to define custom behaviors for standard mathematical operators when applied to non-numeric types, such as tables or userdata. When Lua encounters an arithmeti">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-arithmetic-metamethod-dispatch-works">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Arithmetic Metamethod Dispatch Works - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-arithmetic-metamethod-dispatch-works" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, metamethod dispatch for arithmetic operations allows developers to define custom behaviors for standard mathematical operators when applied to non-numeric types, such as tables or userdata. When Lua encounters an arithmeti" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-arithmetic-metamethod-dispatch-works">How Lua Arithmetic
+Metamethod Dispatch Works</h1>
+<p>In the Lua programming language, metamethod dispatch for arithmetic
+operations allows developers to define custom behaviors for standard
+mathematical operators when applied to non-numeric types, such as tables
+or userdata. When Lua encounters an arithmetic operator, it checks
+whether the operands natively support the operation. If they do not, Lua
+queries the operands' metatables for corresponding metamethods. If a
+valid metamethod is found, it is executed; otherwise, the interpreter
+raises a runtime type error.</p>
+<h2 id="arithmetic-operators-and-their-metamethods">Arithmetic Operators
+and Their Metamethods</h2>
+<p>Lua maps each arithmetic operator directly to a specific metamethod
+name:</p>
+<ul>
+<li>Addition (<code>+</code>): <code>__add</code></li>
+<li>Subtraction (<code>-</code>): <code>__sub</code></li>
+<li>Multiplication (<code>*</code>): <code>__mul</code></li>
+<li>Division (<code>/</code>): <code>__div</code></li>
+<li>Floor division (<code>//</code>): <code>__idiv</code></li>
+<li>Modulo (<code>%</code>): <code>__mod</code></li>
+<li>Exponentiation (<code>^</code>): <code>__pow</code></li>
+<li>Unary minus (<code>-</code>): <code>__unm</code></li>
+</ul>
+<h2 id="the-binary-dispatch-algorithm">The Binary Dispatch
+Algorithm</h2>
+<p>When executing a binary arithmetic operation (such as
+<code>a + b</code>), Lua follows a strict, step-by-step lookup
+order:</p>
+<ol type="1">
+<li><strong>Primitive Evaluation:</strong> Lua checks if both operands
+are numbers (or strings coercible to numbers, depending on the Lua
+version). If both satisfy this condition, the raw CPU-level arithmetic
+instruction executes directly, bypassing the metatable mechanism
+entirely.</li>
+<li><strong>First Operand Check:</strong> If the operation cannot be
+executed natively, Lua inspects the first operand (<code>a</code>). If
+<code>a</code> has a metatable containing the associated metamethod
+(e.g., <code>__add</code>), Lua selects that metamethod.</li>
+<li><strong>Second Operand Check:</strong> If <code>a</code> has no
+metatable, or if its metatable lacks the required field, Lua inspects
+the second operand (<code>b</code>). If <code>b</code> has a metatable
+containing the metamethod, Lua selects that function instead.</li>
+<li><strong>Execution:</strong> If a metamethod was found in either step
+2 or step 3, Lua invokes it, passing both operands in their original
+order: <code>handler(a, b)</code>.</li>
+<li><strong>Failure:</strong> If neither operand provides the required
+metamethod, Lua halts execution with a runtime error (e.g.,
+<code>attempt to perform arithmetic on a table value</code>).</li>
+</ol>
+<p>Unlike relational metamethods (like <code>__eq</code> or
+<code>__le</code>), arithmetic dispatch does not require both operands
+to share the exact same metamethod function. The first operand takes
+precedence; if it defines the handler, that handler is chosen regardless
+of what the second operand defines.</p>
+<h2 id="unary-operation-dispatch">Unary Operation Dispatch</h2>
+<p>The unary minus operator (<code>-a</code>) involves only a single
+operand. Lua's dispatch for unary operations functions as follows:</p>
+<ol type="1">
+<li>If <code>a</code> is a number, Lua computes its negation
+immediately.</li>
+<li>If <code>a</code> is not a number, Lua checks if <code>a</code> has
+a metatable containing the <code>__unm</code> metamethod.</li>
+<li>If present, Lua calls the function, typically passing <code>a</code>
+as both arguments: <code>handler(a, a)</code>.</li>
+<li>If <code>__unm</code> is missing, Lua raises a runtime error.</li>
+</ol>
+<h2 id="practical-implications">Practical Implications</h2>
+<p>Because Lua searches the left operand before the right operand,
+asymmetric operations are governed by the leftmost type that defines the
+metamethod. For example, in vector math where a vector is multiplied by
+a scalar (<code>Vector * 2</code>), the <code>Vector</code> metatable's
+<code>__mul</code> is called. In reverse (<code>2 * Vector</code>), the
+number <code>2</code> has no metamethod, so Lua falls back to the
+<code>Vector</code> metatable's <code>__mul</code>. The metamethod
+implementation must be designed to handle the variable types of either
+argument accordingly.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-arithmetic-metamethod-dispatch-works';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

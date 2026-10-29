@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How String Interning Works in the Lua VM - lua</title>
+    <meta name="description" content="This article explores how the Lua virtual machine (VM) implements string interning, a core optimization technique where the runtime ensures that only a single immutable copy of any unique string exists in memory. By examining the underlying C source archi">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-string-interning-works-in-the-lua-vm">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How String Interning Works in the Lua VM - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-string-interning-works-in-the-lua-vm" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how the Lua virtual machine (VM) implements string interning, a core optimization technique where the runtime ensures that only a single immutable copy of any unique string exists in memory. By examining the underlying C source archi" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-string-interning-works-in-the-lua-vm">How String Interning
+Works in the Lua VM</h1>
+<p>This article explores how the Lua virtual machine (VM) implements
+string interning, a core optimization technique where the runtime
+ensures that only a single immutable copy of any unique string exists in
+memory. By examining the underlying C source architecture, this guide
+breaks down the distinction between short and long strings, the role of
+the global string table, the creation and lookup process, and how this
+design impacts memory management and runtime execution speed.</p>
+<h3 id="the-string-representation-tstring">The String Representation
+(<code>TString</code>)</h3>
+<p>In the Lua VM (specifically Lua 5.3 and 5.4), strings are represented
+internally by the <code>TString</code> structure. The header for a
+string contains metadata essential for VM operations, including:</p>
+<ul>
+<li><strong><code>marked</code></strong>: Flags used by the garbage
+collector.</li>
+<li><strong><code>tt</code></strong>: The type variant tag,
+distinguishing between short strings (<code>LUA_VSHRSTR</code>) and long
+strings (<code>LUA_VLNGSTR</code>).</li>
+<li><strong><code>hash</code></strong>: A precalculated 32-bit hash of
+the string contents.</li>
+<li><strong><code>u.hnext</code></strong>: A pointer to the next
+<code>TString</code> in the same hash bucket (used for hash collision
+chaining in short strings).</li>
+<li><strong><code>shrlen</code> or <code>lnglen</code></strong>: The
+length of the string, avoiding the need for <code>strlen</code>
+operations.</li>
+</ul>
+<p>Directly following this metadata block in contiguous memory is the
+raw byte array containing the string data, terminated with a null byte
+for compatibility with C APIs.</p>
+<h3 id="short-strings-vs-long-strings">Short Strings vs. Long
+Strings</h3>
+<p>Historically, Lua interned every string regardless of length.
+Starting in Lua 5.2 and refined in 5.3, Lua split strings into two
+categories based on a compile-time threshold,
+<code>LUAI_MAXSHORTLEN</code> (defaulting to 40 bytes):</p>
+<ol type="1">
+<li><strong>Short Strings (<span class="math inline">\(\le\)</span> 40
+bytes):</strong> Fully interned. Every short string is hashed upon
+creation and deduplicated via a VM-wide hash table.</li>
+<li><strong>Long Strings (&gt; 40 bytes):</strong> Not interned. Long
+strings allocate their own memory independently and bypass the global
+string table. This prevents performance degradation and potential
+denial-of-service (Hash DoS) vulnerabilities caused by feeding large,
+maliciously crafted strings into the hash function. Long strings compute
+their hash lazily only when used as keys in a table.</li>
+</ol>
+<h3 id="the-global-string-table-stringtable">The Global String Table
+(<code>stringtable</code>)</h3>
+<p>Short strings reside in a centralized hash table within the
+<code>global_State</code> struct, represented by the
+<code>stringtable</code> type. The structure consists of:</p>
+<ul>
+<li><strong><code>hash</code></strong>: An array of pointers to
+<code>TString</code> nodes (the hash buckets).</li>
+<li><strong><code>nuse</code></strong>: The total count of elements
+currently stored in the table.</li>
+<li><strong><code>size</code></strong>: The total capacity (number of
+buckets), which is always a power of two.</li>
+</ul>
+<p>Collisions in the table are resolved using separate chaining via
+singly linked lists using the <code>u.hnext</code> pointers embedded
+within each <code>TString</code>.</p>
+<h3 id="the-interning-workflow">The Interning Workflow</h3>
+<p>When a short string is created via functions like
+<code>luaS_new</code> or <code>luaS_newlstr</code>, the VM performs the
+following steps:</p>
+<ol type="1">
+<li><strong>Hash Generation:</strong> The VM computes the string's hash
+using a randomized seed (<code>global_State-&gt;seed</code>) generated
+at VM initialization. The hashing algorithm processes the string bytes
+along with the seed to prevent external hash prediction.</li>
+<li><strong>Bucket Lookup:</strong> The bucket index is calculated via a
+bitwise AND: <code>hash &amp; (size - 1)</code>.</li>
+<li><strong>Linear Search:</strong> Lua traverses the linked list at the
+calculated bucket. It performs a quick check comparing lengths and
+precomputed hash values. If these match, it executes <code>memcmp</code>
+on the payload bytes.</li>
+<li><strong>Reusing Existing Pointers:</strong> If a match is found, the
+existing <code>TString</code> pointer is immediately returned. The new
+string buffer is discarded, and no allocation occurs.</li>
+<li><strong>Insertion and Allocation:</strong> If no match is found, Lua
+allocates a new <code>TString</code> object, initializes its fields,
+inserts it at the head of the bucket's linked list, and increments
+<code>nuse</code>.</li>
+<li><strong>Resizing:</strong> If <code>nuse</code> exceeds
+<code>size</code> and <code>size</code> has not reached the maximum
+limit, the table triggers a resize operation (<code>luaS_resize</code>),
+doubling the bucket array and rehashing all existing short strings.</li>
+</ol>
+<h3 id="garbage-collection-and-de-interning">Garbage Collection and
+De-interning</h3>
+<p>Interned strings in Lua are subject to the incremental garbage
+collector. The global string table maintains weak references to interned
+strings in the context of GC liveness.</p>
+<p>During the sweep phase, the garbage collector checks each bucket in
+the <code>stringtable</code>. If a <code>TString</code> is not marked as
+reachable by any active Lua variable, table, or closure, it is unlinked
+from the bucket's chain and its memory is freed. The <code>nuse</code>
+count is decremented accordingly, and if the table becomes too sparse,
+it shrinks to reclaim memory.</p>
+<h3 id="performance-implications">Performance Implications</h3>
+<p>String interning provides distinct performance characteristics inside
+the VM:</p>
+<ul>
+<li><strong><span class="math inline">\(O(1)\)</span> Equality
+Checks:</strong> Comparing two short strings (<code>a == b</code>) does
+not require comparing their contents. The VM simply checks pointer
+equality (<code>ts1 == ts2</code>), making string comparisons as fast as
+integer comparisons.</li>
+<li><strong>Fast Table Indexing:</strong> Table lookups with short
+string keys use the precalculated hash stored in the
+<code>TString</code> directly, bypassing hash calculations during table
+access.</li>
+<li><strong>Memory Efficiency:</strong> Repetitive identifiers, variable
+names, and common string values consume memory for their payload only
+once.</li>
+<li><strong>Allocation Overhead:</strong> Creating short strings incurs
+an upfront cost due to the mandatory hash calculation and hash table
+lookup.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-string-interning-works-in-the-lua-vm';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

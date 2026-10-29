@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why Lua table.sort Uses Quicksort and Introsort - lua</title>
+    <meta name="description" content="The table.sort function in Lua implements Quicksort and Introsort variants to balance high-speed execution, minimal memory consumption, and worst-case performance protection. While early versions of Lua relied on a traditional Quicksort, modern releases t">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-lua-table-sort-uses-quicksort-and-introsort">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why Lua table.sort Uses Quicksort and Introsort - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-lua-table-sort-uses-quicksort-and-introsort" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The table.sort function in Lua implements Quicksort and Introsort variants to balance high-speed execution, minimal memory consumption, and worst-case performance protection. While early versions of Lua relied on a traditional Quicksort, modern releases t" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-lua-tablesort-uses-quicksort-and-introsort">Why Lua
+table.sort Uses Quicksort and Introsort</h1>
+<p>The <code>table.sort</code> function in Lua implements Quicksort and
+Introsort variants to balance high-speed execution, minimal memory
+consumption, and worst-case performance protection. While early versions
+of Lua relied on a traditional Quicksort, modern releases transitioned
+to Introsort to eliminate the catastrophic <span
+class="math inline">\(O(n^2)\)</span> runtime vulnerabilities typical of
+unbalanced partitions. This article examines the architectural and
+practical reasons why Lua relies on these specific sorting
+algorithms.</p>
+<h3 id="in-place-sorting-and-low-memory-overhead">In-Place Sorting and
+Low Memory Overhead</h3>
+<p>Lua is primarily designed as an embeddable, lightweight scripting
+language intended for resource-constrained systems, game engines, and
+embedded hardware. In these environments, memory allocation must be
+strictly controlled.</p>
+<p>Algorithms like Mergesort require <span
+class="math inline">\(O(n)\)</span> auxiliary memory space to merge
+partitioned elements, which forces extra allocations on the memory
+allocator. In contrast, Quicksort and Introsort operate in-place,
+modifying the array within its existing memory structure. This requires
+only <span class="math inline">\(O(\log n)\)</span> stack space for
+recursion, keeping the memory footprint minimal and predictable.</p>
+<h3 id="superior-cache-locality-and-raw-performance">Superior Cache
+Locality and Raw Performance</h3>
+<p>On modern CPU architectures, the sequential memory access patterns of
+Quicksort provide superior hardware cache locality compared to
+algorithms like Heapsort.</p>
+<p>Quicksort divides an array and scans elements toward each other from
+opposite ends of the partition. This linear scanning behavior aligns
+closely with CPU cache line prefetching, reducing expensive cache
+misses. In typical real-world scenarios, this cache-friendly behavior
+makes Quicksort faster than almost all competing comparison-based
+algorithms, despite sharing an average theoretical time complexity of
+<span class="math inline">\(O(n \log n)\)</span>.</p>
+<h3 id="preventing-on2-degeneracy-with-introsort">Preventing <span
+class="math inline">\(O(n^2)\)</span> Degeneracy with Introsort</h3>
+<p>Standard Quicksort has a critical weakness: if pivot selection
+repeatedly isolates skewed partitions (such as on nearly sorted,
+reverse-sorted, or tailored pathological inputs), the time complexity
+degrades to <span class="math inline">\(O(n^2)\)</span>.</p>
+<p>To resolve this issue without giving up Quicksort's typical
+performance, newer versions of Lua (such as Lua 5.4) and implementations
+like LuaJIT adopt Introsort (introspective sort).</p>
+<p>Introsort operates as follows:</p>
+<ol type="1">
+<li>It begins sorting the array using standard Quicksort
+partitions.</li>
+<li>It tracks the recursion depth of the call stack.</li>
+<li>If the recursion depth exceeds a designated threshold—typically
+<span class="math inline">\(2 \times \lfloor\log_2 n\rfloor\)</span>—it
+detects that Quicksort is degenerating toward quadratic
+performance.</li>
+<li>It dynamically switches the active partition to Heapsort.</li>
+</ol>
+<p>Because Heapsort guarantees an <span class="math inline">\(O(n \log
+n)\)</span> time complexity even in the worst-case scenario, this hybrid
+approach enforces an upper-bound performance limit.</p>
+<h3 id="minimal-implementation-complexity">Minimal Implementation
+Complexity</h3>
+<p>Lua adheres strictly to a minimalist codebase philosophy, keeping the
+core C source code compact and easy to compile across diverse
+platforms.</p>
+<p>Introsort avoids the complex mechanics, extra buffers, and heavy
+control flows required by adaptive algorithms like Timsort. Combining an
+in-place Quicksort routine with a small Heapsort fallback requires only
+a few dozen lines of clean C code, delivering enterprise-grade sorting
+resilience while preserving the compactness of the Lua runtime.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/why-lua-table-sort-uses-quicksort-and-introsort';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

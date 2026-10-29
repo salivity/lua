@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Compiling Lua as C++ Changes Error Handling - lua</title>
+    <meta name="description" content="Compiling the Lua interpreter with a C++ compiler rather than a standard C compiler fundamentally alters its internal control-flow architecture by replacing traditional C jump mechanisms with native C++ exception handling. This switch enables proper stack">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-compiling-lua-as-c-changes-error-handling">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Compiling Lua as C++ Changes Error Handling - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-compiling-lua-as-c-changes-error-handling" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Compiling the Lua interpreter with a C++ compiler rather than a standard C compiler fundamentally alters its internal control-flow architecture by replacing traditional C jump mechanisms with native C++ exception handling. This switch enables proper stack" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-compiling-lua-as-c-changes-error-handling">How Compiling Lua
+as C++ Changes Error Handling</h1>
+<p>Compiling the Lua interpreter with a C++ compiler rather than a
+standard C compiler fundamentally alters its internal control-flow
+architecture by replacing traditional C jump mechanisms with native C++
+exception handling. This switch enables proper stack unwinding and
+ensures the execution of C++ destructors (RAII) when runtime errors
+occur, preventing memory and resource leaks in hybrid C++/Lua
+applications.</p>
+<h3 id="the-default-c-mechanism-setjmp-and-longjmp">The Default C
+Mechanism: <code>setjmp</code> and <code>longjmp</code></h3>
+<p>By default, Lua is written in ANSI C and implements its error
+handling using the standard C library primitives: <code>setjmp</code>
+and <code>longjmp</code>.</p>
+<p>When a protected call like <code>lua_pcall</code> or
+<code>lua_cpcall</code> is executed, Lua sets a recovery point using
+<code>setjmp</code>. If an error is raised anywhere down the call stack
+via <code>lua_error</code>, Lua executes a <code>longjmp</code> back to
+that recovery point.</p>
+<p>While efficient, <code>longjmp</code> restores the CPU register state
+and resets the stack pointer directly. It has no awareness of the call
+frames it bypasses. If C++ code is executing between the
+<code>setjmp</code> call and the <code>longjmp</code> call, any local
+stack-allocated objects will be discarded instantly without their
+destructors ever being invoked. This breaks the Resource Acquisition Is
+Initialization (RAII) pattern, causing dangling pointers, unreleased
+locks, and memory leaks.</p>
+<h3 id="the-c-alteration-try-catch-and-throw">The C++ Alteration:
+<code>try</code>, <code>catch</code>, and <code>throw</code></h3>
+<p>When Lua source files are compiled using a C++ compiler,
+configuration macros within <code>luaconf.h</code> automatically change
+Lua's internal error-handling primitives. Specifically, Lua adjusts the
+definition of <code>LUAI_THROW</code>, <code>LUAI_TRY</code>, and
+<code>LUAI_CATCH</code>.</p>
+<p>Instead of <code>setjmp</code> and <code>longjmp</code>, Lua defines
+these operations using native C++ keywords:</p>
+<ul>
+<li><strong><code>LUAI_TRY</code></strong>: Wraps protected blocks in a
+C++ <code>try</code> block.</li>
+<li><strong><code>LUAI_THROW</code></strong>: Triggers errors using a
+native <code>throw</code> statement, typically throwing an internal
+exception object or pointer.</li>
+<li><strong><code>LUAI_CATCH</code></strong>: Catches the specific Lua
+exception using a <code>catch (...)</code> or typed <code>catch</code>
+block to handle the error payload and resume execution.</li>
+</ul>
+<h3 id="preservation-of-raii-and-stack-unwinding">Preservation of RAII
+and Stack Unwinding</h3>
+<p>The primary technical consequence of compiling Lua as C++ is the
+activation of the C++ runtime's stack unwinder during error states.</p>
+<p>When <code>lua_error</code> executes a <code>throw</code>, the
+runtime traverses each stack frame between the throw site and the
+catching protected call. During this traversal, the destructors of all
+automatic (stack-allocated) C++ objects are sequentially executed. This
+allows developers to use standard C++ idioms—such as
+<code>std::unique_ptr</code>, <code>std::vector</code>, and
+<code>std::lock_guard</code>—inside C++ functions exposed to the Lua
+runtime without worrying that a Lua error will bypass cleanup
+routines.</p>
+<h3 id="exception-boundary-considerations">Exception Boundary
+Considerations</h3>
+<p>While compiling Lua as C++ facilitates RAII compliance, it alters how
+exceptions must be managed at boundaries:</p>
+<ul>
+<li><strong>Catching Lua Errors as Exceptions</strong>: Lua errors
+thrown via the C++ mechanism can inadvertently be caught by overly broad
+user code containing <code>catch (...)</code>. If user code swallows a
+Lua error exception without rethrowing it, Lua's internal state machine
+can become desynchronized or corrupted.</li>
+<li><strong>Foreign C++ Exceptions</strong>: Standard C++ exceptions
+thrown inside custom functions are not automatically converted into Lua
+error messages unless explicitly caught and translated via
+<code>lua_pushstring</code> and <code>lua_error</code>. If an unhandled
+standard exception escapes across a Lua boundary that is compiled as C,
+the process typically aborts; when compiled as C++, it will unwind
+straight through the Lua frames up to the nearest C++ handler, bypassing
+Lua's error reporting.</li>
+</ul>
+<h3 id="performance-implications">Performance Implications</h3>
+<p>In standard C, <code>setjmp</code> incurs a slight setup overhead at
+every protected call, but <code>longjmp</code> execution is essentially
+a single register restoration.</p>
+<p>When compiled as C++, modern platforms typically use zero-cost
+exception tables (such as DWARF or Windows Structured Exception
+Handling). In this model, entering a <code>try</code> block incurs
+virtually zero runtime overhead during normal execution. However, when
+an error occurs, the stack unwinding process is substantially more
+computationally expensive than a raw <code>longjmp</code>, as it must
+consult exception handling tables and run destruction logic for every
+stack frame.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-compiling-lua-as-c-changes-error-handling';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

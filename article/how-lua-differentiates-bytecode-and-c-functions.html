@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Differentiates Bytecode and C Functions - lua</title>
+    <meta name="description" content="This article explores how the Lua Virtual Machine (VM) distinguishes between running its own compiled bytecode and calling native host C functions. By examining Lua&#39;s internal tagged union structures, the call stack management mechanism, and the function">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-differentiates-bytecode-and-c-functions">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Differentiates Bytecode and C Functions - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-differentiates-bytecode-and-c-functions" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how the Lua Virtual Machine (VM) distinguishes between running its own compiled bytecode and calling native host C functions. By examining Lua&#39;s internal tagged union structures, the call stack management mechanism, and the function" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-differentiates-bytecode-and-c-functions">How Lua
+Differentiates Bytecode and C Functions</h1>
+<p>This article explores how the Lua Virtual Machine (VM) distinguishes
+between running its own compiled bytecode and calling native host C
+functions. By examining Lua's internal tagged union structures, the call
+stack management mechanism, and the function dispatch pipeline, this
+guide clarifies how the runtime seamlessly switches between the bytecode
+interpreter loop and direct native execution.</p>
+<h3 id="the-unified-function-abstraction">The Unified Function
+Abstraction</h3>
+<p>In Lua, every callable entity exposed to the runtime is treated
+uniformly as a function object represented by the basic type tag
+<code>LUA_TFUNCTION</code>. Internally, however, the Lua engine
+differentiates functions by splitting them into distinct subtypes within
+a tagged union:</p>
+<ul>
+<li><strong>Lua Closures (<code>LClosure</code>):</strong> Contain a
+pointer to a <code>Proto</code> (prototype) structure that holds the
+compiled bytecode instructions, constants, debug information, and a list
+of upvalues.</li>
+<li><strong>C Closures (<code>CClosure</code>):</strong> Contain a
+direct native C function pointer (<code>lua_CFunction</code>) along with
+an array of Lua values serving as upvalues bound to the C
+environment.</li>
+<li><strong>Light C Functions:</strong> Lightweight function
+representations stored directly inside Lua's general value container
+(<code>TValue</code>) as raw function pointers without upvalue
+allocation overhead.</li>
+</ul>
+<p>When a function is pushed onto the stack, the VM assigns it a
+specific subtype tag—such as <code>LUA_VLCL</code> for Lua closures,
+<code>LUA_VCCL</code> for C closures, and <code>LUA_VLCF</code> for
+light C functions.</p>
+<h3 id="call-dispatch-and-stack-frames">Call Dispatch and Stack
+Frames</h3>
+<p>The differentiation occurs during the call preparation phase,
+primarily handled by the internal core function
+<code>luaD_precall</code>. When the interpreter encounters a call
+instruction (such as the <code>OP_CALL</code> bytecode or an explicit
+invocation via the C API like <code>lua_pcall</code>), it executes the
+following steps:</p>
+<ol type="1">
+<li><strong>Tag Checking:</strong> The VM inspects the target object's
+type tag at the base of the call frame. If the object is not a function,
+Lua checks for a <code>__call</code> metamethod. If it is a function,
+the VM reads the subtype tag to decide the execution branch.</li>
+<li><strong>CallInfo Allocation:</strong> The VM pushes a new
+<code>CallInfo</code> struct onto its execution call stack. This
+structure tracks the state of the active call, including the base
+register index, expected number of return values, and status flags.</li>
+</ol>
+<h3 id="executing-c-callbacks">Executing C Callbacks</h3>
+<p>If <code>luaD_precall</code> identifies a <code>CClosure</code> or a
+light C function, the VM bypasses the bytecode interpreter entirely:</p>
+<ul>
+<li><p>The runtime sets the call frame status flag to mark it as a C
+call.</p></li>
+<li><p>The VM invokes the stored <code>lua_CFunction</code> pointer
+directly via standard machine-code calling conventions, passing the
+current execution thread (<code>lua_State* L</code>) as the single
+argument:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> n <span class="op">=</span> <span class="op">(*</span>f<span class="op">)(</span>L<span class="op">);</span></span></code></pre></div></li>
+<li><p>The C callback performs its tasks using the Lua C API,
+manipulating the virtual stack relative to its own stack
+window.</p></li>
+<li><p>Once the C function returns an integer indicating the number of
+results placed on the stack, <code>luaD_poscall</code> executes
+immediately to adjust the stack, copy the return values to the caller's
+frame, and pop the <code>CallInfo</code> record.</p></li>
+</ul>
+<h3 id="executing-native-bytecode">Executing Native Bytecode</h3>
+<p>If the target object is an <code>LClosure</code>, the VM remains
+within the interpreter context:</p>
+<ul>
+<li>The runtime initializes the execution frame using the metadata
+stored in the closure's <code>Proto</code> block.</li>
+<li>It sets the VM’s program counter (<code>pc</code>) to the first
+bytecode instruction of the prototype.</li>
+<li>It verifies stack space, ensures that all expected parameters are
+mapped into registers, and initializes any missing arguments to
+<code>nil</code>.</li>
+<li>Control is transferred to the main virtual machine loop
+(<code>luaV_execute</code>), which fetches, decodes, and executes
+bytecode instructions sequentially.</li>
+</ul>
+<p>Through this dual-path dispatching system, the Lua VM maintains a
+clean separation between high-level interpreted instructions and native
+C host boundaries while presenting a unified calling interface to the
+programmer.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-differentiates-bytecode-and-c-functions';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

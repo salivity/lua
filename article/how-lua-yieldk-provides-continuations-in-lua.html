@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How lua_yieldk Provides Continuations in Lua - lua</title>
+    <meta name="description" content="In the Lua C API, luayieldk enables coroutines to yield execution inside C functions and resume seamlessly through the use of continuation functions. Introduced in Lua 5.2, this mechanism circumvents the limitation of standard C where the native call stac">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-yieldk-provides-continuations-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How lua_yieldk Provides Continuations in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-yieldk-provides-continuations-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua C API, luayieldk enables coroutines to yield execution inside C functions and resume seamlessly through the use of continuation functions. Introduced in Lua 5.2, this mechanism circumvents the limitation of standard C where the native call stac" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua_yieldk-provides-continuations-in-lua">How lua_yieldk
+Provides Continuations in Lua</h1>
+<p>In the Lua C API, <code>lua_yieldk</code> enables coroutines to yield
+execution inside C functions and resume seamlessly through the use of
+continuation functions. Introduced in Lua 5.2, this mechanism
+circumvents the limitation of standard C where the native call stack
+cannot be preserved across yields. By decoupling the resumption logic
+from the original C execution frame, <code>lua_yieldk</code> allows
+developers to specify a fallback function and context that Lua invokes
+once the coroutine is resumed, effectively solving the classic "attempt
+to yield across a C-call boundary" error.</p>
+<h2 id="the-c-stack-limitation">The C Stack Limitation</h2>
+<p>Standard C relies on an operating system-managed execution stack. In
+earlier versions of Lua (such as Lua 5.1), if a C function yielded, Lua
+could not easily pause and restore the C stack frame without
+non-portable assembly or platform-specific thread mechanics. If a C
+function called another function or needed to perform operations after a
+yield, returning control to Lua would discard the local C variables and
+the execution pointer. Consequently, yielding was only permitted if the
+C function directly returned the yield result with no pending C
+operations.</p>
+<h2 id="the-structure-of-lua_yieldk">The Structure of lua_yieldk</h2>
+<p>The <code>lua_yieldk</code> function extends the basic
+<code>lua_yield</code> macro by accepting additional parameters for
+continuation management:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> lua_yieldk <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">int</span> nresults<span class="op">,</span> lua_KContext ctx<span class="op">,</span> lua_KFunction k<span class="op">);</span></span></code></pre></div>
+<ul>
+<li><strong><code>L</code></strong>: The execution state of the
+coroutine.</li>
+<li><strong><code>nresults</code></strong>: The number of values on the
+Lua stack to return to <code>coroutine.resume</code>.</li>
+<li><strong><code>ctx</code></strong>: An arbitrary integer-sized
+context value (<code>lua_KContext</code>) used to track state across
+yields.</li>
+<li><strong><code>k</code></strong>: A pointer to the continuation
+function of type <code>lua_KFunction</code>.</li>
+</ul>
+<p>A continuation function follows this signature:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">typedef</span> <span class="dt">int</span> <span class="op">(*</span>lua_KFunction<span class="op">)</span> <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">int</span> status<span class="op">,</span> lua_KContext ctx<span class="op">);</span></span></code></pre></div>
+<h2 id="how-the-continuation-cycle-works">How the Continuation Cycle
+Works</h2>
+<p>The execution flow using <code>lua_yieldk</code> operates in three
+distinct phases:</p>
+<ol type="1">
+<li><strong>Suspending Execution</strong>: Inside the original C
+function, instead of performing a simple return or standard yield, the
+program invokes <code>lua_yieldk</code>. It passes the continuation
+function <code>k</code>, any needed state packed into <code>ctx</code>,
+and the count of return values. Lua records this metadata inside the
+internal call frame for that thread and immediately suspends the
+coroutine.</li>
+<li><strong>Re-entering via the Continuation</strong>: When Lua code
+resumes the coroutine using <code>coroutine.resume</code>, the Lua
+runtime detects the pending continuation on the thread's call stack.
+Instead of trying to jump back into the middle of the original C
+function, it directly calls the function pointer <code>k</code>.</li>
+<li><strong>Handling the Resumption State</strong>: The continuation
+function receives the Lua state, the yield status (typically
+<code>LUA_YIELD</code>), and the stored <code>ctx</code>. Any arguments
+passed to <code>coroutine.resume</code> are placed on the Lua stack and
+can be read by <code>k</code>.</li>
+</ol>
+<p>Inside the continuation function, the developer can process the new
+parameters, use <code>ctx</code> to determine what step of the operation
+was pending, and either return final results to Lua or invoke
+<code>lua_yieldk</code> again to chain further continuations.</p>
+<h2 id="practical-advantages">Practical Advantages</h2>
+<ul>
+<li><strong>Yielding Across Metamethods</strong>: Continuations permit
+yields inside metamethods (such as <code>__index</code> or
+<code>__newindex</code>) and iterator functions written in C.</li>
+<li><strong>State Machine Emulation</strong>: Complex asynchronous I/O
+loops can be structured as C state machines where <code>ctx</code>
+represents the current state ID, allowing clean, non-blocking C
+extensions without requiring native OS threads.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-yieldk-provides-continuations-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

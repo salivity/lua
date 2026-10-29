@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strict Global Variable Checks in Lua - lua</title>
+    <meta name="description" content="Lua creates global variables by default whenever an undeclared variable is assigned, which often introduces silent bugs caused by simple typos. This article demonstrates how to eliminate these errors by intercepting undeclared reads and writes using metat">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/strict-global-variable-checks-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Strict Global Variable Checks in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/strict-global-variable-checks-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua creates global variables by default whenever an undeclared variable is assigned, which often introduces silent bugs caused by simple typos. This article demonstrates how to eliminate these errors by intercepting undeclared reads and writes using metat" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="strict-global-variable-checks-in-lua">Strict Global Variable
+Checks in Lua</h1>
+<p>Lua creates global variables by default whenever an undeclared
+variable is assigned, which often introduces silent bugs caused by
+simple typos. This article demonstrates how to eliminate these errors by
+intercepting undeclared reads and writes using metatables on Lua's
+global environment, and how to augment this runtime safety with static
+analysis tools.</p>
+<h3 id="the-problem-with-implicit-globals">The Problem with Implicit
+Globals</h3>
+<p>In standard Lua, forgetting the <code>local</code> keyword does not
+raise an error. Instead, the runtime assigns the value to the global
+table <code>_G</code>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> calculate_total<span class="op">(</span><span class="va">price</span><span class="op">,</span> <span class="va">tax</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">ttoal</span> <span class="op">=</span> <span class="va">price</span> <span class="op">+</span> <span class="va">tax</span> <span class="co">-- Typo creates an unintended global</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">ttoal</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Because reading a nonexistent global simply returns <code>nil</code>,
+typos in variable names can propagate silently through an application
+until they cause hard-to-trace runtime failures.</p>
+<hr />
+<h3 id="enforcing-strict-globals-with-metatables">Enforcing Strict
+Globals with Metatables</h3>
+<p>The standard way to restrict global variable creation is by attaching
+a metatable to the global environment table (<code>_G</code>). By
+intercepting the <code>__newindex</code> (write) and
+<code>__index</code> (read) metamethods, you can throw an explicit error
+whenever an unauthorized global variable is accessed.</p>
+<p>Here is a minimal, robust implementation:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">declared</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">setmetatable</span><span class="op">(</span><span class="va">_G</span><span class="op">,</span> <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__newindex</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">t</span><span class="op">,</span> <span class="va">name</span><span class="op">,</span> <span class="va">value</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> <span class="va">declared</span><span class="op">[</span><span class="va">name</span><span class="op">]</span> <span class="cf">then</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>            <span class="fu">error</span><span class="op">(</span><span class="st">&quot;Attempt to write to undeclared global variable: &quot;</span> <span class="op">..</span> <span class="fu">tostring</span><span class="op">(</span><span class="va">name</span><span class="op">),</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>        <span class="fu">rawset</span><span class="op">(</span><span class="va">t</span><span class="op">,</span> <span class="va">name</span><span class="op">,</span> <span class="va">value</span><span class="op">)</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="op">,</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__index</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">t</span><span class="op">,</span> <span class="va">name</span><span class="op">)</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> <span class="va">declared</span><span class="op">[</span><span class="va">name</span><span class="op">]</span> <span class="cf">then</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>            <span class="fu">error</span><span class="op">(</span><span class="st">&quot;Attempt to read undeclared global variable: &quot;</span> <span class="op">..</span> <span class="fu">tostring</span><span class="op">(</span><span class="va">name</span><span class="op">),</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="kw">nil</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="op">,</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="co">-- Function to explicitly register permitted globals</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="kw">global</span><span class="op">(</span><span class="va">name</span><span class="op">,</span> <span class="va">value</span><span class="op">)</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    <span class="va">declared</span><span class="op">[</span><span class="va">name</span><span class="op">]</span> <span class="op">=</span> <span class="kw">true</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rawset</span><span class="op">(</span><span class="va">_G</span><span class="op">,</span> <span class="va">name</span><span class="op">,</span> <span class="va">value</span><span class="op">)</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h4 id="how-it-works">How It Works:</h4>
+<ol type="1">
+<li><strong><code>__newindex</code></strong>: Triggers whenever a script
+attempts to assign a value to a key that does not already exist in
+<code>_G</code>. If the key is not in <code>declared</code>, it raises
+an error.</li>
+<li><strong><code>__index</code></strong>: Triggers whenever code
+attempts to read a key from <code>_G</code> that does not exist. It
+prevents accessing nonexistent globals that would normally return
+<code>nil</code>.</li>
+<li><strong><code>rawset</code></strong>: Bypasses the metatable to
+actually write the approved variable to <code>_G</code> without
+re-triggering <code>__newindex</code>.</li>
+<li><strong><code>error(..., 2)</code></strong>: Sets the error level to
+<code>2</code> so the traceback points directly to the offending line of
+code rather than the metatable function itself.</li>
+</ol>
+<hr />
+<h3 id="using-the-canonical-strictlua">Using the Canonical
+<code>strict.lua</code></h3>
+<p>The official Lua distribution includes a standard utility called
+<code>strict.lua</code>. It allows declaring globals inside the main
+chunk while throwing errors if an undeclared global is assigned inside a
+function.</p>
+<p>To use it:</p>
+<ol type="1">
+<li>Download or locate <code>strict.lua</code> from your Lua
+distribution.</li>
+<li>Require it at the very top of your application entry point before
+loading other modules:</li>
+</ol>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">require</span><span class="op">(</span><span class="st">&quot;strict&quot;</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Valid in main chunk (depending on configuration)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="va">MyGlobal</span> <span class="op">=</span> <span class="st">&quot;Allowed here&quot;</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> test<span class="op">()</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">bad_var</span> <span class="op">=</span> <span class="dv">123</span> <span class="co">-- Throws: &quot;variable &#39;bad_var&#39; is not declared&quot;</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<hr />
+<h3 id="modern-lua-controlling-_env-lua-52">Modern Lua: Controlling
+<code>_ENV</code> (Lua 5.2+)</h3>
+<p>In Lua 5.2 and newer, global resolution is scoped to the
+<code>_ENV</code> table. You can protect a specific module or chunk by
+assigning an empty or strictly checked table to <code>_ENV</code>:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Isolate a chunk&#39;s environment</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="cn">_ENV</span> <span class="op">=</span> <span class="fu">setmetatable</span><span class="op">({},</span> <span class="op">{</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__index</span> <span class="op">=</span> <span class="va">_G</span><span class="op">,</span> <span class="co">-- Fallback to standard libraries</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__newindex</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="cn">_</span><span class="op">,</span> <span class="va">k</span><span class="op">,</span> <span class="cn">_</span><span class="op">)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>        <span class="fu">error</span><span class="op">(</span><span class="st">&quot;Global creation disabled. Cannot set: &quot;</span> <span class="op">..</span> <span class="fu">tostring</span><span class="op">(</span><span class="va">k</span><span class="op">),</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">x</span> <span class="op">=</span> <span class="dv">10</span> <span class="co">-- OK: local variable</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="va">y</span> <span class="op">=</span> <span class="dv">20</span>       <span class="co">-- Error: Global creation disabled. Cannot set: y</span></span></code></pre></div>
+<hr />
+<h3 id="static-analysis-with-luacheck">Static Analysis with
+Luacheck</h3>
+<p>While runtime metatable checks catch errors during execution, static
+analysis prevents undeclared globals before the code runs.
+<strong>Luacheck</strong> is the standard linter for Lua.</p>
+<ol type="1">
+<li><p>Install Luacheck via Luarocks:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luarocks</span> install luacheck</span></code></pre></div></li>
+<li><p>Run it against your source files:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luacheck</span> src/</span></code></pre></div></li>
+</ol>
+<p>Luacheck automatically reports:</p>
+<ul>
+<li>Accessing undeclared globals (warning <code>111</code>)</li>
+<li>Setting undeclared globals (warning <code>112</code>)</li>
+<li>Unused local variables (warning <code>211</code>)</li>
+</ul>
+<p>You can define intentional globals in a <code>.luacheckrc</code>
+configuration file:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="va">globals</span> <span class="op">=</span> <span class="op">{</span> <span class="st">&quot;describe&quot;</span><span class="op">,</span> <span class="st">&quot;it&quot;</span> <span class="op">}</span> <span class="co">-- Whitelist test framework globals</span></span></code></pre></div>
+<p>Combining the runtime metatable check with Luacheck during continuous
+integration provides full coverage against unintentional global
+leaks.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/strict-global-variable-checks-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

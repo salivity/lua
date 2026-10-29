@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Garbage Collection and Open File Handles - lua</title>
+    <meta name="description" content="In the Lua programming language, when an open file handle represented by a userdata object becomes unreferenced, it is not closed immediately; instead, it remains open until the garbage collector runs and invokes the object&#39;s finalizer. When the garbage c">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-garbage-collection-and-open-file-handles">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Garbage Collection and Open File Handles - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-garbage-collection-and-open-file-handles" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, when an open file handle represented by a userdata object becomes unreferenced, it is not closed immediately; instead, it remains open until the garbage collector runs and invokes the object&#39;s finalizer. When the garbage c" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-garbage-collection-and-open-file-handles">Lua Garbage
+Collection and Open File Handles</h1>
+<p>In the Lua programming language, when an open file handle represented
+by a userdata object becomes unreferenced, it is not closed immediately;
+instead, it remains open until the garbage collector runs and invokes
+the object's finalizer. When the garbage collector eventually collects
+this unreferenced userdata, its <code>__gc</code> metamethod
+automatically executes the underlying C runtime call
+<code>fclose()</code>, properly flushing buffers and releasing the
+operating system file descriptor.</p>
+<h3 id="the-finalizer-mechanism">The Finalizer Mechanism</h3>
+<p>Files opened using Lua's standard I/O library (such as through
+<code>io.open()</code>) are represented internally as a
+<code>FILE*</code> pointer wrapped in a full userdata object. This
+userdata is assigned a specific metatable containing a <code>__gc</code>
+(garbage collection) metamethod.</p>
+<p>When a program drops all references to a file object—such as when a
+local variable goes out of scope—the file userdata becomes eligible for
+garbage collection. During a subsequent garbage collection cycle, Lua
+identifies the unreachable userdata and executes its <code>__gc</code>
+metamethod before deallocating the memory. The default implementation
+calls <code>file:close()</code>, which closes the underlying stream and
+frees the file descriptor back to the operating system.</p>
+<h3 id="hazards-of-relying-on-the-garbage-collector">Hazards of Relying
+on the Garbage Collector</h3>
+<p>While Lua ensures that orphaned file handles are eventually closed,
+relying entirely on the garbage collector for resource cleanup
+introduces significant risks:</p>
+<ul>
+<li><strong>Non-Deterministic Timing:</strong> Lua's garbage collector
+is primarily driven by memory allocation thresholds, not external system
+resources. Because file userdata objects consume very little Lua memory,
+the garbage collector may not trigger a cycle for a long time.</li>
+<li><strong>File Descriptor Exhaustion:</strong> Operating systems
+impose strict limits on the number of simultaneously open file
+descriptors per process. A Lua program can quickly exhaust available
+file descriptors by repeatedly opening files without explicitly closing
+them, even if the memory footprint remains small enough that the garbage
+collector does not run.</li>
+<li><strong>Delayed Buffer Flushing:</strong> Output operations are
+often buffered. If a file is not explicitly closed, buffered data might
+not be written to disk until an unpredictable garbage collection cycle
+occurs, or until the Lua state is cleanly closed.</li>
+</ul>
+<h3 id="best-practices">Best Practices</h3>
+<p>To avoid descriptor leaks and ensure predictable execution, files
+should always be closed deterministically:</p>
+<ol type="1">
+<li><strong>Explicit Closure:</strong> Call <code>file:close()</code> as
+soon as I/O operations are complete.</li>
+<li><strong>Iteration Idioms:</strong> Use
+<code>io.lines(filename)</code>, which automatically closes the
+underlying file handle as soon as the end of the file is reached or an
+error occurs during iteration.</li>
+<li><strong>Safe Cleanup:</strong> Wrap file-handling operations inside
+<code>pcall</code> or <code>xpcall</code> constructs to ensure that
+<code>file:close()</code> is called even if an error is raised during
+processing.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-garbage-collection-and-open-file-handles';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

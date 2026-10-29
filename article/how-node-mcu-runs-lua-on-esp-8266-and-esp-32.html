@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How NodeMCU Runs Lua on ESP8266 and ESP32 - lua</title>
+    <meta name="description" content="This article examines how the open-source NodeMCU project successfully implemented the Lua scripting language on resource-constrained ESP8266 and ESP32 system-on-chip (SoC) microcontrollers. It details the underlying architectural adaptations, including t">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-node-mcu-runs-lua-on-esp-8266-and-esp-32">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How NodeMCU Runs Lua on ESP8266 and ESP32 - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-node-mcu-runs-lua-on-esp-8266-and-esp-32" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article examines how the open-source NodeMCU project successfully implemented the Lua scripting language on resource-constrained ESP8266 and ESP32 system-on-chip (SoC) microcontrollers. It details the underlying architectural adaptations, including t" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-nodemcu-runs-lua-on-esp8266-and-esp32">How NodeMCU Runs Lua
+on ESP8266 and ESP32</h1>
+<p>This article examines how the open-source NodeMCU project
+successfully implemented the Lua scripting language on
+resource-constrained ESP8266 and ESP32 system-on-chip (SoC)
+microcontrollers. It details the underlying architectural adaptations,
+including the integration of an embedded Lua runtime with Espressif’s
+native software development kits, the asynchronous event-driven
+execution model, custom flash memory optimizations, and the C-based
+hardware abstraction layers that make high-level scripting viable on
+microcontrollers.</p>
+<h3 id="the-embedded-runtime-foundation">The Embedded Runtime
+Foundation</h3>
+<p>NodeMCU bridges high-level scripting with low-level silicon by
+adapting eLua (Embedded Lua), based originally on Lua 5.1.4 and later
+extended to Lua 5.3 on the ESP32. Instead of running on an operating
+system, the Lua virtual machine (VM) compiles directly against
+Espressif’s development frameworks: the Non-OS SDK (and later RTOS SDK)
+for the ESP8266, and the ESP-IDF (Espressif IoT Development Framework)
+for the ESP32. The VM operates as a native C application executing
+directly on the bare metal or on top of FreeRTOS tasks.</p>
+<h3 id="asynchronous-non-blocking-execution-model">Asynchronous,
+Non-Blocking Execution Model</h3>
+<p>Microcontrollers handling network stacks cannot tolerate long,
+blocking loops without crashing or triggering hardware watchdog timers
+(WDT). NodeMCU solved this by modeling its execution framework after
+Node.js.</p>
+<p>Rather than using synchronous blocking calls for network and hardware
+I/O, NodeMCU maps Lua callbacks to Espressif SDK event loops. When a
+network packet arrives, a timer fires, or a GPIO pin changes state, the
+underlying C-level interrupt or callback queues an event. The NodeMCU
+task dispatcher picks up this event and invokes the corresponding Lua
+callback function in the VM. This keeps the execution thread free,
+preventing watchdog resets and ensuring Wi-Fi connectivity remains
+stable without requiring complex multithreaded Lua code.</p>
+<h3 id="memory-optimization-and-lua-flash-store-lfs">Memory Optimization
+and Lua Flash Store (LFS)</h3>
+<p>The ESP8266 possesses less than 50 KB of usable data RAM for user
+applications, posing a severe challenge for a dynamic language where
+variables, strings, and bytecodes typically reside in RAM. NodeMCU
+implemented several memory management solutions to circumvent these
+limits:</p>
+<ul>
+<li><strong>Rotables (Read-Only Tables):</strong> NodeMCU stores core
+API definitions, module tables, and string keys directly in read-only
+SPI flash memory rather than dynamically allocating them in SRAM.</li>
+<li><strong>Lua Flash Store (LFS):</strong> Introduced to overcome
+memory exhaustion when loading large user scripts, LFS enables Lua
+bytecode to reside in and execute directly from flash memory
+(XIP—Execute In Place). This leaves scarce SRAM almost entirely
+available for runtime variables, dynamic allocations, and Lua garbage
+collection.</li>
+</ul>
+<h3 id="hardware-abstraction-layer-hal-and-c-bindings">Hardware
+Abstraction Layer (HAL) and C-Bindings</h3>
+<p>To manipulate hardware peripherals, NodeMCU uses standard Lua C-APIs
+to register native C functions into Lua tables. Modules such as
+<code>gpio</code>, <code>net</code>, <code>wifi</code>,
+<code>i2c</code>, and <code>mqtt</code> are written in native C. When a
+user calls a method like <code>gpio.write(pin, level)</code> in Lua, the
+VM pushes the arguments onto the Lua stack, where the C wrapper extracts
+the types, validates them, and directly manipulates the ESP SoC
+registers via the underlying SDK drivers.</p>
+<p>Developers can customize their firmware by toggling C modules in the
+firmware configuration header files before compilation, allowing
+projects to strip out unused drivers and conserve both flash and
+RAM.</p>
+<h3 id="architectural-differences-esp8266-vs-esp32">Architectural
+Differences: ESP8266 vs. ESP32</h3>
+<p>While both chip architectures share the same Lua API design
+principles within NodeMCU, their underlying implementations differ based
+on hardware capabilities:</p>
+<ul>
+<li><strong>ESP8266:</strong> Runs on a single-core Tensilica Xtensa
+L106 processor without a traditional OS. Multitasking relies strictly on
+cooperative scheduling managed by an internal task queue tied directly
+to the ESP8266 SDK.</li>
+<li><strong>ESP32:</strong> Leverages a dual-core Xtensa LX6 or RISC-V
+processor and native FreeRTOS. NodeMCU for the ESP32 runs the Lua VM as
+a distinct FreeRTOS task, routing hardware interactions through the
+ESP-IDF drivers. This enables true multi-core utilization,
+hardware-accelerated cryptographic processing for TLS/SSL, larger
+address spaces, and integrated Bluetooth/BLE support directly within the
+Lua environment.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-node-mcu-runs-lua-on-esp-8266-and-esp-32';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

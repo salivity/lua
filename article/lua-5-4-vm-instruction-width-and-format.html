@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua 5.4 VM Instruction Width and Format - lua</title>
+    <meta name="description" content="In version 5.4 of the Lua programming language, the Lua Virtual Machine (LVM) operates as a register-based engine where every bytecode instruction has a fixed width of 32 bits. This article provides a technical breakdown of this 32-bit instruction width,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-5-4-vm-instruction-width-and-format">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua 5.4 VM Instruction Width and Format - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-5-4-vm-instruction-width-and-format" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In version 5.4 of the Lua programming language, the Lua Virtual Machine (LVM) operates as a register-based engine where every bytecode instruction has a fixed width of 32 bits. This article provides a technical breakdown of this 32-bit instruction width," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-54-vm-instruction-width-and-format">Lua 5.4 VM Instruction
+Width and Format</h1>
+<p>In version 5.4 of the Lua programming language, the Lua Virtual
+Machine (LVM) operates as a register-based engine where every bytecode
+instruction has a fixed width of 32 bits. This article provides a
+technical breakdown of this 32-bit instruction width, explains how the
+bit fields are structured, and covers the five primary instruction
+formats (<code>iABC</code>, <code>iABx</code>, <code>iAsBx</code>,
+<code>iAx</code>, and <code>isJ</code>) defined in Lua 5.4's bytecode
+architecture.</p>
+<h3 id="instruction-width">Instruction Width</h3>
+<p>The Lua 5.4 Virtual Machine encodes every instruction into a fixed
+32-bit unsigned integer, defined in the source code as
+<code>Instruction</code> (aliased to <code>l_uint32</code>). Using a
+fixed 32-bit width ensures predictable instruction decoding, efficient
+memory alignment, and consistent performance across modern processor
+architectures.</p>
+<h3 id="opcode-allocation">Opcode Allocation</h3>
+<p>In Lua 5.4, the primary operation code (<code>OpCode</code>) occupies
+the lowest 7 bits of the 32-bit word (bits 0 through 6). This expands
+upon earlier Lua versions, which allocated only 6 bits for opcodes. The
+7-bit allocation supports up to 128 unique bytecode instructions,
+leaving the remaining 25 bits to be divided among various register and
+immediate value operands.</p>
+<h3 id="instruction-formats">Instruction Formats</h3>
+<p>Lua 5.4 structures instructions into five distinct layouts defined in
+<code>lopcodes.h</code>. The VM determines how to interpret the
+remaining 25 bits based on the opcode.</p>
+<h4 id="1-iabc-format">1. iABC Format</h4>
+<p>The <code>iABC</code> format is the most common format, used for
+standard register operations, arithmetic, and logic commands.</p>
+<ul>
+<li><strong>Opcode:</strong> 7 bits (bits 0–6)</li>
+<li><strong>A:</strong> 8 bits (bits 7–14)</li>
+<li><strong>k:</strong> 1 bit (bit 15)</li>
+<li><strong>B:</strong> 8 bits (bits 16–23)</li>
+<li><strong>C:</strong> 8 bits (bits 24–31)</li>
+</ul>
+<p><code>A</code>, <code>B</code>, and <code>C</code> generally
+represent register indices. The <code>k</code> field is a 1-bit boolean
+flag introduced in Lua 5.4. It is often used to signal whether an
+operand refers to a constant directly or whether a condition should be
+inverted, reducing the need for auxiliary instructions.</p>
+<h4 id="2-iabx-format">2. iABx Format</h4>
+<p>The <code>iABx</code> format is used when an instruction requires an
+unsigned 17-bit integer argument, such as referencing entries in a large
+constant table or handling closure parameters.</p>
+<ul>
+<li><strong>Opcode:</strong> 7 bits (bits 0–6)</li>
+<li><strong>A:</strong> 8 bits (bits 7–14)</li>
+<li><strong>Bx:</strong> 17 bits (bits 15–31)</li>
+</ul>
+<p>Field <code>Bx</code> is an unsigned value ranging from 0 to
+131,071.</p>
+<h4 id="3-iasbx-format">3. iAsBx Format</h4>
+<p>The <code>iAsBx</code> format mirrors the <code>iABx</code> layout
+but treats the 17-bit field as a signed integer.</p>
+<ul>
+<li><strong>Opcode:</strong> 7 bits (bits 0–6)</li>
+<li><strong>A:</strong> 8 bits (bits 7–14)</li>
+<li><strong>sBx:</strong> 17 bits (bits 15–31)</li>
+</ul>
+<p>Field <code>sBx</code> represents signed values using a biased
+representation (offset binary), allowing a range from -65,536 to
++65,535. It is commonly used for arithmetic loops and relative value
+offsets.</p>
+<h4 id="4-iax-format">4. iAx Format</h4>
+<p>The <code>iAx</code> format handles operations that require a single,
+large immediate value spanning the entire remaining width of the
+instruction.</p>
+<ul>
+<li><strong>Opcode:</strong> 7 bits (bits 0–6)</li>
+<li><strong>Ax:</strong> 25 bits (bits 7–31)</li>
+</ul>
+<p>The unsigned 25-bit <code>Ax</code> field can store values up to
+33,554,431. This format is primarily used by the
+<code>OP_EXTRAARG</code> instruction to extend the constant-addressing
+capability of preceding instructions that exceed their native operand
+limits.</p>
+<h4 id="5-isj-format">5. isJ Format</h4>
+<p>Introduced in Lua 5.4, the <code>isJ</code> format is dedicated to
+control-flow and jump instructions (such as <code>OP_JMP</code>).</p>
+<ul>
+<li><strong>Opcode:</strong> 7 bits (bits 0–6)</li>
+<li><strong>sJ:</strong> 25 bits (bits 7–31)</li>
+</ul>
+<p>Field <code>sJ</code> is a signed 25-bit offset that allows the VM to
+perform relative jumps across a range of approximately -16,777,216 to
++16,777,215 instructions. Unlike older Lua versions that used
+<code>sBx</code> alongside a register argument for jumps, Lua 5.4
+dedicated <code>isJ</code> exclusively to branch displacement,
+significantly expanding the maximum jump distance within a single
+compiled chunk.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-5-4-vm-instruction-width-and-format';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Using the Lua select Function with Varargs - lua</title>
+    <meta name="description" content="In the Lua programming language, functions can accept an arbitrary number of parameters using the variable argument (vararg) expression, denoted by three dots (...). This article explains how Lua&#39;s built-in select function works to inspect the total count">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/using-the-lua-select-function-with-varargs">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Using the Lua select Function with Varargs - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/using-the-lua-select-function-with-varargs" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, functions can accept an arbitrary number of parameters using the variable argument (vararg) expression, denoted by three dots (...). This article explains how Lua&#39;s built-in select function works to inspect the total count" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="using-the-lua-select-function-with-varargs">Using the Lua select
+Function with Varargs</h1>
+<p>In the Lua programming language, functions can accept an arbitrary
+number of parameters using the variable argument (vararg) expression,
+denoted by three dots (<code>...</code>). This article explains how
+Lua's built-in <code>select</code> function works to inspect the total
+count of these arguments and retrieve specific values from them
+efficiently without packing them into a table.</p>
+<h3 id="the-role-of-the-select-function">The Role of the
+<code>select</code> Function</h3>
+<p>The standard signature of the function is
+<code>select(index, ...)</code>. It takes an index or selector as its
+first argument, followed by the variable arguments to be evaluated.
+Depending on the value passed as the first parameter,
+<code>select</code> performs one of two operations: counting the
+arguments or slicing and returning them starting from a specific
+position.</p>
+<h3 id="counting-arguments-with-select-">Counting Arguments with
+<code>select('#', ...)</code></h3>
+<p>When the string <code>'#'</code> is provided as the first argument,
+<code>select</code> returns the total number of arguments passed in the
+vararg expression.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> countArgs<span class="op">(...)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">count</span> <span class="op">=</span> <span class="fu">select</span><span class="op">(</span><span class="st">&#39;#&#39;</span><span class="op">,</span> <span class="op">...)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Total arguments:&quot;</span><span class="op">,</span> <span class="va">count</span><span class="op">)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>countArgs<span class="op">(</span><span class="dv">10</span><span class="op">,</span> <span class="st">&quot;hello&quot;</span><span class="op">,</span> <span class="kw">nil</span><span class="op">,</span> <span class="kw">true</span><span class="op">)</span> <span class="co">-- Total arguments: 4</span></span></code></pre></div>
+<p>Using <code>select('#', ...)</code> is the standard, idiomatic way to
+count arguments in Lua because it correctly counts <code>nil</code>
+values. Packing arguments into a table via <code>{...}</code> and using
+the length operator <code>#</code> can produce unreliable results if
+trailing or intermediate <code>nil</code> values exist, as
+<code>nil</code> creates "holes" in Lua sequences.</p>
+<h3 id="retrieving-arguments-by-numeric-index">Retrieving Arguments by
+Numeric Index</h3>
+<p>When a positive integer <code>n</code> is supplied as the first
+argument, <code>select</code> drops the first <code>n - 1</code>
+elements and returns all remaining arguments from position
+<code>n</code> onward.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> getFromIndex<span class="op">(...)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Returns the 2nd argument and everything after it</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">select</span><span class="op">(</span><span class="dv">2</span><span class="op">,</span> <span class="op">...)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">,</span> <span class="va">c</span> <span class="op">=</span> getFromIndex<span class="op">(</span><span class="st">&quot;first&quot;</span><span class="op">,</span> <span class="st">&quot;second&quot;</span><span class="op">,</span> <span class="st">&quot;third&quot;</span><span class="op">,</span> <span class="st">&quot;fourth&quot;</span><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">,</span> <span class="va">c</span><span class="op">)</span> <span class="co">-- Output: second    third    fourth</span></span></code></pre></div>
+<p>If you only need a single specific argument, you can isolate it by
+wrapping the call in parentheses to adjust the return values to a single
+item:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> getSingleArg<span class="op">(</span><span class="va">n</span><span class="op">,</span> <span class="op">...)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Parentheses force Lua to evaluate only the first returned value</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">(</span><span class="fu">select</span><span class="op">(</span><span class="va">n</span><span class="op">,</span> <span class="op">...))</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>getSingleArg<span class="op">(</span><span class="dv">3</span><span class="op">,</span> <span class="st">&quot;A&quot;</span><span class="op">,</span> <span class="st">&quot;B&quot;</span><span class="op">,</span> <span class="st">&quot;C&quot;</span><span class="op">,</span> <span class="st">&quot;D&quot;</span><span class="op">))</span> <span class="co">-- Output: C</span></span></code></pre></div>
+<h3 id="using-negative-indices">Using Negative Indices</h3>
+<p>Modern versions of Lua (Lua 5.3 and newer) support negative numbers
+for the index. A negative index counts backward from the end of the
+argument list, where <code>-1</code> represents the last argument,
+<code>-2</code> represents the second-to-last, and so on.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> getLastArg<span class="op">(...)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">select</span><span class="op">(-</span><span class="dv">1</span><span class="op">,</span> <span class="op">...)</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>getLastArg<span class="op">(</span><span class="st">&quot;apple&quot;</span><span class="op">,</span> <span class="st">&quot;banana&quot;</span><span class="op">,</span> <span class="st">&quot;cherry&quot;</span><span class="op">))</span> <span class="co">-- Output: cherry</span></span></code></pre></div>
+<h3 id="performance-benefits">Performance Benefits</h3>
+<p>The primary advantage of <code>select</code> over packing arguments
+into an array with <code>{...}</code> is efficiency. Creating a table
+requires memory allocation and invokes the garbage collector, which adds
+overhead in performance-critical code or tight loops. The
+<code>select</code> function operates directly on Lua's internal virtual
+machine stack, inspecting and retrieving parameters with zero table
+allocations.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/using-the-lua-select-function-with-varargs';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

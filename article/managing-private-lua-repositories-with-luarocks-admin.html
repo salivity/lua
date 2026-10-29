@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Managing Private Lua Repositories with luarocks-admin - lua</title>
+    <meta name="description" content="The luarocks-admin tool is an administrative command-line utility used to create, maintain, and curate custom LuaRocks package repositories. While standard developers use the luarocks command to download and install packages, repository administrators use">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/managing-private-lua-repositories-with-luarocks-admin">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Managing Private Lua Repositories with luarocks-admin - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/managing-private-lua-repositories-with-luarocks-admin" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The luarocks-admin tool is an administrative command-line utility used to create, maintain, and curate custom LuaRocks package repositories. While standard developers use the luarocks command to download and install packages, repository administrators use" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="managing-private-lua-repositories-with-luarocks-admin">Managing
+Private Lua Repositories with luarocks-admin</h1>
+<p>The <code>luarocks-admin</code> tool is an administrative
+command-line utility used to create, maintain, and curate custom
+LuaRocks package repositories. While standard developers use the
+<code>luarocks</code> command to download and install packages,
+repository administrators use <code>luarocks-admin</code> to organize
+proprietary modules, manage binary and source <code>.rock</code>
+archives, and maintain manifest files for private or air-gapped
+environments.</p>
+<h3 id="core-purpose-of-luarocks-admin">Core Purpose of
+luarocks-admin</h3>
+<p>In the Lua ecosystem, LuaRocks relies on a structured directory
+hierarchy containing package files and a central <code>manifest</code>
+file that details available packages, versions, and dependencies. The
+primary role of <code>luarocks-admin</code> is to automate the creation
+and maintenance of this index. Without it, managing the metadata
+required for the standard <code>luarocks</code> client to discover and
+install private packages would require error-prone manual editing.</p>
+<h3 id="key-capabilities-for-private-repositories">Key Capabilities for
+Private Repositories</h3>
+<h4 id="1-manifest-generation-and-maintenance">1. Manifest Generation
+and Maintenance</h4>
+<p>The fundamental command for repository management is
+<code>luarocks-admin make-manifest</code>. When executed inside a
+directory containing <code>.rock</code> or <code>.rockspec</code> files,
+it scans all packages and compiles the <code>manifest</code> file. This
+index enables the <code>luarocks</code> package manager to resolve
+dependencies and find appropriate versions for the target operating
+system and Lua runtime.</p>
+<h4 id="2-adding-and-removing-rocks">2. Adding and Removing Rocks</h4>
+<p>The <code>luarocks-admin add</code> and
+<code>luarocks-admin remove</code> commands allow administrators to
+manage repository contents cleanly:</p>
+<ul>
+<li><strong><code>add</code></strong>: Copies a target rock into the
+appropriate repository directory architecture and automatically
+refreshes the manifest.</li>
+<li><strong><code>remove</code></strong>: Safely unlinks a package
+version from the index and deletes the archive, ensuring that outdated
+or vulnerable proprietary code is no longer resolvable by internal
+builds.</li>
+</ul>
+<h4 id="3-managing-air-gapped-and-mirror-environments">3. Managing
+Air-Gapped and Mirror Environments</h4>
+<p>Organizations operating under strict compliance or offline
+environments use <code>luarocks-admin</code> to build local mirrors of
+public Lua packages alongside internal modules. By creating an internal
+mirror, teams ensure build reproducibility and protect their continuous
+integration pipelines from external downtime or removed upstream
+packages.</p>
+<h3 id="operating-workflow">Operating Workflow</h3>
+<p>Using a private repository with <code>luarocks-admin</code> follows a
+direct workflow:</p>
+<ol type="1">
+<li><strong>Storage Setup</strong>: Create a directory on a local
+filesystem or behind a static web server (such as Nginx, Apache, or an
+Amazon S3 bucket).</li>
+<li><strong>Rock Ingestion</strong>: Place proprietary
+<code>.rockspec</code> or pre-built <code>.rock</code> files into the
+storage path.</li>
+<li><strong>Index Creation</strong>: Run
+<code>luarocks-admin make-manifest /path/to/repository</code> to
+generate the repository index.</li>
+<li><strong>Client Configuration</strong>: Point developer environments
+and CI runners to the private repository by adding the server URL to the
+<code>rocks_servers</code> list inside the user's
+<code>config.lua</code> or via the <code>--server</code> flag during
+installation.</li>
+</ol>
+<p>Through this workflow, <code>luarocks-admin</code> acts as the bridge
+between custom Lua codebases and the standard Lua package management
+pipeline, ensuring secure, isolated, and structured module
+distribution.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/managing-private-lua-repositories-with-luarocks-admin';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

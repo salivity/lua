@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua C API: Guide to lua_rawgeti and lua_rawseti - lua</title>
+    <meta name="description" content="In the Lua C API, luarawgeti and luarawseti are specialized, high-performance functions designed to read and write table entries using integer keys. This article explains the primary purpose of these functions, how they optimize interactions between C and">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-c-api-guide-to-lua-rawgeti-and-lua-rawseti">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua C API: Guide to lua_rawgeti and lua_rawseti - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-c-api-guide-to-lua-rawgeti-and-lua-rawseti" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua C API, luarawgeti and luarawseti are specialized, high-performance functions designed to read and write table entries using integer keys. This article explains the primary purpose of these functions, how they optimize interactions between C and" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-c-api-guide-to-lua_rawgeti-and-lua_rawseti">Lua C API: Guide
+to lua_rawgeti and lua_rawseti</h1>
+<p>In the Lua C API, <code>lua_rawgeti</code> and
+<code>lua_rawseti</code> are specialized, high-performance functions
+designed to read and write table entries using integer keys. This
+article explains the primary purpose of these functions, how they
+optimize interactions between C and Lua tables, why bypassing
+metamethods enhances execution speed, and how they simplify Lua stack
+management.</p>
+<h3 id="purpose-of-lua_rawgeti-and-lua_rawseti">Purpose of
+<code>lua_rawgeti</code> and <code>lua_rawseti</code></h3>
+<p>The primary purpose of <code>lua_rawgeti</code> and
+<code>lua_rawseti</code> is to provide fast, direct access to array-like
+elements in Lua tables. In typical table operations, retrieving or
+assigning a value requires pushing both the table and the key onto the
+Lua virtual stack, followed by invoking generic functions like
+<code>lua_gettable</code> or <code>lua_settable</code>. The
+<code>lua_rawgeti</code> and <code>lua_rawseti</code> functions bypass
+several of these steps to maximize efficiency when dealing with
+sequential numeric indices.</p>
+<h3 id="bypassing-metamethods-raw-access">Bypassing Metamethods ("Raw"
+Access)</h3>
+<p>The "raw" prefix indicates that these functions perform a raw table
+access, completely ignoring any associated metatables:</p>
+<ul>
+<li><strong>No <code>__index</code> invocation:</strong>
+<code>lua_rawgeti</code> retrieves the value directly stored at the
+numeric key without triggering an <code>__index</code> metamethod if the
+key is missing.</li>
+<li><strong>No <code>__newindex</code> invocation:</strong>
+<code>lua_rawseti</code> writes the value directly to the specified
+numeric index without triggering a <code>__newindex</code> metamethod if
+the key does not yet exist.</li>
+</ul>
+<p>Bypassing metamethods eliminates the runtime overhead of checking
+metatables and executing custom metamethod logic, guaranteeing
+predictable, constant-time operations suitable for high-performance C
+extensions.</p>
+<h3 id="reduction-of-stack-operations">Reduction of Stack
+Operations</h3>
+<p>Standard table access functions require manually pushing the key onto
+the stack:</p>
+<ol type="1">
+<li>Push the key (e.g., via <code>lua_pushinteger</code>).</li>
+<li>Call <code>lua_gettable</code> or <code>lua_settable</code>.</li>
+</ol>
+<p>With <code>lua_rawgeti</code> and <code>lua_rawseti</code>, the
+integer key is passed directly as a C argument
+(<code>lua_Integer n</code>), avoiding the need to push the key onto the
+Lua stack:</p>
+<ul>
+<li><strong><code>lua_rawgeti(lua_State *L, int index, lua_Integer n)</code></strong>:
+Reads <code>t[n]</code> where <code>t</code> is the table at the given
+stack <code>index</code>. It pushes the retrieved value onto the top of
+the stack and returns the type of the value.</li>
+<li><strong><code>lua_rawseti(lua_State *L, int index, lua_Integer n)</code></strong>:
+Pops the value from the top of the stack and assigns it to
+<code>t[n]</code> where <code>t</code> is the table at the given stack
+<code>index</code>.</li>
+</ul>
+<p>This significantly reduces stack manipulation, keeps C code concise,
+and reduces CPU cache pressure during tight loops.</p>
+<h3 id="common-use-cases">Common Use Cases</h3>
+<ul>
+<li><strong>Iterating Over Lua Arrays:</strong> Looping through array
+sequences from 1 to <span class="math inline">\(N\)</span> inside C
+functions can be done rapidly using <code>lua_rawgeti</code>.</li>
+<li><strong>Populating Tables from C:</strong> Creating and filling
+large numerical tables or arrays to return to Lua is best achieved using
+<code>lua_createtable</code> paired with repeated calls to
+<code>lua_rawseti</code>.</li>
+<li><strong>Working with the Lua Registry:</strong> The Lua reference
+system (<code>luaL_ref</code> and <code>luaL_unref</code>) stores
+references as integer keys inside the registry table
+(<code>LUA_REGISTRYINDEX</code>). Functions like
+<code>lua_rawgeti</code> allow developers to quickly fetch stored
+references using their integer IDs.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-c-api-guide-to-lua-rawgeti-and-lua-rawseti';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

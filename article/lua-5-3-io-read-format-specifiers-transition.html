@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua 5.3 io.read Format Specifiers Transition - lua</title>
+    <meta name="description" content="The transition of io.read format specifiers in Lua 5.3 marked a significant shift toward cleaner, more modern standard library conventions by removing the legacy asterisk prefix from read formats. Prior to Lua 5.3, developers relied on formats such as &quot;al">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-5-3-io-read-format-specifiers-transition">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua 5.3 io.read Format Specifiers Transition - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-5-3-io-read-format-specifiers-transition" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The transition of io.read format specifiers in Lua 5.3 marked a significant shift toward cleaner, more modern standard library conventions by removing the legacy asterisk prefix from read formats. Prior to Lua 5.3, developers relied on formats such as &quot;al" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-53-ioread-format-specifiers-transition">Lua 5.3 io.read
+Format Specifiers Transition</h1>
+<p>The transition of <code>io.read</code> format specifiers in Lua 5.3
+marked a significant shift toward cleaner, more modern standard library
+conventions by removing the legacy asterisk prefix from read formats.
+Prior to Lua 5.3, developers relied on formats such as
+<code>"*all"</code>, <code>"*line"</code>, and <code>"*number"</code>
+(often shortened to <code>"*a"</code>, <code>"*l"</code>, and
+<code>"*n"</code>). With the release of Lua 5.3, the language
+streamlined these options into concise single-character
+strings—<code>"a"</code>, <code>"l"</code>, <code>"L"</code>, and
+<code>"n"</code>—while retaining backward compatibility for older
+scripts.</p>
+<h3 id="legacy-formatting-in-lua-52-and-earlier">Legacy Formatting in
+Lua 5.2 and Earlier</h3>
+<p>In Lua 5.0 through Lua 5.2, reading from standard input or file
+handles via <code>io.read</code> or <code>file:read</code> required
+string arguments prefixed with an asterisk. The primary options
+included:</p>
+<ul>
+<li><code>"*a"</code> (or <code>"*all"</code>): Read the entire
+remaining content of the file.</li>
+<li><code>"*l"</code> (or <code>"*line"</code>): Read the next line,
+stripping the newline character.</li>
+<li><code>"*L"</code>: Introduced in Lua 5.2, read the next line while
+preserving the newline character.</li>
+<li><code>"*n"</code> (or <code>"*number"</code>): Read a number from
+the input stream.</li>
+<li>Numerical values: Read a specific number of bytes or characters
+(e.g., <code>file:read(10)</code>).</li>
+</ul>
+<p>The leading asterisk was originally introduced to distinguish
+string-based specifiers from numeric byte-length arguments and avoid
+name collisions.</p>
+<h3 id="the-lua-53-simplification">The Lua 5.3 Simplification</h3>
+<p>Lua 5.3 eliminated the need for the asterisk prefix. The standard
+library updated the accepted format descriptors to single-character
+identifiers:</p>
+<ul>
+<li><code>"a"</code>: Reads the entire file, returning an empty string
+at the end of the file.</li>
+<li><code>"l"</code>: Reads the next line without the end-of-line
+delimiter. This remains the default behavior if no format is
+provided.</li>
+<li><code>"L"</code>: Reads the next line and preserves the end-of-line
+delimiter.</li>
+<li><code>"n"</code>: Reads a numeral, returning a float or an integer
+according to Lua 5.3's unified arithmetic engine.</li>
+</ul>
+<p>Supplying a positive integer directly to specify the exact number of
+characters or bytes to read remained unchanged.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Legacy syntax (Lua 5.2 and earlier)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">all_data</span> <span class="op">=</span> <span class="fu">io.read</span><span class="op">(</span><span class="st">&quot;*a&quot;</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">num</span> <span class="op">=</span> <span class="fu">io.read</span><span class="op">(</span><span class="st">&quot;*n&quot;</span><span class="op">)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">line</span> <span class="op">=</span> <span class="fu">io.read</span><span class="op">(</span><span class="st">&quot;*l&quot;</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- Modern syntax (Lua 5.3+)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">all_data</span> <span class="op">=</span> <span class="fu">io.read</span><span class="op">(</span><span class="st">&quot;a&quot;</span><span class="op">)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">num</span> <span class="op">=</span> <span class="fu">io.read</span><span class="op">(</span><span class="st">&quot;n&quot;</span><span class="op">)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">line</span> <span class="op">=</span> <span class="fu">io.read</span><span class="op">(</span><span class="st">&quot;l&quot;</span><span class="op">)</span></span></code></pre></div>
+<h3 id="rationale-behind-the-change">Rationale Behind the Change</h3>
+<p>The redesign was part of a broader effort in Lua 5.3 to modernize the
+language's core libraries, reduce unnecessary punctuation, and establish
+syntactic consistency across formatting modules.</p>
+<ol type="1">
+<li><strong>Syntactic Cleanliness</strong>: Dropping the asterisk made
+file I/O operations less verbose and more intuitive for programmers
+coming from other languages.</li>
+<li><strong>Alignment with Other Subsystems</strong>: Lua 5.3 introduced
+<code>string.pack</code> and <code>string.unpack</code>, which heavily
+rely on single-character format descriptors (like <code>"i"</code>,
+<code>"s"</code>, <code>"c"</code>) without special prefixes.
+Modernizing <code>io.read</code> aligned file parsing with this
+convention.</li>
+<li><strong>Disambiguation Without Prefixing</strong>: The Lua runtime
+uses type checking to distinguish formats. Because numeric byte reads
+are passed as integers and specifiers are passed as strings, the
+asterisk was redundant for disambiguation.</li>
+</ol>
+<h3 id="backward-compatibility">Backward Compatibility</h3>
+<p>To prevent breaking existing codebases, Lua 5.3 retained backward
+compatibility for the asterisk-prefixed specifiers. The internal C
+implementation was updated to check whether the first character of a
+string format is <code>'*'</code>. If present, the engine simply skips
+the asterisk and processes the next character. As a result, older
+formats like <code>"*n"</code> and <code>"*a"</code> continue to
+function transparently in Lua 5.3 and Lua 5.4.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-5-3-io-read-format-specifiers-transition';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

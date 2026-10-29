@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invalidate Method Lookup Cache in Lua Metatables - lua</title>
+    <meta name="description" content="In Lua, caching method lookups—either by copying resolved functions directly into child tables or memoizing index resolutions—is a standard technique to bypass costly prototype chain traversals. However, when a metatable is mutated dynamically at runtime,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/invalidate-method-lookup-cache-in-lua-metatables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Invalidate Method Lookup Cache in Lua Metatables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/invalidate-method-lookup-cache-in-lua-metatables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, caching method lookups—either by copying resolved functions directly into child tables or memoizing index resolutions—is a standard technique to bypass costly prototype chain traversals. However, when a metatable is mutated dynamically at runtime," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="invalidate-method-lookup-cache-in-lua-metatables">Invalidate
+Method Lookup Cache in Lua Metatables</h1>
+<p>In Lua, caching method lookups—either by copying resolved functions
+directly into child tables or memoizing <code>__index</code>
+resolutions—is a standard technique to bypass costly prototype chain
+traversals. However, when a metatable is mutated dynamically at runtime,
+these cached methods become stale, leading to logic bugs or missed
+updates. This article covers the primary mechanisms used to reliably
+invalidate and refresh cached method lookups when metatables change at
+runtime, including metametatable hooks, version counter validation, and
+deep cache traversal.</p>
+<h3 id="the-challenge-of-cached-method-lookups">The Challenge of Cached
+Method Lookups</h3>
+<p>A typical Lua class hierarchy resolves methods via the
+<code>__index</code> metamethod. When looking up
+<code>object:method()</code>, Lua repeatedly queries metatables up the
+chain until it finds the function. To optimize performance, developers
+often "flatten" inheritance by copying functions from the base class
+directly into derived metatables, or they memoize lookups inside an
+internal cache table.</p>
+<p>When a metatable receives a new function or overrides an existing one
+at runtime, any downstream tables that have already cached that method
+will not see the change unless an invalidation routine is executed.</p>
+<h3 id="method-1-intercepting-changes-with-metametables">Method 1:
+Intercepting Changes with Metametables</h3>
+<p>The most robust way to trigger cache invalidation automatically is to
+place a metatable on the metatable itself (a metametatable). This allows
+you to catch modifications using <code>__newindex</code>.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> make_trackable_class<span class="op">(</span><span class="va">class_table</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">metametatable</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">__newindex</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">t</span><span class="op">,</span> <span class="va">key</span><span class="op">,</span> <span class="va">value</span><span class="op">)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>            <span class="fu">rawset</span><span class="op">(</span><span class="va">t</span><span class="op">,</span> <span class="va">key</span><span class="op">,</span> <span class="va">value</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>            <span class="co">-- Trigger cache invalidation whenever a method is added or altered</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="va">t</span><span class="op">.</span><span class="va">__invalidate_cache</span> <span class="cf">then</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>                <span class="va">t</span><span class="op">:</span>__invalidate_cache<span class="op">(</span><span class="va">key</span><span class="op">)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">end</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>        <span class="kw">end</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">setmetatable</span><span class="op">(</span><span class="va">class_table</span><span class="op">,</span> <span class="va">metametatable</span><span class="op">)</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>By intercepting mutations through <code>__newindex</code>, the class
+can immediately broadcast the update to instances, child classes, or an
+internal memoization table.</p>
+<h3 id="method-2-epoch--version-based-validation">Method 2: Epoch /
+Version-Based Validation</h3>
+<p>Instead of actively hunting down and purging every cached reference,
+you can use an integer-based generation or epoch counter. This approach
+is common in high-performance engines because it avoids recursive
+traversals on modification.</p>
+<ol type="1">
+<li><strong>Assign a Version:</strong> Give the base metatable a numeric
+version field (e.g., <code>version = 1</code>).</li>
+<li><strong>Tag Cached Entries:</strong> When an instance or sub-class
+caches a lookup, record the version alongside the cached value.</li>
+<li><strong>Validate on Lookup:</strong> In the caching accessor, verify
+that the cached version matches the metatable's current version before
+returning the cached method.</li>
+<li><strong>Invalidate:</strong> To invalidate the entire cache, simply
+increment <code>metatable.version = metatable.version + 1</code>.</li>
+</ol>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Class</span> <span class="op">=</span> <span class="op">{</span> <span class="va">version</span> <span class="op">=</span> <span class="dv">1</span> <span class="op">}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="va">Class</span><span class="op">.</span><span class="va">__index</span> <span class="op">=</span> <span class="va">Class</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Class</span><span class="op">:</span>update_method<span class="op">(</span><span class="va">name</span><span class="op">,</span> <span class="va">fn</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span><span class="op">[</span><span class="va">name</span><span class="op">]</span> <span class="op">=</span> <span class="va">fn</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span><span class="op">.</span><span class="va">version</span> <span class="op">=</span> <span class="va">self</span><span class="op">.</span><span class="va">version</span> <span class="op">+</span> <span class="dv">1</span> <span class="co">-- Invalidates all existing cached reads</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> get_cached_method<span class="op">(</span><span class="va">instance</span><span class="op">,</span> <span class="va">key</span><span class="op">)</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">cache</span> <span class="op">=</span> <span class="fu">rawget</span><span class="op">(</span><span class="va">instance</span><span class="op">,</span> <span class="st">&quot;_cache&quot;</span><span class="op">)</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">cls</span> <span class="op">=</span> <span class="fu">getmetatable</span><span class="op">(</span><span class="va">instance</span><span class="op">)</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">cache</span> <span class="kw">and</span> <span class="va">cache</span><span class="op">[</span><span class="va">key</span><span class="op">]</span> <span class="kw">and</span> <span class="va">cache</span><span class="op">[</span><span class="va">key</span><span class="op">].</span><span class="va">version</span> <span class="op">==</span> <span class="va">cls</span><span class="op">.</span><span class="va">version</span> <span class="cf">then</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">cache</span><span class="op">[</span><span class="va">key</span><span class="op">].</span><span class="va">fn</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Cache miss or invalidated: re-resolve and update</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">fn</span> <span class="op">=</span> <span class="va">cls</span><span class="op">[</span><span class="va">key</span><span class="op">]</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">fn</span> <span class="cf">then</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> <span class="va">cache</span> <span class="cf">then</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>            <span class="va">cache</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>            <span class="fu">rawset</span><span class="op">(</span><span class="va">instance</span><span class="op">,</span> <span class="st">&quot;_cache&quot;</span><span class="op">,</span> <span class="va">cache</span><span class="op">)</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>        <span class="va">cache</span><span class="op">[</span><span class="va">key</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span> <span class="va">fn</span> <span class="op">=</span> <span class="va">fn</span><span class="op">,</span> <span class="va">version</span> <span class="op">=</span> <span class="va">cls</span><span class="op">.</span><span class="va">version</span> <span class="op">}</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">fn</span></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="method-3-recursive-child-and-instance-flushing">Method 3:
+Recursive Child and Instance Flushing</h3>
+<p>If your architecture copies resolved methods directly into child
+classes via <code>rawset</code> to maximize lookup speed, updating a
+base class requires an explicit tree traversal:</p>
+<ol type="1">
+<li><strong>Track Inheritors:</strong> Maintain a registry of derived
+classes using weak tables (<code>__mode = "k"</code> or
+<code>"v"</code>) so that subclasses can still be garbage
+collected.</li>
+<li><strong>Propagate Modifications:</strong> When a method changes on a
+parent, recursively traverse the registry and update or <code>nil</code>
+out the corresponding key in every descendant.</li>
+</ol>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> propagate_invalidation<span class="op">(</span><span class="va">parent_class</span><span class="op">,</span> <span class="va">key</span><span class="op">,</span> <span class="va">new_fn</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="va">parent_class</span><span class="op">.</span><span class="va">__subclasses</span> <span class="cf">then</span> <span class="cf">return</span> <span class="cf">end</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="va">subclass</span> <span class="kw">in</span> <span class="fu">pairs</span><span class="op">(</span><span class="va">parent_class</span><span class="op">.</span><span class="va">__subclasses</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Only overwrite if the subclass has not explicitly defined its own override</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="fu">rawget</span><span class="op">(</span><span class="va">subclass</span><span class="op">,</span> <span class="va">key</span><span class="op">)</span> <span class="op">==</span> <span class="kw">nil</span> <span class="kw">or</span> <span class="va">subclass</span><span class="op">.</span><span class="va">__is_cached_entry</span> <span class="cf">then</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>            <span class="fu">rawset</span><span class="op">(</span><span class="va">subclass</span><span class="op">,</span> <span class="va">key</span><span class="op">,</span> <span class="va">new_fn</span><span class="op">)</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>            propagate_invalidation<span class="op">(</span><span class="va">subclass</span><span class="op">,</span> <span class="va">key</span><span class="op">,</span> <span class="va">new_fn</span><span class="op">)</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="luajit-considerations">LuaJIT Considerations</h3>
+<p>If using LuaJIT, the trace compiler automatically observes changes to
+standard metatables. When a trace is compiled with an assumed metatable
+layout, modifying that metatable via <code>setmetatable</code> or
+setting metamethod fields directly causes LuaJIT to invalidate the
+compiled machine code (trace flushes or guard failures).</p>
+<p>However, if you implement a custom, user-space method caching table
+(such as a flat dispatch table), LuaJIT cannot infer the relationship
+between your cache and the metatable. In that scenario, manual
+invalidation using metametatable hooks or version tracking remains
+strictly necessary.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/invalidate-method-lookup-cache-in-lua-metatables';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

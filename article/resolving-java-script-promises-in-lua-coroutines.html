@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resolving JavaScript Promises in Lua Coroutines - lua</title>
+    <meta name="description" content="Interfacing modern JavaScript with the Lua programming language requires bridging two distinct asynchronous models: JavaScript’s event-loop-driven Promises and Lua’s cooperative coroutines. Because Lua lacks a built-in event loop, resolving a JavaScript P">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/resolving-java-script-promises-in-lua-coroutines">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Resolving JavaScript Promises in Lua Coroutines - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/resolving-java-script-promises-in-lua-coroutines" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Interfacing modern JavaScript with the Lua programming language requires bridging two distinct asynchronous models: JavaScript’s event-loop-driven Promises and Lua’s cooperative coroutines. Because Lua lacks a built-in event loop, resolving a JavaScript P" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="resolving-javascript-promises-in-lua-coroutines">Resolving
+JavaScript Promises in Lua Coroutines</h1>
+<p>Interfacing modern JavaScript with the Lua programming language
+requires bridging two distinct asynchronous models: JavaScript’s
+event-loop-driven Promises and Lua’s cooperative coroutines. Because Lua
+lacks a built-in event loop, resolving a JavaScript Promise within Lua
+is achieved by yielding the current Lua coroutine when an asynchronous
+operation begins, attaching resolution handlers to the Promise in
+JavaScript, and resuming the paused coroutine with the resolved data
+once the event loop fulfills the Promise.</p>
+<h3 id="the-architectural-mismatch">The Architectural Mismatch</h3>
+<p>JavaScript handles asynchronous operations natively through an event
+loop and the microtask queue, returning <code>Promise</code> objects
+that resolve or reject asynchronously. In contrast, Lua relies on
+coroutines (<code>threads</code>) for non-preemptive concurrency. A Lua
+coroutine executes synchronously until it explicitly calls
+<code>coroutine.yield()</code>, transferring execution back to the
+caller until manually re-awakened via
+<code>coroutine.resume()</code>.</p>
+<p>When running Lua embedded inside a JavaScript runtime—such as via
+WebAssembly runtimes (e.g., Wasmoon) or JavaScript-based interpreters
+(e.g., Fengari)—Lua cannot natively block execution to wait for a
+JavaScript Promise without freezing the entire JavaScript thread.</p>
+<h3 id="the-yield-and-resume-bridge">The Yield-and-Resume Bridge</h3>
+<p>To make JavaScript Promises behave like synchronous calls inside Lua,
+bridge libraries implement an <code>await</code>-style wrapper using the
+yield-and-resume pattern:</p>
+<ol type="1">
+<li><strong>Detection and Yielding:</strong> When Lua invokes an
+asynchronous JavaScript function, the bridge receives a JavaScript
+<code>Promise</code>. Instead of returning the unsettled Promise
+directly to Lua, a bridge function captures the running Lua thread using
+<code>coroutine.running()</code> and immediately yields execution using
+<code>coroutine.yield()</code>. This suspends the Lua execution
+context.</li>
+<li><strong>Attaching Callbacks:</strong> On the JavaScript side,
+handlers are registered to the Promise using <code>.then()</code> and
+<code>.catch()</code>. Because Lua has yielded control back to
+JavaScript, the main JavaScript thread remains unblocked and can
+continue processing its event loop and microtask queues.</li>
+<li><strong>Resuming on Resolution:</strong> Once the asynchronous
+operation completes, the Promise settles:
+<ul>
+<li>If the Promise resolves, the <code>.then()</code> handler invokes
+<code>coroutine.resume(thread, resolvedValue)</code>. This re-enters the
+Lua state exactly where it yielded, passing the JavaScript result back
+as the return value of the yield call.</li>
+<li>If the Promise rejects, the <code>.catch()</code> handler captures
+the error. It either resumes the coroutine with an error flag or
+triggers an error in Lua using
+<code>coroutine.resume(thread, nil, error)</code> or the bridge's
+internal error mechanism, allowing the failure to be caught via Lua's
+<code>pcall</code> or <code>xpcall</code>.</li>
+</ul></li>
+</ol>
+<h3 id="conceptual-implementation-flow">Conceptual Implementation
+Flow</h3>
+<p>In a typical implementation, an <code>await</code> utility function
+in Lua or the foreign function interface (FFI) operates like this:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Conceptual Lua await implementation</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> await<span class="op">(</span><span class="va">promise</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">current_thread</span> <span class="op">=</span> <span class="fu">coroutine.running</span><span class="op">()</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">assert</span><span class="op">(</span><span class="va">current_thread</span><span class="op">,</span> <span class="st">&quot;await must be called inside a coroutine&quot;</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">promise</span><span class="op">:</span><span class="fu">next</span><span class="op">(</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>        <span class="kw">function</span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>            <span class="co">-- JavaScript fulfilled the Promise</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>            <span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">coroutine.resume</span><span class="op">(</span><span class="va">current_thread</span><span class="op">,</span> <span class="va">result</span><span class="op">)</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="kw">not</span> <span class="va">success</span> <span class="cf">then</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>                <span class="fu">error</span><span class="op">(</span><span class="va">err</span><span class="op">)</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>            <span class="cf">end</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>        <span class="kw">end</span><span class="op">,</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>        <span class="kw">function</span><span class="op">(</span><span class="va">err</span><span class="op">)</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>            <span class="co">-- JavaScript rejected the Promise</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>            <span class="fu">coroutine.resume</span><span class="op">(</span><span class="va">current_thread</span><span class="op">,</span> <span class="kw">nil</span><span class="op">,</span> <span class="va">err</span><span class="op">)</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>        <span class="kw">end</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">)</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Suspend Lua until one of the callbacks executes</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">result</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">coroutine.yield</span><span class="op">()</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">err</span> <span class="cf">then</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>        <span class="fu">error</span><span class="op">(</span><span class="va">err</span><span class="op">)</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">result</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="context-and-state-management">Context and State Management</h3>
+<p>For this pattern to work robustly, bridge runtimes must manage thread
+lifecycles and garbage collection:</p>
+<ul>
+<li><strong>Reference Preservation:</strong> The Lua thread object must
+be protected from garbage collection while yielded. If Lua’s garbage
+collector sweeps the suspended coroutine before the JavaScript Promise
+resolves, the subsequent <code>coroutine.resume()</code> attempt will
+fail. Bridge interfaces typically store a reference to the yielding
+thread in the Lua registry until the Promise settles.</li>
+<li><strong>Data Marshalling:</strong> Resolved values must cross the
+language boundary. Primitives (numbers, strings, booleans) convert
+directly, while complex JavaScript objects and arrays are usually
+wrapped in Lua userdata or proxy tables with appropriate metatables to
+allow field access from Lua.</li>
+<li><strong>Top-Level Execution:</strong> Because yielding is only
+permitted inside an active coroutine, top-level Lua scripts that
+interact with asynchronous JavaScript APIs must either be automatically
+wrapped in an outer coroutine by the environment or restrict Promise
+resolution to designated asynchronous task runners.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/resolving-java-script-promises-in-lua-coroutines';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua string.rep Uses Binary Exponentiation - lua</title>
+    <meta name="description" content="The string.rep function in the Lua programming language duplicates a given string $n$ times with exceptional speed and memory efficiency. Instead of appending strings sequentially in an $O(n)$ loop—which would cause heavy memory churn and trigger frequent">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-string-rep-uses-binary-exponentiation">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua string.rep Uses Binary Exponentiation - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-string-rep-uses-binary-exponentiation" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The string.rep function in the Lua programming language duplicates a given string $n$ times with exceptional speed and memory efficiency. Instead of appending strings sequentially in an $O(n)$ loop—which would cause heavy memory churn and trigger frequent" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-stringrep-uses-binary-exponentiation">How Lua string.rep
+Uses Binary Exponentiation</h1>
+<p>The <code>string.rep</code> function in the Lua programming language
+duplicates a given string <span class="math inline">\(n\)</span> times
+with exceptional speed and memory efficiency. Instead of appending
+strings sequentially in an <span class="math inline">\(O(n)\)</span>
+loop—which would cause heavy memory churn and trigger frequent garbage
+collection cycles—Lua utilizes an algorithm based on binary
+exponentiation (exponentiation by squaring). By treating string
+concatenation algebraically as a multiplication operation, Lua
+constructs the final duplicated string in <span
+class="math inline">\(O(\log n)\)</span> doubling steps, preallocating
+memory to maximize throughput and minimize overhead.</p>
+<h2 id="the-problem-with-naive-string-duplication">The Problem with
+Naive String Duplication</h2>
+<p>In Lua, strings are immutable and interned. If you duplicate a string
+by repeatedly concatenating it in a loop:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> <span class="st">&quot;&quot;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="va">n</span> <span class="cf">do</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">result</span> <span class="op">=</span> <span class="va">result</span> <span class="op">..</span> <span class="va">s</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>Each iteration creates a new string object and leaves the previous
+one for the garbage collector. This naive approach exhibits <span
+class="math inline">\(O(n^2)\)</span> time complexity relative to the
+total byte length, resulting in severe CPU and memory penalties for
+large values of <span class="math inline">\(n\)</span>.</p>
+<p>Even when utilizing a mutable buffer, writing a small string chunk
+<span class="math inline">\(n\)</span> individual times requires <span
+class="math inline">\(n\)</span> separate write operations, failing to
+take advantage of low-level CPU cache lines and block memory copy
+optimizations.</p>
+<h2 id="the-principle-of-binary-exponentiation">The Principle of Binary
+Exponentiation</h2>
+<p>Binary exponentiation is traditionally used to compute powers such as
+<span class="math inline">\(x^n\)</span> in <span
+class="math inline">\(O(\log n)\)</span> operations rather than <span
+class="math inline">\(O(n)\)</span>. It relies on the binary
+representation of the exponent <span
+class="math inline">\(n\)</span>:</p>
+<ul>
+<li>If <span class="math inline">\(n\)</span> is even: <span
+class="math inline">\(x^n = (x^2)^{n/2}\)</span></li>
+<li>If <span class="math inline">\(n\)</span> is odd: <span
+class="math inline">\(x^n = x \cdot (x^2)^{(n-1)/2}\)</span></li>
+</ul>
+<p>Because string concatenation is associative and has an identity
+element (the empty string), it forms a monoid. Consequently, string
+duplication <span class="math inline">\(s \times n\)</span> is
+mathematically identical to calculating <span
+class="math inline">\(s^n\)</span>, where concatenation replaces
+multiplication.</p>
+<h3 id="step-by-step-example">Step-by-Step Example</h3>
+<p>Suppose you want to duplicate string <code>s</code> by <span
+class="math inline">\(n = 13\)</span> times. In binary, <span
+class="math inline">\(13\)</span> is represented as <code>1101</code>
+(<span class="math inline">\(8 + 4 + 1\)</span>).</p>
+<p>Instead of adding <code>s</code> 13 times, the algorithm tracks two
+values: an accumulator (the partial result) and the current power-of-two
+base (<code>s</code>, <code>s^2</code>, <code>s^4</code>,
+<code>s^8</code>...):</p>
+<ol type="1">
+<li><strong>Bit 0 (Value = 1):</strong> The lowest bit is 1. Append the
+current base (<span class="math inline">\(s^1\)</span>) to the result
+accumulator. Then, double the base: <span class="math inline">\(s \to
+s^2\)</span>.</li>
+<li><strong>Bit 1 (Value = 0):</strong> The bit is 0. Do not append to
+the accumulator. Double the base: <span class="math inline">\(s^2 \to
+s^4\)</span>.</li>
+<li><strong>Bit 2 (Value = 1):</strong> The bit is 1. Append the current
+base (<span class="math inline">\(s^4\)</span>) to the accumulator.
+Double the base: <span class="math inline">\(s^4 \to s^8\)</span>.</li>
+<li><strong>Bit 3 (Value = 1):</strong> The bit is 1. Append the current
+base (<span class="math inline">\(s^8\)</span>) to the accumulator.</li>
+</ol>
+<p>The process terminates after only 4 iterations (<span
+class="math inline">\(\lfloor\log_2(13)\rfloor + 1\)</span>), having
+constructed <span class="math inline">\(s^1 + s^4 + s^8 =
+s^{13}\)</span>.</p>
+<h2 id="how-lua-implements-stringrep-under-the-hood">How Lua Implements
+string.rep Under the Hood</h2>
+<p>Lua implements <code>string.rep</code> in C inside its standard
+library (<code>lstrlib.c</code>). Rather than running this logic at the
+interpreted Lua level, it executes the pattern directly against raw
+memory buffers.</p>
+<h3 id="1-preallocating-memory-and-overflow-checks">1. Preallocating
+Memory and Overflow Checks</h3>
+<p>Before copying any data, Lua calculates the final string size:</p>
+<p><span class="math display">\[\text{Total Length} = n \times
+\text{length}(s) + (n - 1) \times
+\text{length}(\text{separator})\]</span></p>
+<p>Lua validates that this multiplication does not cause an integer
+overflow and ensures the target size fits within the maximum allowable
+string size. Once validated, Lua allocates the exact buffer space
+required in a single step using its internal buffer utilities
+(<code>luaL_Buffer</code>).</p>
+<h3 id="2-eliminating-garbage-collection-overhead">2. Eliminating
+Garbage Collection Overhead</h3>
+<p>Because the memory buffer is allocated up front at the C level, Lua
+avoids creating intermediate Lua string objects during the duplication
+process. Intermediate doubled strings exist only within raw C buffers or
+memory segments, generating zero garbage collection pressure.</p>
+<h3 id="3-exponential-block-copying-with-memcpy">3. Exponential Block
+Copying with <code>memcpy</code></h3>
+<p>Within the preallocated destination buffer, Lua uses the binary
+exponentiation pattern alongside standard C <code>memcpy</code>.</p>
+<p>Instead of copying small string chunks repeatedly:</p>
+<ol type="1">
+<li>Lua places the base pattern into the destination buffer.</li>
+<li>It iteratively copies progressively larger contiguous blocks of
+already-duplicated data.</li>
+<li>As the chunk size doubles (<span class="math inline">\(1\times,
+2\times, 4\times, 8\times \dots\)</span>), the number of required
+<code>memcpy</code> calls drops to <span class="math inline">\(\approx
+\log_2(n)\)</span>.</li>
+</ol>
+<p>Large contiguous block transfers allow modern CPUs to leverage vector
+registers (SIMD) and sequential memory bandwidth, executing the
+duplication as close to the hardware's theoretical memory write speed as
+possible.</p>
+<h2 id="summary-of-efficiency-gains">Summary of Efficiency Gains</h2>
+<ul>
+<li><strong>Algorithmic Complexity:</strong> Reduces the number of
+discrete aggregation steps from linear <span
+class="math inline">\(O(n)\)</span> to logarithmic <span
+class="math inline">\(O(\log n)\)</span>.</li>
+<li><strong>Single Allocation:</strong> Avoids reallocations and buffer
+resizing by computing the exact final size before copying data.</li>
+<li><strong>Zero GC Churn:</strong> Creates only the final Lua string
+object, entirely bypassing temporary heap allocations.</li>
+<li><strong>Hardware Optimization:</strong> Maximizes memory throughput
+by batching data transfers into exponentially growing
+<code>memcpy</code> operations.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-string-rep-uses-binary-exponentiation';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

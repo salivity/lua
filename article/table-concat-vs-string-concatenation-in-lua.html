@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>table.concat vs String Concatenation in Lua - lua</title>
+    <meta name="description" content="This article explains why Lua&#39;s table.concat significantly outperforms the standard string concatenation operator (..) when joining large collections of strings. In Lua, strings are immutable and interned, meaning repeated concatenation inside loops leads">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/table-concat-vs-string-concatenation-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="table.concat vs String Concatenation in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/table-concat-vs-string-concatenation-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains why Lua&#39;s table.concat significantly outperforms the standard string concatenation operator (..) when joining large collections of strings. In Lua, strings are immutable and interned, meaning repeated concatenation inside loops leads" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="tableconcat-vs-string-concatenation-in-lua">table.concat vs
+String Concatenation in Lua</h1>
+<p>This article explains why Lua's <code>table.concat</code>
+significantly outperforms the standard string concatenation operator
+(<code>..</code>) when joining large collections of strings. In Lua,
+strings are immutable and interned, meaning repeated concatenation
+inside loops leads to severe memory churn, excessive allocations, and
+quadratic time complexity. By gathering substrings into an array and
+combining them via <code>table.concat</code>, developers leverage a
+single C-level memory allocation that processes the entire operation in
+linear time.</p>
+<h3 id="the-problem-with-the--operator">The Problem with the
+<code>..</code> Operator</h3>
+<p>In Lua, strings are immutable values. Once a string is created, its
+contents cannot be modified in place. When you use the concatenation
+operator (<code>..</code>) in a loop to build a larger string, Lua
+cannot simply append new bytes to the existing buffer:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> <span class="st">&quot;&quot;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">100000</span> <span class="cf">do</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">result</span> <span class="op">=</span> <span class="va">result</span> <span class="op">..</span> <span class="st">&quot;a&quot;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>In every iteration of this loop, Lua must:</p>
+<ol type="1">
+<li>Allocate memory for a brand-new string large enough to hold both the
+accumulator (<code>result</code>) and the appended fragment.</li>
+<li>Copy the contents of both strings into the new memory block.</li>
+<li>Hash and intern the newly created string.</li>
+<li>Mark the previous intermediate string as garbage to be collected
+later.</li>
+</ol>
+<p>Because the length of <code>result</code> grows on every cycle, the
+number of bytes copied increases incrementally: 1, 2, 3, ..., up to
+<span class="math inline">\(N\)</span>. This pattern causes the
+cumulative work to scale quadratically, resulting in an algorithmic time
+complexity of <span class="math inline">\(O(N^2)\)</span>. As the number
+of strings grows into the tens or hundreds of thousands, this creates an
+enormous amount of intermediate string garbage, forcing the Lua garbage
+collector to run frequently and degrading application throughput.</p>
+<h3 id="how-tableconcat-solves-the-bottleneck">How
+<code>table.concat</code> Solves the Bottleneck</h3>
+<p>The <code>table.concat</code> function circumvents intermediate
+string creation by delegating the entire operation to the underlying C
+implementation (<code>luaB_concat</code> in the Lua standard library).
+Instead of continually allocating and discarding strings, you append
+fragments to a sequential table and join them all at once:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">buffer</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">100000</span> <span class="cf">do</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">buffer</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;a&quot;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> <span class="fu">table.concat</span><span class="op">(</span><span class="va">buffer</span><span class="op">)</span></span></code></pre></div>
+<p>This approach is dramatically faster due to how the function manages
+memory internally:</p>
+<ul>
+<li><strong>Single Pre-Calculated Allocation:</strong>
+<code>table.concat</code> inspects the array to calculate the total
+length of all elements combined (plus any optional delimiters). It then
+allocates a single memory buffer of the exact size required for the
+final string.</li>
+<li><strong>Direct Sequential Copying:</strong> Using efficient C-level
+memory copying routines (<code>memcpy</code>), Lua copies each table
+entry directly into its respective offset within the destination buffer.
+No intermediate Lua string objects are generated during this
+traversal.</li>
+<li><strong>Linear Time Complexity:</strong> Because each byte from each
+substring is read and copied only once into the final buffer, the
+operation completes in <span class="math inline">\(O(N)\)</span> linear
+time, where <span class="math inline">\(N\)</span> is the total length
+of the final output.</li>
+<li><strong>Minimal Garbage Collection Overhead:</strong> Since no
+temporary strings are instantiated, the garbage collector remains idle
+throughout the concatenation phase, saving CPU cycles and preventing
+latency spikes.</li>
+</ul>
+<h3 id="performance-summary">Performance Summary</h3>
+<p>Using the <code>..</code> operator is suitable for joining a fixed,
+small number of strings (such as
+<code>first_name .. " " .. last_name</code>), where the engine can
+optimize multiple concatenations in a single statement. However, for
+dynamic lists, loops, file parsers, or serialization tasks,
+<code>table.concat</code> is the standard and necessary idiom in Lua to
+maintain high performance and low memory consumption.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/table-concat-vs-string-concatenation-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

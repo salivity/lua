@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua package.loadlib Platform Requirements - lua</title>
+    <meta name="description" content="The package.loadlib function provides low-level dynamic linking in the Lua programming language, enabling scripts to load and bind functions directly from native shared libraries. This article outlines the essential system, compilation, and architectural">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-package-loadlib-platform-requirements">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua package.loadlib Platform Requirements - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-package-loadlib-platform-requirements" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The package.loadlib function provides low-level dynamic linking in the Lua programming language, enabling scripts to load and bind functions directly from native shared libraries. This article outlines the essential system, compilation, and architectural" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-packageloadlib-platform-requirements">Lua package.loadlib
+Platform Requirements</h1>
+<p>The <code>package.loadlib</code> function provides low-level dynamic
+linking in the Lua programming language, enabling scripts to load and
+bind functions directly from native shared libraries. This article
+outlines the essential system, compilation, and architectural
+requirements needed for <code>package.loadlib</code> to function
+correctly across Windows, Linux, and macOS.</p>
+<h3 id="universal-requirements">Universal Requirements</h3>
+<p>Regardless of the operating system, several fundamental conditions
+must be met:</p>
+<ul>
+<li><strong>Architecture Matching:</strong> The target compiled shared
+library must match the architecture of the Lua executable (e.g., a
+64-bit Lua runtime requires a 64-bit library; a 32-bit library will fail
+to load).</li>
+<li><strong>ABI and Linkage:</strong> Exported C functions must use
+standard C calling conventions (<code>cdecl</code>). If using C++, the
+target function must be wrapped in <code>extern "C"</code> to prevent
+name mangling.</li>
+<li><strong>Function Signature:</strong> The target entry point function
+must match the Lua C API function prototype:
+<code>int func(lua_State *L)</code>.</li>
+<li><strong>Dynamic Linking Support in Lua:</strong> The Lua interpreter
+itself must be built with support for dynamic loading enabled (standard
+in prebuilt distributions, but requires <code>LUA_USE_DLOPEN</code> or
+equivalent during manual source builds).</li>
+</ul>
+<h3 id="windows-requirements">Windows Requirements</h3>
+<p>On Windows, <code>package.loadlib</code> interfaces with the Win32
+API functions <code>LoadLibraryEx</code> and
+<code>GetProcAddress</code>.</p>
+<ul>
+<li><strong>Binary Format:</strong> The binary must be a standard
+Dynamic Link Library (<code>.dll</code>).</li>
+<li><strong>Symbol Exporting:</strong> The entry point function must be
+explicitly exported. This is typically achieved using
+<code>__declspec(dllexport)</code> in the source code or by defining the
+symbol in a Module-Definition (<code>.def</code>) file.</li>
+<li><strong>Runtime Dependencies:</strong> All dependent DLLs must be
+located in standard Windows search paths (the application directory,
+<code>System32</code>, or directories defined in the system
+<code>PATH</code> variable).</li>
+<li><strong>C Runtime Compatibility:</strong> While not strictly fatal
+for symbol loading, mismatched C Runtime (CRT) versions between Lua and
+the DLL can cause memory crashes if resources allocated by one CRT are
+freed by another.</li>
+</ul>
+<h3 id="linux-requirements">Linux Requirements</h3>
+<p>On Linux, <code>package.loadlib</code> relies on the POSIX
+<code>dlopen</code> and <code>dlsym</code> APIs provided by
+<code>libdl</code>.</p>
+<ul>
+<li><strong>Binary Format:</strong> The target file must be an ELF
+Shared Object (<code>.so</code>).</li>
+<li><strong>Compilation Flags:</strong> The library source must be
+compiled with the <code>-fPIC</code> (Position Independent Code)
+compiler flag and linked with the <code>-shared</code> linker flag.</li>
+<li><strong>Dynamic Symbol Resolution:</strong> The main Lua executable
+must be linked with the <code>-Wl,-E</code> (or <code>-rdynamic</code>)
+flag if the shared library relies on symbols exported by the host Lua
+process. Alternatively, the library must be explicitly linked against a
+shared <code>liblua.so</code>.</li>
+<li><strong>Library Paths:</strong> If the shared object has external
+dependencies, they must be resolvable via standard linker paths,
+<code>LD_LIBRARY_PATH</code>, or an embedded <code>rpath</code>.</li>
+</ul>
+<h3 id="macos-requirements">macOS Requirements</h3>
+<p>On macOS, dynamic loading is also implemented via <code>dlopen</code>
+and <code>dlsym</code>, targeting the Darwin Mach-O binary format.</p>
+<ul>
+<li><strong>Binary Format:</strong> The binary can be either a Mach-O
+dynamic library (<code>.dylib</code>) or a Mach-O bundle
+(<code>.so</code>). Lua convention typically favors
+<code>.so</code>.</li>
+<li><strong>Linker Flags:</strong> When compiling a plugin intended
+specifically for Lua, use the <code>-bundle</code> flag along with
+<code>-undefined dynamic_lookup</code>. The <code>dynamic_lookup</code>
+flag allows the dynamic linker to resolve Lua API symbols from the host
+executable at runtime without requiring direct linkage to a Lua library
+at build time.</li>
+<li><strong>System Integrity Protection (SIP):</strong> Libraries must
+adhere to Apple's code-signing requirements if running under a hardened
+runtime environment. Unsigned or improperly signed binaries may be
+blocked from dynamic loading by the OS.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-package-loadlib-platform-requirements';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

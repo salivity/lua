@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profiling Lua Memory with collectgarbage(&quot;count&quot;) - lua</title>
+    <meta name="description" content="In Lua, tracking memory consumption is critical for optimizing performance and preventing memory leaks, and the built-in collectgarbage(&quot;count&quot;) function serves as the primary diagnostic utility for this purpose. This article examines how collectgarbage(&quot;">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/profiling-lua-memory-with-collectgarbage-count">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Profiling Lua Memory with collectgarbage(&quot;count&quot;) - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/profiling-lua-memory-with-collectgarbage-count" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, tracking memory consumption is critical for optimizing performance and preventing memory leaks, and the built-in collectgarbage(&quot;count&quot;) function serves as the primary diagnostic utility for this purpose. This article examines how collectgarbage(&quot;" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="profiling-lua-memory-with-collectgarbagecount">Profiling Lua
+Memory with collectgarbage("count")</h1>
+<p>In Lua, tracking memory consumption is critical for optimizing
+performance and preventing memory leaks, and the built-in
+<code>collectgarbage("count")</code> function serves as the primary
+diagnostic utility for this purpose. This article examines how
+<code>collectgarbage("count")</code> functions, its role in benchmarking
+and differential memory profiling, best practices for obtaining accurate
+allocation metrics, and the limitations developers must consider when
+analyzing Lua heaps.</p>
+<h3 id="understanding-collectgarbagecount">Understanding
+collectgarbage("count")</h3>
+<p>Lua manages memory automatically using an internal garbage collector.
+The <code>collectgarbage()</code> function provides an interface to
+control and inspect this subsystem. When invoked with the
+<code>"count"</code> argument:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">memory_in_kb</span> <span class="op">=</span> <span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;count&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>The function returns a single floating-point number representing the
+total memory currently in use by the Lua state, measured in kilobytes.
+The integer portion represents whole kilobytes, while the fractional
+portion corresponds to the remaining bytes (calculated as
+<code>fraction * 1024</code>).</p>
+<h3 id="key-roles-in-memory-profiling">Key Roles in Memory
+Profiling</h3>
+<h4 id="1-differential-allocation-tracking">1. Differential Allocation
+Tracking</h4>
+<p>The most common use of <code>collectgarbage("count")</code> is
+measuring the memory footprint of specific code blocks or functions. By
+capturing the count before and after executing a routine, developers can
+determine the gross or net allocations caused by that routine.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;collect&quot;</span><span class="op">)</span> <span class="co">-- Force a full cycle for a clean baseline</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">before</span> <span class="op">=</span> <span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;count&quot;</span><span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- Code under test</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">t</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">10000</span> <span class="cf">do</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">t</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">=</span> <span class="va">i</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">after</span> <span class="op">=</span> <span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;count&quot;</span><span class="op">)</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;Memory allocated: %.2f KB&quot;</span><span class="op">,</span> <span class="va">after</span> <span class="op">-</span> <span class="va">before</span><span class="op">))</span></span></code></pre></div>
+<h4 id="2-identifying-memory-leaks">2. Identifying Memory Leaks</h4>
+<p>Unintended references (such as values left in global tables,
+improperly managed registries, or long-lived closures) prevent the
+garbage collector from reclaiming memory. By logging
+<code>collectgarbage("count")</code> periodically—specifically
+immediately after a forced collection cycle
+(<code>collectgarbage("collect")</code>)—developers can observe whether
+baseline memory usage continually grows over time, which signals a
+memory leak.</p>
+<h4 id="3-churn-and-temporary-allocation-monitoring">3. Churn and
+Temporary Allocation Monitoring</h4>
+<p>High allocation rates can degrade performance by triggering frequent
+garbage collection pauses. Profilers can use
+<code>collectgarbage("count")</code> to evaluate high-frequency
+functions (such as render loops or per-tick game updates). If the count
+rises dramatically between iterations, it indicates temporary table
+creations, string concatenations, or closure instantiations that should
+be pooled or cached.</p>
+<h3 id="best-practices-for-accurate-profiling">Best Practices for
+Accurate Profiling</h3>
+<ul>
+<li><p><strong>Stabilize the Collector:</strong> Because Lua's
+incremental garbage collector runs concurrently with execution,
+automatic collection can occur between your start and end measurements,
+leading to negative or misleading deltas. To measure raw allocation
+volume accurately, temporarily stop the collector:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;stop&quot;</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">start_mem</span> <span class="op">=</span> <span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;count&quot;</span><span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>run_workload<span class="op">()</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">end_mem</span> <span class="op">=</span> <span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;count&quot;</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;restart&quot;</span><span class="op">)</span></span></code></pre></div></li>
+<li><p><strong>Distinguish Between Retained and Temporary
+Memory:</strong> To measure retained memory (objects that survived), run
+a full collection (<code>collectgarbage("collect")</code>) both before
+and after the target routine. To measure total memory churn (including
+temporary objects), disable the collector as shown above.</p></li>
+</ul>
+<h3 id="limitations">Limitations</h3>
+<p>While <code>collectgarbage("count")</code> is an essential first-line
+diagnostic tool, it has notable limitations:</p>
+<ul>
+<li><strong>Scope of Tracking:</strong> It only measures memory
+allocated through Lua's standard memory allocator. Memory allocated
+directly by third-party C libraries or native extensions via standard
+<code>malloc</code> calls remains invisible to this function unless
+explicitly routed through Lua’s allocation function
+(<code>lua_Alloc</code>).</li>
+<li><strong>Coarse Visibility:</strong> The call only returns aggregate
+memory usage for the entire Lua state. It does not provide object-level
+attribution, type breakdowns, or allocation call stacks. Pinpointing the
+exact source of an allocation spike requires combining
+<code>collectgarbage("count")</code> with custom table crawlers, the Lua
+Debug library, or external profilers.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/profiling-lua-memory-with-collectgarbage-count';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

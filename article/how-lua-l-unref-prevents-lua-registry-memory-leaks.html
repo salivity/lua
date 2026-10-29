@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How luaL_unref Prevents Lua Registry Memory Leaks - lua</title>
+    <meta name="description" content="This article explains how the luaLunref function in the Lua C API releases references to prevent memory leaks in the Lua registry. In C and Lua interoperability, developers frequently store Lua values in the pseudo-index registry using luaLref to keep the">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-l-unref-prevents-lua-registry-memory-leaks">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How luaL_unref Prevents Lua Registry Memory Leaks - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-l-unref-prevents-lua-registry-memory-leaks" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains how the luaLunref function in the Lua C API releases references to prevent memory leaks in the Lua registry. In C and Lua interoperability, developers frequently store Lua values in the pseudo-index registry using luaLref to keep the" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lual_unref-prevents-lua-registry-memory-leaks">How
+luaL_unref Prevents Lua Registry Memory Leaks</h1>
+<p>This article explains how the <code>luaL_unref</code> function in the
+Lua C API releases references to prevent memory leaks in the Lua
+registry. In C and Lua interoperability, developers frequently store Lua
+values in the pseudo-index registry using <code>luaL_ref</code> to keep
+them safe from garbage collection. Calling <code>luaL_unref</code>
+releases these stored handles by replacing the referenced object with a
+link in an internal free list, thereby allowing Lua's garbage collector
+to reclaim unreachable objects and avoiding infinite table growth.</p>
+<p>The Lua registry (<code>LUA_REGISTRYINDEX</code>) is a regular Lua
+table accessible only to C code. When a C program needs to retain a
+reference to a Lua object—such as a function, table, or userdata—across
+separate API calls, it pushes the object onto the stack and invokes
+<code>luaL_ref</code>. This function assigns an integer key to the
+object within the registry table, creating a strong reference that
+prevents Lua's incremental garbage collector from collecting it.</p>
+<p>If these handles are never released, the registry retains strong
+references indefinitely, creating memory leaks. The
+<code>luaL_unref</code> function addresses this by executing the
+following operation:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> luaL_unref <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">int</span> t<span class="op">,</span> <span class="dt">int</span> ref<span class="op">);</span></span></code></pre></div>
+<p>When <code>luaL_unref</code> is called with the registry table index
+and a valid integer reference, it performs three primary actions:</p>
+<ol type="1">
+<li><strong>Validation</strong>: It checks whether the passed reference
+is valid. If the reference is <code>LUA_NOREF</code> (-2) or
+<code>LUA_REFNIL</code> (-1), the function returns immediately without
+modifying the table.</li>
+<li><strong>Severing the Strong Reference</strong>: The function
+overwrites the registry slot at key <code>ref</code>. By replacing the
+stored Lua object with an integer, the strong reference to that object
+is removed. With no other references pointing to it, the object becomes
+eligible for collection during Lua’s next garbage collection phase.</li>
+<li><strong>Managing the Free List</strong>: Instead of setting the key
+to <code>nil</code>—which could alter hash table sizing or leave holes
+in array segments—Lua maintains a singly linked free list directly
+inside the registry table. The head of this list is stored at index zero
+(<code>t[0]</code>). When freeing a slot, <code>luaL_unref</code> sets
+<code>t[ref]</code> to the current value of <code>t[0]</code>, and then
+updates <code>t[0]</code> to <code>ref</code>.</li>
+</ol>
+<p>By maintaining this linked list of available integer keys, future
+calls to <code>luaL_ref</code> can immediately reuse existing vacant
+slots rather than expanding the table size with new keys. This design
+ensures that memory is conserved on two fronts: the underlying Lua
+values are safely reclaimed by the garbage collector, and the registry
+table itself remains compact and bounded.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-l-unref-prevents-lua-registry-memory-leaks';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How OP_TFORCALL Handles Generic Loops in Lua - lua</title>
+    <meta name="description" content="The OPTFORCALL opcode in the Lua virtual machine manages the execution of iterator functions within generic for loops. It coordinates the transition of loop states by passing the invariant state and the primary control variable to an iterator function, ca">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-op-tforcall-handles-generic-loops-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How OP_TFORCALL Handles Generic Loops in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-op-tforcall-handles-generic-loops-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The OPTFORCALL opcode in the Lua virtual machine manages the execution of iterator functions within generic for loops. It coordinates the transition of loop states by passing the invariant state and the primary control variable to an iterator function, ca" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-op_tforcall-handles-generic-loops-in-lua">How OP_TFORCALL
+Handles Generic Loops in Lua</h1>
+<p>The <code>OP_TFORCALL</code> opcode in the Lua virtual machine
+manages the execution of iterator functions within generic
+<code>for</code> loops. It coordinates the transition of loop states by
+passing the invariant state and the primary control variable to an
+iterator function, capturing the newly returned values, and placing them
+into the appropriate stack registers so subsequent instructions can
+evaluate whether the loop should continue or terminate.</p>
+<h3 id="generic-loop-state-architecture">Generic Loop State
+Architecture</h3>
+<p>In Lua, a generic <code>for</code> loop is syntactically defined
+as:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">var_1</span><span class="op">,</span> <span class="op">...,</span> <span class="va">var_n</span> <span class="kw">in</span> <span class="va">explist</span> <span class="cf">do</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- loop body</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>Before entering the iteration phase, the Lua compiler evaluates
+<code>explist</code> to produce three core values that govern the loop's
+lifecycle:</p>
+<ol type="1">
+<li><strong>Iterator Function (<span
+class="math inline">\(f\)</span>):</strong> A callable entity that
+yields subsequent values on each iteration.</li>
+<li><strong>Invariant State (<span
+class="math inline">\(s\)</span>):</strong> A static context passed into
+every call to the iterator.</li>
+<li><strong>Control Variable (<span
+class="math inline">\(var\)</span>):</strong> The variable tracking the
+current iteration progress, initialized to the third result of
+<code>explist</code>.</li>
+</ol>
+<p>These values are placed in consecutive internal registers in the
+virtual machine stack:</p>
+<ul>
+<li><code>R(A)</code>: The iterator function (<span
+class="math inline">\(f\)</span>)</li>
+<li><code>R(A+1)</code>: The invariant state (<span
+class="math inline">\(s\)</span>)</li>
+<li><code>R(A+2)</code>: The control variable (<span
+class="math inline">\(var\)</span>)</li>
+</ul>
+<h3 id="the-mechanics-of-op_tforcall">The Mechanics of OP_TFORCALL</h3>
+<p>The <code>OP_TFORCALL</code> instruction executes the iterator
+invocation. Its format takes a base register <code>A</code> and a count
+parameter <code>C</code>, which specifies how many loop variables need
+to be extracted from the call.</p>
+<p>When the virtual machine encounters <code>OP_TFORCALL A C</code>, it
+performs the following sequence:</p>
+<ol type="1">
+<li><strong>Argument Preparation:</strong> The VM sets up a function
+call using the iterator function located at <code>R(A)</code>. It
+supplies exactly two arguments: the invariant state at
+<code>R(A+1)</code> and the current control variable at
+<code>R(A+2)</code>.</li>
+<li><strong>Function Invocation:</strong> The VM executes the function
+call equivalent to <code>f(s, var)</code>.</li>
+<li><strong>Return Value Capture:</strong> The returned values are
+written sequentially into target registers beginning directly after the
+internal loop state registers. The first returned value represents the
+next iteration's proposed control variable.</li>
+</ol>
+<p>Because the invariant state <code>R(A+1)</code> never changes
+throughout the loop's execution, the state transition relies entirely on
+the progression of the control variable from one cycle to the next.</p>
+<h3 id="transition-evaluation-and-op_tforloop">Transition Evaluation and
+OP_TFORLOOP</h3>
+<p><code>OP_TFORCALL</code> does not handle conditional jumps or loop
+termination on its own. In Lua's bytecode architecture,
+<code>OP_TFORCALL</code> is immediately paired with
+<code>OP_TFORLOOP</code>.</p>
+<p>Once <code>OP_TFORCALL</code> finishes writing the iterator's output
+to the stack:</p>
+<ol type="1">
+<li><code>OP_TFORLOOP</code> inspects the primary returned value (the
+candidate for the new control variable).</li>
+<li><strong>Termination Check:</strong> If this value is
+<code>nil</code>, the iteration sequence has finished. The VM falls
+through to the instruction following <code>OP_TFORLOOP</code>, exiting
+the loop.</li>
+<li><strong>State Update and Jump:</strong> If the value is not
+<code>nil</code>, the loop state transitions forward.
+<code>OP_TFORLOOP</code> copies the candidate control variable into
+<code>R(A+2)</code>, updates the user-visible loop variables, and
+executes a backward jump to the start of the loop body.</li>
+</ol>
+<h3 id="efficiency-and-register-reuse">Efficiency and Register
+Reuse</h3>
+<p>By separating the iterator invocation (<code>OP_TFORCALL</code>) from
+the branching logic (<code>OP_TFORLOOP</code>), Lua keeps virtual
+machine instructions simple and pipelined. This design updates the
+loop's variant state in-place on the stack without allocating heap
+memory or intermediate tables, allowing stateful traversal mechanisms
+like <code>ipairs</code> and stateless iterators like <code>pairs</code>
+to execute with minimal CPU overhead.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-op-tforcall-handles-generic-loops-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

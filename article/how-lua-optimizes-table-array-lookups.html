@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Optimizes Table Array Lookups - lua</title>
+    <meta name="description" content="The Lua programming language achieves high-performance data access by implementing its universal table structure as a hybrid container composed of an array slice and a hash table. When tables utilize consecutive positive integer keys starting at index 1,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-optimizes-table-array-lookups">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Optimizes Table Array Lookups - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-optimizes-table-array-lookups" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The Lua programming language achieves high-performance data access by implementing its universal table structure as a hybrid container composed of an array slice and a hash table. When tables utilize consecutive positive integer keys starting at index 1," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-optimizes-table-array-lookups">How Lua Optimizes Table
+Array Lookups</h1>
+<p>The Lua programming language achieves high-performance data access by
+implementing its universal table structure as a hybrid container
+composed of an array slice and a hash table. When tables utilize
+consecutive positive integer keys starting at index 1, Lua automatically
+places these elements into a contiguous C array, allowing lookups to
+bypass hash computations entirely and execute via direct memory offset
+calculations in constant <span class="math inline">\(O(1)\)</span>
+time.</p>
+<h3 id="the-dual-structure-architecture-of-tables">The Dual-Structure
+Architecture of Tables</h3>
+<p>Internally, every Lua table is represented by a C structure (defined
+as <code>Table</code> in the Lua source code, primarily
+<code>ltable.c</code> and <code>ltable.h</code>). This structure splits
+storage into two distinct segments:</p>
+<ol type="1">
+<li><strong>The Hash Part (<code>Node *node</code>):</strong> A
+conventional hash table that handles arbitrary keys, including strings,
+floating-point numbers, functions, objects, and non-consecutive or
+out-of-range integers.</li>
+<li><strong>The Array Part (<code>TValue *array</code>):</strong> A
+contiguous block of raw <code>TValue</code> objects allocated in memory,
+specifically reserved for consecutive positive integer keys starting
+from 1 up to an internally tracked limit (<code>sizearray</code> or
+<code>alimit</code> in modern Lua releases).</li>
+</ol>
+<h3 id="direct-pointer-arithmetic-and-bounds-checking">Direct Pointer
+Arithmetic and Bounds Checking</h3>
+<p>When a program accesses a key using the syntax <code>t[k]</code>, Lua
+first checks whether <code>k</code> is a positive integer within the
+bounds of the array slice:</p>
+<ol type="1">
+<li>Lua verifies that <code>k</code> is an integer type (or a float
+convertible to an exact integer without loss).</li>
+<li>It evaluates whether <code>1 &lt;= k &lt;= alimit</code>.</li>
+</ol>
+<p>If this condition is met, Lua skips hashing, modulus arithmetic, and
+hash collision traversal. Instead, the runtime accesses the element
+using raw C pointer indexing:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>TValue <span class="op">*</span>val <span class="op">=</span> <span class="op">&amp;</span>t<span class="op">-&gt;</span>array<span class="op">[</span>k <span class="op">-</span> <span class="dv">1</span><span class="op">];</span></span></code></pre></div>
+<p>Because C utilizes zero-based indexing while Lua uses one-based
+indexing, the runtime simply subtracts <code>1</code> from the key
+<code>k</code>. The CPU calculates the physical memory address with a
+single base-plus-offset calculation:</p>
+<p><span class="math display">\[\text{Address} = \text{base\_address} +
+((k - 1) \times \text{sizeof}(TValue))\]</span></p>
+<p>This provides true <span class="math inline">\(O(1)\)</span>
+random-access performance equivalent to native arrays in compiled
+languages such as C or Rust.</p>
+<h3 id="memory-locality-and-cache-performance">Memory Locality and Cache
+Performance</h3>
+<p>Placing consecutive integer keys in a contiguous C array provides
+significant hardware-level optimizations via CPU cache lines:</p>
+<ul>
+<li><strong>Spatial Locality:</strong> Successive elements are stored
+immediately adjacent to one another. Iterating over an array slice
+sequentially (for example, with <code>ipairs</code> or a numeric
+<code>for</code> loop) causes the CPU cache prefetcher to load adjacent
+values into L1/L2 caches ahead of execution, minimizing memory
+latency.</li>
+<li><strong>No Pointer Indirection:</strong> Unlike languages that box
+all primitive values or store arrays as collections of references, Lua's
+<code>TValue</code> stores primitive types (like booleans, numbers, and
+pointers) directly inside the array slot, eliminating an extra
+dereference step during lookups.</li>
+</ul>
+<h3 id="the-50-density-threshold-for-array-allocation">The 50% Density
+Threshold for Array Allocation</h3>
+<p>To balance memory usage against access speed, Lua does not allocate
+an array slice of arbitrary size if the keys are sparse. When a table
+triggers a resize (rehash), the runtime computes the optimal size for
+the array part using a power-of-two allocation rule:</p>
+<ul>
+<li>Lua scans all integer keys present in the table and counts how many
+fall into intervals <span class="math inline">\([2^{i-1} + 1,
+2^i]\)</span>.</li>
+<li>It selects the largest power of two <span
+class="math inline">\(2^n\)</span> such that at least 50% of the slots
+between 1 and <span class="math inline">\(2^n\)</span> will be populated
+by non-nil values.</li>
+</ul>
+<p>If integer keys are consecutive (such as indices 1 through 1,000),
+the density is 100%, well above the 50% threshold. The entire sequence
+stays inside the array slice. If the keys are sparse (e.g., indices 1
+and 1,000,000), allocating a million-element array would waste memory;
+in that case, Lua routes the sparse high-integer keys to the hash part,
+ensuring the array slice is only deployed when it yields compact,
+cache-friendly lookups.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-optimizes-table-array-lookups';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

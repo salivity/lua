@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Pegasus.lua Handles HTTP and WebSockets - lua</title>
+    <meta name="description" content="This article provides an overview of how the Pegasus.lua web server processes incoming network traffic in Lua environments. It details the server&#39;s lifecycle management for standard HTTP transactions via structured request and response objects, as well as">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-pegasus-lua-handles-http-and-web-sockets">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Pegasus.lua Handles HTTP and WebSockets - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-pegasus-lua-handles-http-and-web-sockets" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of how the Pegasus.lua web server processes incoming network traffic in Lua environments. It details the server&#39;s lifecycle management for standard HTTP transactions via structured request and response objects, as well as" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-pegasuslua-handles-http-and-websockets">How Pegasus.lua
+Handles HTTP and WebSockets</h1>
+<p>This article provides an overview of how the Pegasus.lua web server
+processes incoming network traffic in Lua environments. It details the
+server's lifecycle management for standard HTTP transactions via
+structured request and response objects, as well as the transition
+mechanisms required to support persistent, bidirectional WebSocket
+communication over raw TCP sockets.</p>
+<h3 id="architecture-and-standard-request-processing">Architecture and
+Standard Request Processing</h3>
+<p>Pegasus.lua is a lightweight, non-blocking HTTP server built natively
+for Lua, relying on the LuaSocket library to manage low-level network
+I/O. Its primary execution model centers around an event loop that
+listens for incoming TCP connections on a configured host and port.</p>
+<p>When a client initiates a standard HTTP request, Pegasus.lua handles
+the transaction through the following sequence:</p>
+<ol type="1">
+<li><p><strong>Connection Acceptance:</strong> The server accepts the
+incoming client socket and initializes a buffered reader to read the raw
+HTTP stream.</p></li>
+<li><p><strong>Parsing Request Headers:</strong> Pegasus.lua reads the
+request line to extract the HTTP method (GET, POST, PUT, DELETE, etc.),
+the request target path, and the HTTP version. It then parses incoming
+headers line by line into a key-value Lua table, normalizes paths, and
+extracts query parameters.</p></li>
+<li><p><strong>Payload Ingestion:</strong> If headers such as
+<code>Content-Length</code> or <code>Transfer-Encoding: chunked</code>
+are present, Pegasus reads the specified bytes from the socket to
+assemble the request body.</p></li>
+<li><p><strong>Context Creation:</strong> The server constructs two
+primary objects:</p>
+<ul>
+<li><strong><code>Request</code>:</strong> Exposes client data,
+including path, headers, query parameters, method, and raw payload
+data.</li>
+<li><strong><code>Response</code>:</strong> Exposes methods to construct
+and write HTTP response headers, set cookies, define status codes, and
+stream or write the response body.</li>
+</ul></li>
+<li><p><strong>Handler Invocation:</strong> Pegasus.lua invokes the
+user-defined callback function, passing the <code>Request</code> and
+<code>Response</code> objects as arguments:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Pegasus</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&#39;pegasus&#39;</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">server</span> <span class="op">=</span> <span class="va">Pegasus</span><span class="op">:</span>new<span class="op">({</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">port</span> <span class="op">=</span> <span class="dv">9090</span><span class="op">,</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">location</span> <span class="op">=</span> <span class="st">&#39;./public&#39;</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="va">server</span><span class="op">:</span>start<span class="op">(</span><span class="kw">function</span><span class="op">(</span><span class="va">req</span><span class="op">,</span> <span class="fu">rep</span><span class="op">)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">path</span> <span class="op">=</span> <span class="va">req</span><span class="op">:</span>path<span class="op">()</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">path</span> <span class="op">==</span> <span class="st">&quot;/api/status&quot;</span> <span class="cf">then</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>        <span class="fu">rep</span><span class="op">:</span>addHeader<span class="op">(</span><span class="st">&quot;Content-Type&quot;</span><span class="op">,</span> <span class="st">&quot;application/json&quot;</span><span class="op">)</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>        <span class="fu">rep</span><span class="op">:</span><span class="fu">write</span><span class="op">(</span><span class="st">&#39;{&quot;status&quot;: &quot;ok&quot;}&#39;</span><span class="op">)</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>        <span class="fu">rep</span><span class="op">:</span>status<span class="op">(</span><span class="dv">404</span><span class="op">)</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>        <span class="fu">rep</span><span class="op">:</span><span class="fu">write</span><span class="op">(</span><span class="st">&quot;Not Found&quot;</span><span class="op">)</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span><span class="op">)</span></span></code></pre></div></li>
+<li><p><strong>Connection Termination:</strong> Once the handler
+execution finishes and the response buffer flushes to the client, the
+server closes the TCP socket or prepares it for subsequent requests if
+HTTP Keep-Alive is negotiated.</p></li>
+</ol>
+<h3 id="websocket-handshake-and-socket-hijacking">WebSocket Handshake
+and Socket Hijacking</h3>
+<p>Standard HTTP transactions are stateless and transient, while
+WebSockets require a persistent, full-duplex communication channel.
+Pegasus.lua does not implement a monolithic, built-in WebSocket framing
+protocol parser by default; instead, it relies on protocol upgrades and
+underlying socket access to facilitate WebSocket communication.</p>
+<p>The WebSocket lifecycle in Pegasus.lua works through the following
+phases:</p>
+<h4 id="1-upgrade-detection">1. Upgrade Detection</h4>
+<p>A WebSocket connection begins as a standard HTTP GET request
+containing specific headers:</p>
+<ul>
+<li><code>Upgrade: websocket</code></li>
+<li><code>Connection: Upgrade</code></li>
+<li><code>Sec-WebSocket-Key: &lt;base64-nonce&gt;</code></li>
+<li><code>Sec-WebSocket-Version: 13</code></li>
+</ul>
+<p>The Pegasus.lua request handler inspects incoming headers to detect
+whether the client is requesting an upgrade:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> is_websocket_request<span class="op">(</span><span class="va">req</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">headers</span> <span class="op">=</span> <span class="va">req</span><span class="op">:</span>headers<span class="op">()</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">headers</span><span class="op">[</span><span class="st">&quot;upgrade&quot;</span><span class="op">]</span> <span class="kw">and</span> <span class="va">headers</span><span class="op">[</span><span class="st">&quot;upgrade&quot;</span><span class="op">]:</span><span class="fu">lower</span><span class="op">()</span> <span class="op">==</span> <span class="st">&quot;websocket&quot;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h4 id="2-the-upgrade-handshake">2. The Upgrade Handshake</h4>
+<p>To complete the handshake, the server must compute the
+<code>Sec-WebSocket-Accept</code> header. This requires concatenating
+the incoming <code>Sec-WebSocket-Key</code> with the standard globally
+unique identifier <code>258EAFA5-E914-47DA-95CA-C5AB0DC85B11</code>,
+computing the SHA-1 hash of the result, and encoding that hash in
+Base64.</p>
+<p>Pegasus.lua responds with an
+<code>HTTP/1.1 101 Switching Protocols</code> status code:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rep</span><span class="op">:</span>status<span class="op">(</span><span class="dv">101</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">rep</span><span class="op">:</span>addHeader<span class="op">(</span><span class="st">&quot;Upgrade&quot;</span><span class="op">,</span> <span class="st">&quot;websocket&quot;</span><span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">rep</span><span class="op">:</span>addHeader<span class="op">(</span><span class="st">&quot;Connection&quot;</span><span class="op">,</span> <span class="st">&quot;Upgrade&quot;</span><span class="op">)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">rep</span><span class="op">:</span>addHeader<span class="op">(</span><span class="st">&quot;Sec-WebSocket-Accept&quot;</span><span class="op">,</span> <span class="va">computed_key</span><span class="op">)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">rep</span><span class="op">:</span>sendHeader<span class="op">()</span></span></code></pre></div>
+<h4 id="3-bypassing-http-lifecycle">3. Bypassing HTTP Lifecycle</h4>
+<p>Once the <code>101 Switching Protocols</code> response is sent, the
+standard HTTP cycle terminates without closing the client socket. At
+this point, the underlying raw client socket (managed by LuaSocket) is
+handed over directly to a dedicated WebSocket implementation or framing
+library (such as <code>lua-websockets</code>).</p>
+<h4 id="4-frame-processing-and-event-dispatching">4. Frame Processing
+and Event Dispatching</h4>
+<p>Once the socket is detached from HTTP handling:</p>
+<ul>
+<li><strong>Framing Protocol:</strong> Data is no longer formatted as
+plain-text HTTP messages. Pegasus hands data reading over to logic that
+parses RFC 6455 data frames, handling masking keys, opcodes (text,
+binary, ping, pong, close), and payload lengths.</li>
+<li><strong>Bi-directional Flow:</strong> The Lua server can
+independently write frames to the raw client socket without waiting for
+a new request, allowing real-time event pushing.</li>
+<li><strong>Connection Closure:</strong> The socket remains open until
+either endpoint transmits an explicit close frame (opcode
+<code>0x8</code>) or the underlying TCP connection breaks.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-pegasus-lua-handles-http-and-web-sockets';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

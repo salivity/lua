@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How package.loaded Prevents Duplicate Execution in Lua - lua</title>
+    <meta name="description" content="In the Lua programming language, the require function relies on an internal registry table named package.loaded to implement module caching and prevent the redundant execution of scripts. When a file or module is requested, Lua checks this table before se">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-package-loaded-prevents-duplicate-execution-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How package.loaded Prevents Duplicate Execution in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-package-loaded-prevents-duplicate-execution-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the require function relies on an internal registry table named package.loaded to implement module caching and prevent the redundant execution of scripts. When a file or module is requested, Lua checks this table before se" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-packageloaded-prevents-duplicate-execution-in-lua">How
+package.loaded Prevents Duplicate Execution in Lua</h1>
+<p>In the Lua programming language, the <code>require</code> function
+relies on an internal registry table named <code>package.loaded</code>
+to implement module caching and prevent the redundant execution of
+scripts. When a file or module is requested, Lua checks this table
+before searching the filesystem or running any code. If an entry for the
+specified module already exists, Lua immediately returns the cached
+value rather than loading and executing the file again. This article
+explains the internal mechanics of <code>package.loaded</code>, the
+step-by-step execution lifecycle of the <code>require</code> function,
+and how this caching strategy maintains state and performance.</p>
+<h3 id="the-lifecycle-of-a-require-call">The Lifecycle of a
+<code>require</code> Call</h3>
+<p>When you invoke <code>require("module_name")</code>, Lua follows a
+strict sequence to locate and load the requested code:</p>
+<ol type="1">
+<li><strong>Cache Inspection:</strong> Lua queries
+<code>package.loaded["module_name"]</code>. If the key exists and its
+value is anything other than <code>false</code> or <code>nil</code>,
+<code>require</code> halts further operations and immediately returns
+that value.</li>
+<li><strong>Search Phase:</strong> If the value is not present, Lua
+iterates through searchers (defined in <code>package.searchers</code> in
+Lua 5.2+ or <code>package.loaders</code> in Lua 5.1) to locate the file
+on disk or identify a C library.</li>
+<li><strong>Execution Phase:</strong> Once the loader finds the file, it
+compiles the chunk and executes it as a function.</li>
+<li><strong>Cache Population:</strong> Lua assigns the return value of
+that executed chunk directly to
+<code>package.loaded["module_name"]</code>. If the chunk does not
+explicitly return a value, Lua assigns <code>true</code> to that key
+instead.</li>
+<li><strong>Return:</strong> The assigned value in
+<code>package.loaded["module_name"]</code> is returned to the
+caller.</li>
+</ol>
+<h3 id="preventing-duplicate-execution-and-side-effects">Preventing
+Duplicate Execution and Side Effects</h3>
+<p>Because Lua populates <code>package.loaded</code> during the initial
+load, any subsequent calls to <code>require("module_name")</code> in any
+file within the same Lua state will trigger step 1 and exit early.</p>
+<p>This mechanism provides two primary benefits:</p>
+<ul>
+<li><strong>Elimination of Redundant Overhead:</strong> Parsing and
+compiling source files, performing filesystem I/O, and evaluating
+top-level code chunks are computationally expensive. Checking an
+in-memory hash table eliminates this overhead on subsequent
+imports.</li>
+<li><strong>Preservation of Module State (Singletons):</strong>
+Top-level variables and local state within a required file are executed
+only once. Every subsequent file that imports the module receives a
+reference to the exact same table or object, enabling shared state
+across disparate parts of an application.</li>
+</ul>
+<h3 id="handling-circular-dependencies">Handling Circular
+Dependencies</h3>
+<p>The <code>package.loaded</code> table also acts as a safeguard
+against infinite loops caused by circular dependencies. When a module
+execution begins, Lua temporarily sets
+<code>package.loaded["module_name"]</code> to a sentinel boolean value
+(typically <code>true</code>) before the file finishes executing. If
+module A requires module B, and module B requires module A, module B
+will receive this sentinel value from <code>package.loaded</code> rather
+than causing an infinite recursion of file executions.</p>
+<h3 id="manual-cache-invalidation">Manual Cache Invalidation</h3>
+<p>Because <code>package.loaded</code> is a standard Lua table exposed
+globally, developers can manipulate it directly. Setting
+<code>package.loaded["module_name"] = nil</code> purges the cached
+entry. The next time <code>require("module_name")</code> is called, Lua
+will be forced to search the filesystem, recompile, and execute the file
+from scratch, confirming that <code>package.loaded</code> is the sole
+gatekeeper controlling execution prevention.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-package-loaded-prevents-duplicate-execution-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

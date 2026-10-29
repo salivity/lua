@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inspect Lua require Resolution Sequence - lua</title>
+    <meta name="description" content="When managing dependencies in Lua, understanding how the require function locates files is essential for troubleshooting missing module errors and path conflicts. This guide outlines the core mechanisms behind Lua module resolution and details the most ef">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/inspect-lua-require-resolution-sequence">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Inspect Lua require Resolution Sequence - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/inspect-lua-require-resolution-sequence" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="When managing dependencies in Lua, understanding how the require function locates files is essential for troubleshooting missing module errors and path conflicts. This guide outlines the core mechanisms behind Lua module resolution and details the most ef" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="inspect-lua-require-resolution-sequence">Inspect Lua require
+Resolution Sequence</h1>
+<p>When managing dependencies in Lua, understanding how the
+<code>require</code> function locates files is essential for
+troubleshooting missing module errors and path conflicts. This guide
+outlines the core mechanisms behind Lua module resolution and details
+the most effective techniques to inspect the complete sequence of paths
+and loaders Lua evaluates when importing a module.</p>
+<h3 id="how-lua-resolves-modules">How Lua Resolves Modules</h3>
+<p>When <code>require("module_name")</code> is invoked, Lua evaluates
+loaders defined in the <code>package.searchers</code> table (named
+<code>package.loaders</code> in Lua 5.1). By default, Lua executes the
+following sequence:</p>
+<ol type="1">
+<li><strong>Preload Table</strong>: Checks if the module is already
+defined in <code>package.preload</code>.</li>
+<li><strong>Lua Loader</strong>: Searches for standard <code>.lua</code>
+files using templates in <code>package.path</code>.</li>
+<li><strong>C Loader</strong>: Searches for compiled shared libraries
+(<code>.so</code>, <code>.dll</code>) using templates in
+<code>package.cpath</code>.</li>
+<li><strong>All-in-One Loader</strong>: Searches for C libraries
+containing combined submodules.</li>
+</ol>
+<h3 id="method-1-triggering-an-intentional-error-via-pcall">Method 1:
+Triggering an Intentional Error via <code>pcall</code></h3>
+<p>The simplest and most complete way to view the exact search sequence
+evaluated by <code>require</code> is to deliberately fail a module load
+using <code>pcall</code>. When a module cannot be found, Lua raises an
+error containing every attempted path across all default searchers.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">module_name</span> <span class="op">=</span> <span class="st">&quot;target_module&quot;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">pcall</span><span class="op">(</span><span class="fu">require</span><span class="op">,</span> <span class="va">module_name</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">success</span> <span class="cf">then</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Resolution sequence attempted by require:&quot;</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">err</span><span class="op">)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>If the module does not exist, Lua outputs the formatted trace showing
+the exact paths checked:</p>
+<pre class="text"><code>module &#39;target_module&#39; not found:
+    no field package.preload[&#39;target_module&#39;]
+    no file &#39;./target_module.lua&#39;
+    no file &#39;/usr/local/share/lua/5.4/target_module.lua&#39;
+    no file &#39;/usr/local/share/lua/5.4/target_module/init.lua&#39;
+    no file &#39;./target_module.so&#39;
+    no file &#39;/usr/local/lib/lua/5.4/target_module.so&#39;</code></pre>
+<h3 id="method-2-inspecting-path-strings-directly">Method 2: Inspecting
+Path Strings Directly</h3>
+<p>The search templates evaluated by the second and third searchers are
+stored directly in <code>package.path</code> and
+<code>package.cpath</code>. These strings contain semicolon-separated
+path templates where <code>?</code> represents the module name (with
+dots converted to directory separators).</p>
+<p>You can print and iterate over them directly:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;--- Lua Search Path (package.path) ---&quot;</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">template</span> <span class="kw">in</span> <span class="fu">string.gmatch</span><span class="op">(</span><span class="va">package.path</span><span class="op">,</span> <span class="st">&quot;[^;]+&quot;</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">template</span><span class="op">)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;</span><span class="sc">\n</span><span class="st">--- C Library Search Path (package.cpath) ---&quot;</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">template</span> <span class="kw">in</span> <span class="fu">string.gmatch</span><span class="op">(</span><span class="va">package.cpath</span><span class="op">,</span> <span class="st">&quot;[^;]+&quot;</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">template</span><span class="op">)</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h3 id="method-3-using-packagesearchpath-lua-52">Method 3: Using
+<code>package.searchpath</code> (Lua 5.2+)</h3>
+<p>In Lua 5.2 and later, <code>package.searchpath</code> exposes the
+underlying template-expansion algorithm used by <code>require</code>. It
+takes the module name and a template string, attempting to locate the
+file without loading it. If the file is not found, it returns
+<code>nil</code> followed by an error message listing every generated
+file path.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">modname</span> <span class="op">=</span> <span class="st">&quot;my.module&quot;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Check Lua paths</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">file</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">package.searchpath</span><span class="op">(</span><span class="va">modname</span><span class="op">,</span> <span class="va">package.path</span><span class="op">)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">file</span> <span class="cf">then</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Resolved to: &quot;</span> <span class="op">..</span> <span class="va">file</span><span class="op">)</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Failed to resolve in package.path. Paths checked:</span><span class="sc">\n</span><span class="st">&quot;</span> <span class="op">..</span> <span class="va">err</span><span class="op">)</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="co">-- Check C paths</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">cfile</span><span class="op">,</span> <span class="va">cerr</span> <span class="op">=</span> <span class="fu">package.searchpath</span><span class="op">(</span><span class="va">modname</span><span class="op">,</span> <span class="va">package.cpath</span><span class="op">)</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">cfile</span> <span class="cf">then</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;</span><span class="sc">\n</span><span class="st">Paths checked in package.cpath:</span><span class="sc">\n</span><span class="st">&quot;</span> <span class="op">..</span> <span class="va">cerr</span><span class="op">)</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h3 id="method-4-hooking-packagesearchers">Method 4: Hooking
+<code>package.searchers</code></h3>
+<p>For programmatic observation or logging during runtime, you can wrap
+each function in the <code>package.searchers</code> array. This reveals
+which searchers execute and what arguments they receive.</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">searchers</span> <span class="op">=</span> <span class="va">package.searchers</span> <span class="kw">or</span> <span class="va">package</span><span class="op">.</span><span class="va">loaders</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">index</span><span class="op">,</span> <span class="va">searcher</span> <span class="kw">in</span> <span class="fu">ipairs</span><span class="op">(</span><span class="va">searchers</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">searchers</span><span class="op">[</span><span class="va">index</span><span class="op">]</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">modname</span><span class="op">)</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>        <span class="fu">print</span><span class="op">(</span><span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;Searcher #%d testing: %s&quot;</span><span class="op">,</span> <span class="va">index</span><span class="op">,</span> <span class="va">modname</span><span class="op">))</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> searcher<span class="op">(</span><span class="va">modname</span><span class="op">)</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="fu">type</span><span class="op">(</span><span class="va">result</span><span class="op">)</span> <span class="op">==</span> <span class="st">&quot;function&quot;</span> <span class="cf">then</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>            <span class="fu">print</span><span class="op">(</span><span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;Searcher #%d matched %s&quot;</span><span class="op">,</span> <span class="va">index</span><span class="op">,</span> <span class="va">modname</span><span class="op">))</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">result</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="co">-- Require a module to trace execution</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a><span class="fu">require</span><span class="op">(</span><span class="st">&quot;example_module&quot;</span><span class="op">)</span></span></code></pre></div></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/inspect-lua-require-resolution-sequence';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

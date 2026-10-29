@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How io.lines Performs Buffered Reads in Lua - lua</title>
+    <meta name="description" content="The io.lines function in the Lua programming language provides an idiomatic and memory-efficient way to process text files line by line using an iterator. Behind the scenes, it does not issue expensive operating system read requests for every individual l">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-io-lines-performs-buffered-reads-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How io.lines Performs Buffered Reads in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-io-lines-performs-buffered-reads-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The io.lines function in the Lua programming language provides an idiomatic and memory-efficient way to process text files line by line using an iterator. Behind the scenes, it does not issue expensive operating system read requests for every individual l" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-iolines-performs-buffered-reads-in-lua">How io.lines
+Performs Buffered Reads in Lua</h1>
+<p>The <code>io.lines</code> function in the Lua programming language
+provides an idiomatic and memory-efficient way to process text files
+line by line using an iterator. Behind the scenes, it does not issue
+expensive operating system read requests for every individual line, nor
+does it load entire files into memory at once. Instead, Lua delegates
+input operations to the underlying ANSI C standard library
+(<code>stdio</code>), which uses internal memory buffers to balance
+memory consumption with fast input/output performance.</p>
+<h2 id="the-c-standard-io-foundation">The C Standard I/O Foundation</h2>
+<p>Lua’s <code>io</code> library is implemented directly on top of the
+standard C <code>FILE*</code> streams. When you invoke
+<code>io.lines("filename.txt")</code> or call <code>file:lines()</code>
+on an already opened handle, Lua relies on the C runtime's built-in file
+handling rather than raw operating system system calls (such as POSIX
+<code>read</code> or Windows <code>ReadFile</code>).</p>
+<p>The C library automatically allocates an internal buffer (typically 4
+KB or 8 KB, depending on the platform's <code>BUFSIZ</code> definition)
+for the stream opened via <code>fopen</code>. When a read operation is
+requested:</p>
+<ol type="1">
+<li>The C runtime issues a single system call to fill the internal
+buffer with a full block of bytes from the storage device.</li>
+<li>Subsequent read requests are satisfied entirely within user-space
+memory from this buffer.</li>
+<li>Another physical read is executed only when the buffer is
+exhausted.</li>
+</ol>
+<h2 id="how-iolines-interacts-with-the-buffer">How <code>io.lines</code>
+Interacts with the Buffer</h2>
+<p>When <code>io.lines</code> is called with a filename, Lua opens the
+file, creates a closure that serves as an iterator, and yields this
+iterator to a loop (such as a generic <code>for</code> loop).</p>
+<p>On each iteration:</p>
+<ol type="1">
+<li><strong>State Check:</strong> Lua calls its internal file-reading
+routine, equivalent to requesting the next line pattern
+(<code>"*l"</code>).</li>
+<li><strong>Buffer Scanning:</strong> Lua uses standard C routines (or
+its own buffer-aware scanning on the <code>FILE*</code> handle) to scan
+forward in the C library's pre-filled buffer until it encounters a
+newline character (<code>\n</code> or <code>\r\n</code>) or the
+End-Of-File (EOF) indicator.</li>
+<li><strong>String Allocation:</strong> Only the bytes making up the
+current line are extracted from the buffer to construct a new Lua
+string, which is then returned to the loop. The line-break characters
+are discarded by default.</li>
+<li><strong>Buffer Refill:</strong> If the scan reaches the end of the
+4/8 KB buffer without finding a newline, the C runtime performs another
+block read into the buffer, continuing the scan seamlessly.</li>
+</ol>
+<h2 id="resource-management-and-cleanup">Resource Management and
+Cleanup</h2>
+<p>The behavior of <code>io.lines</code> also optimizes resource
+lifecycles:</p>
+<ul>
+<li><strong>Filename Argument (<code>io.lines("path")</code>):</strong>
+Lua controls the file handle implicitly. When the iterator reaches the
+end of the file, the C library signals EOF, Lua automatically closes the
+stream via <code>fclose</code> (flushing and freeing the internal C
+buffer), and the iterator returns <code>nil</code> to terminate the
+loop. If an error interrupts the loop, Lua's garbage collector
+eventually reclaims the handle and closes the underlying stream.</li>
+<li><strong>File Handle Method (<code>file:lines()</code>):</strong> The
+file handle is managed explicitly by the programmer. Reaching EOF stops
+the iteration by returning <code>nil</code>, but the file descriptor and
+its C buffer remain open until explicitly closed using
+<code>file:close()</code>.</li>
+</ul>
+<h2 id="performance-advantages">Performance Advantages</h2>
+<p>Using <code>io.lines</code> achieves high throughput by minimizing
+context switches. Direct system calls require transitions between user
+space and kernel space, which introduce substantial CPU overhead when
+executed frequently. By fetching chunks of data into an internal buffer
+and slicing lines within user memory, <code>io.lines</code> ensures that
+a file containing thousands of lines only triggers a small fraction of
+actual system read calls, all while maintaining a minimal memory
+footprint in the Lua state.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-io-lines-performs-buffered-reads-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

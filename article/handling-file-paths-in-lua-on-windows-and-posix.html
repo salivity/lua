@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Handling File Paths in Lua on Windows and POSIX - lua</title>
+    <meta name="description" content="Lua relies directly on the underlying C runtime library for its file operations, meaning it lacks an integrated, abstract file system module in its standard distribution. Consequently, Lua treats file paths purely as raw strings and defers path parsing di">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/handling-file-paths-in-lua-on-windows-and-posix">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Handling File Paths in Lua on Windows and POSIX - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/handling-file-paths-in-lua-on-windows-and-posix" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua relies directly on the underlying C runtime library for its file operations, meaning it lacks an integrated, abstract file system module in its standard distribution. Consequently, Lua treats file paths purely as raw strings and defers path parsing di" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="handling-file-paths-in-lua-on-windows-and-posix">Handling File
+Paths in Lua on Windows and POSIX</h1>
+<p>Lua relies directly on the underlying C runtime library for its file
+operations, meaning it lacks an integrated, abstract file system module
+in its standard distribution. Consequently, Lua treats file paths purely
+as raw strings and defers path parsing directly to the host operating
+system. This guide covers how Lua interacts with POSIX and Windows file
+paths, explains how to determine runtime platform separators natively,
+highlights edge cases in system calls, and details recommended
+approaches for writing cross-platform path-handling code.</p>
+<h3 id="the-underlying-c-runtime-model">The Underlying C Runtime
+Model</h3>
+<p>Lua’s standard I/O library (<code>io.open</code>,
+<code>io.lines</code>, etc.) maps directly to standard C functions like
+<code>fopen</code>. Because of this design choice:</p>
+<ul>
+<li><strong>POSIX Systems (Linux, macOS, BSD):</strong> Paths strictly
+use the forward slash (<code>/</code>) as the directory separator. Null
+bytes and forward slashes are the only reserved characters in file path
+segments.</li>
+<li><strong>Windows Systems:</strong> Windows natively uses the
+backslash (<code>\</code>) as its directory separator. However, the
+underlying Windows Win32 file APIs and the Microsoft C Runtime (CRT)
+accept forward slashes (<code>/</code>) for almost all standard file
+access functions.</li>
+</ul>
+<p>Because the Windows C Runtime translates <code>/</code> internally to
+<code>\</code>, using forward slashes in standard Lua <code>io</code>
+functions works consistently across both POSIX and Windows.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- This works identically on both POSIX and modern Windows systems</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">file</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">io.open</span><span class="op">(</span><span class="st">&quot;data/logs/output.txt&quot;</span><span class="op">,</span> <span class="st">&quot;r&quot;</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">file</span> <span class="cf">then</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Error opening file: &quot;</span> <span class="op">..</span> <span class="va">err</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h3 id="detecting-the-native-path-separator-via-packageconfig">Detecting
+the Native Path Separator via <code>package.config</code></h3>
+<p>When your code explicitly requires the host operating system's native
+path separator—such as when generating user-facing paths or building
+strings for external processes—Lua provides a native configuration
+string: <code>package.config</code>.</p>
+<p>The <code>package.config</code> string contains newline-delimited
+configuration values compiled into the Lua binary. The first line of
+this string is always the directory separator.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Extract the directory separator</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">dir_sep</span> <span class="op">=</span> <span class="va">package.config</span><span class="op">:</span><span class="fu">sub</span><span class="op">(</span><span class="dv">1</span><span class="op">,</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- Extract the path list separator (line 2)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">path_sep</span> <span class="op">=</span> <span class="va">package.config</span><span class="op">:</span><span class="fu">match</span><span class="op">(</span><span class="st">&quot;</span><span class="sc">\n</span><span class="st">(.-)</span><span class="sc">\n</span><span class="st">&quot;</span><span class="op">)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;Directory separator: &quot;</span> <span class="op">..</span> <span class="va">dir_sep</span><span class="op">)</span>   <span class="co">-- &#39;/&#39; on POSIX, &#39;\&#39; on Windows</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;Search path separator: &quot;</span> <span class="op">..</span> <span class="va">path_sep</span><span class="op">)</span> <span class="co">-- &#39;;&#39; on both platforms</span></span></code></pre></div>
+<p>Using this method avoids unreliable operating system detection via
+shell checks or environment variables.</p>
+<h3 id="the-problem-with-shell-commands-and-osexecute">The Problem with
+Shell Commands and <code>os.execute</code></h3>
+<p>While the standard <code>io</code> library tolerates forward slashes
+on Windows, invoking external commands with <code>os.execute</code> or
+<code>io.popen</code> exposes platform-specific syntax issues:</p>
+<ol type="1">
+<li><strong>Command Prompts:</strong> On Windows, <code>cmd.exe</code>
+often treats <code>/</code> as a command-line switch delimiter (e.g.,
+<code>dir /s</code>) rather than a path separator. Passing forward
+slashes to internal shell commands like <code>type</code>,
+<code>dir</code>, or <code>copy</code> can cause commands to fail.</li>
+<li><strong>Path Escaping:</strong> Windows uses the backslash
+(<code>\</code>) as an escape character inside standard Lua literal
+strings. If you hardcode Windows paths, backslashes must be doubled
+(<code>"C:\\path\\to\\file"</code>) or written using long brackets
+(<code>[[C:\path\to\file]]</code>).</li>
+<li><strong>Quoting:</strong> POSIX systems use single quotes
+(<code>'</code>) or double quotes (<code>"</code>) for paths with
+spaces, whereas the Windows Command Processor only supports double
+quotes (<code>"</code>).</li>
+</ol>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Cross-platform path normalization for external execution</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> normalize_for_shell<span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">sep</span> <span class="op">=</span> <span class="va">package.config</span><span class="op">:</span><span class="fu">sub</span><span class="op">(</span><span class="dv">1</span><span class="op">,</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">sep</span> <span class="op">==</span> <span class="st">&quot;</span><span class="sc">\\</span><span class="st">&quot;</span> <span class="cf">then</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Convert forward slashes to backslashes for Windows shell</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">path</span><span class="op">:</span><span class="fu">gsub</span><span class="op">(</span><span class="st">&quot;/&quot;</span><span class="op">,</span> <span class="st">&quot;</span><span class="sc">\\</span><span class="st">&quot;</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">path</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="implementing-simple-path-concatenation">Implementing Simple Path
+Concatenation</h3>
+<p>Without external dependencies, a basic cross-platform path-joining
+function should strip redundant slashes to prevent malformed path
+strings:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> join_path<span class="op">(...)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">sep</span> <span class="op">=</span> <span class="va">package.config</span><span class="op">:</span><span class="fu">sub</span><span class="op">(</span><span class="dv">1</span><span class="op">,</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">parts</span> <span class="op">=</span> <span class="op">{...}</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">clean_parts</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="va">i</span><span class="op">,</span> <span class="va">part</span> <span class="kw">in</span> <span class="fu">ipairs</span><span class="op">(</span><span class="va">parts</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Normalize slashes to current platform separator</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">clean</span> <span class="op">=</span> <span class="va">part</span><span class="op">:</span><span class="fu">gsub</span><span class="op">(</span><span class="st">&quot;[/</span><span class="sc">\\</span><span class="st">]&quot;</span><span class="op">,</span> <span class="va">sep</span><span class="op">)</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Strip leading separator if not the first segment</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">i</span> <span class="op">&gt;</span> <span class="dv">1</span> <span class="cf">then</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>            <span class="va">clean</span> <span class="op">=</span> <span class="va">clean</span><span class="op">:</span><span class="fu">gsub</span><span class="op">(</span><span class="st">&quot;^&quot;</span> <span class="op">..</span> <span class="st">&quot;%&quot;</span> <span class="op">..</span> <span class="va">sep</span><span class="op">,</span> <span class="st">&quot;&quot;</span><span class="op">)</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Strip trailing separator if not the last segment</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">i</span> <span class="op">&lt;</span> <span class="op">#</span><span class="va">parts</span> <span class="cf">then</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>            <span class="va">clean</span> <span class="op">=</span> <span class="va">clean</span><span class="op">:</span><span class="fu">gsub</span><span class="op">(</span><span class="st">&quot;%&quot;</span> <span class="op">..</span> <span class="va">sep</span> <span class="op">..</span> <span class="st">&quot;$&quot;</span><span class="op">,</span> <span class="st">&quot;&quot;</span><span class="op">)</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>        </span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>        <span class="fu">table.insert</span><span class="op">(</span><span class="va">clean_parts</span><span class="op">,</span> <span class="va">clean</span><span class="op">)</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">table.concat</span><span class="op">(</span><span class="va">clean_parts</span><span class="op">,</span> <span class="va">sep</span><span class="op">)</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">full_path</span> <span class="op">=</span> join_path<span class="op">(</span><span class="st">&quot;my_folder&quot;</span><span class="op">,</span> <span class="st">&quot;sub_dir&quot;</span><span class="op">,</span> <span class="st">&quot;file.lua&quot;</span><span class="op">)</span></span></code></pre></div>
+<h3 id="using-external-libraries-for-complex-needs">Using External
+Libraries for Complex Needs</h3>
+<p>For applications requiring advanced filesystem features—such as
+checking file existence, inspecting modification times, resolving
+symbolic links, or parsing relative parent directories
+(<code>..</code>)—the minimal standard Lua runtime is insufficient.</p>
+<p>In these cases, two standard external modules are used:</p>
+<ul>
+<li><strong>LuaFileSystem (<code>lfs</code>):</strong> The standard de
+facto library for checking file attributes, creating directories, and
+traversing directory trees across POSIX and Windows.</li>
+<li><strong>Penlight (<code>pl.path</code>):</strong> A module that
+mimics Python's <code>os.path</code>, offering cross-platform functions
+like <code>path.abspath</code>, <code>path.splitpath</code>, and
+<code>path.normalize</code>.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/handling-file-paths-in-lua-on-windows-and-posix';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

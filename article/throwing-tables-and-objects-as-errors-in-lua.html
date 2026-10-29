@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Throwing Tables and Objects as Errors in Lua - lua</title>
+    <meta name="description" content="In the Lua programming language, error handling is not limited to text-based messages. Lua natively supports throwing any data type as an error object, including tables and complex objects with metatables. This article explains how to throw structured err">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/throwing-tables-and-objects-as-errors-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Throwing Tables and Objects as Errors in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/throwing-tables-and-objects-as-errors-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, error handling is not limited to text-based messages. Lua natively supports throwing any data type as an error object, including tables and complex objects with metatables. This article explains how to throw structured err" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="throwing-tables-and-objects-as-errors-in-lua">Throwing Tables
+and Objects as Errors in Lua</h1>
+<p>In the Lua programming language, error handling is not limited to
+text-based messages. Lua natively supports throwing any data type as an
+error object, including tables and complex objects with metatables. This
+article explains how to throw structured error objects using the
+<code>error()</code> function, how to catch and handle them with
+<code>pcall</code> and <code>xpcall</code>, and the key caveats
+regarding stack trace preservation.</p>
+<h2 id="how-lua-handles-non-string-errors">How Lua Handles Non-String
+Errors</h2>
+<p>The built-in <code>error()</code> function in Lua accepts any value
+as its primary argument:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">error</span><span class="op">(</span><span class="va">message</span> <span class="op">[,</span> <span class="va">level</span><span class="op">])</span></span></code></pre></div>
+<p>While developers frequently pass strings, <code>message</code> can be
+a number, a boolean, a function, a userdata value, or a table. When you
+pass a table or an object, Lua preserves the reference to that data
+structure when propagating the failure.</p>
+<h2 id="throwing-and-catching-table-errors-with-pcall">Throwing and
+Catching Table Errors with <code>pcall</code></h2>
+<p>When using <code>pcall</code> (protected call), the returned error
+value is the exact object passed to <code>error()</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> performTask<span class="op">()</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">errObj</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>        <span class="va">code</span> <span class="op">=</span> <span class="dv">404</span><span class="op">,</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">message</span> <span class="op">=</span> <span class="st">&quot;Resource not found&quot;</span><span class="op">,</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">timestamp</span> <span class="op">=</span> <span class="fu">os.time</span><span class="op">(),</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">details</span> <span class="op">=</span> <span class="op">{</span> <span class="va">resourceId</span> <span class="op">=</span> <span class="st">&quot;usr_1024&quot;</span> <span class="op">}</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">error</span><span class="op">(</span><span class="va">errObj</span><span class="op">)</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">pcall</span><span class="op">(</span><span class="va">performTask</span><span class="op">)</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">success</span> <span class="cf">then</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="fu">type</span><span class="op">(</span><span class="va">err</span><span class="op">)</span> <span class="op">==</span> <span class="st">&quot;table&quot;</span> <span class="cf">then</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>        <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Error Code: &quot;</span> <span class="op">..</span> <span class="va">err</span><span class="op">.</span><span class="va">code</span><span class="op">)</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Message: &quot;</span> <span class="op">..</span> <span class="va">err</span><span class="op">.</span><span class="va">message</span><span class="op">)</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>        <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Resource: &quot;</span> <span class="op">..</span> <span class="va">err</span><span class="op">.</span><span class="va">details</span><span class="op">.</span><span class="va">resourceId</span><span class="op">)</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>        <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Generic Error: &quot;</span> <span class="op">..</span> <span class="fu">tostring</span><span class="op">(</span><span class="va">err</span><span class="op">))</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>Because <code>err</code> retains its table type, you can implement
+structured exception patterns, categorical error types, and contextual
+debugging payloads.</p>
+<h2 id="using-xpcall-and-custom-error-handlers">Using
+<code>xpcall</code> and Custom Error Handlers</h2>
+<p>The <code>xpcall</code> function allows you to define an error
+handler that executes before the stack unwinds. The handler receives the
+original error object directly:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> errorHandler<span class="op">(</span><span class="va">err</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="fu">type</span><span class="op">(</span><span class="va">err</span><span class="op">)</span> <span class="op">==</span> <span class="st">&quot;table&quot;</span> <span class="kw">and</span> <span class="va">err</span><span class="op">.</span><span class="va">code</span> <span class="cf">then</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="op">{</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>            <span class="va">formatted</span> <span class="op">=</span> <span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;[%d] %s&quot;</span><span class="op">,</span> <span class="va">err</span><span class="op">.</span><span class="va">code</span><span class="op">,</span> <span class="va">err</span><span class="op">.</span><span class="va">message</span><span class="op">),</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>            <span class="va">raw</span> <span class="op">=</span> <span class="va">err</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">{</span> <span class="va">formatted</span> <span class="op">=</span> <span class="fu">tostring</span><span class="op">(</span><span class="va">err</span><span class="op">),</span> <span class="va">raw</span> <span class="op">=</span> <span class="va">err</span> <span class="op">}</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">result</span> <span class="op">=</span> <span class="fu">xpcall</span><span class="op">(</span><span class="va">performTask</span><span class="op">,</span> <span class="va">errorHandler</span><span class="op">)</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">success</span> <span class="cf">then</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">result</span><span class="op">.</span><span class="va">formatted</span><span class="op">)</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h2 id="adding-metatables-for-printable-objects">Adding Metatables for
+Printable Objects</h2>
+<p>If external code or standard output attempts to convert an error
+object into a string, a raw table will print as a memory address (e.g.,
+<code>table: 0x...</code>). You can attach a metatable with a
+<code>__tostring</code> metamethod to make complex objects readable
+while retaining their structured properties:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ErrorMeta</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__tostring</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">self</span><span class="op">)</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;Error %d: %s&quot;</span><span class="op">,</span> <span class="va">self</span><span class="op">.</span><span class="va">code</span><span class="op">,</span> <span class="va">self</span><span class="op">.</span><span class="va">message</span><span class="op">)</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> raiseCustomError<span class="op">(</span><span class="va">code</span><span class="op">,</span> <span class="va">message</span><span class="op">)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">setmetatable</span><span class="op">({</span> <span class="va">code</span> <span class="op">=</span> <span class="va">code</span><span class="op">,</span> <span class="va">message</span> <span class="op">=</span> <span class="va">message</span> <span class="op">},</span> <span class="va">ErrorMeta</span><span class="op">)</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">error</span><span class="op">(</span><span class="va">err</span><span class="op">)</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ok</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">pcall</span><span class="op">(</span><span class="va">raiseCustomError</span><span class="op">,</span> <span class="dv">500</span><span class="op">,</span> <span class="st">&quot;Internal Server Failure&quot;</span><span class="op">)</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">ok</span> <span class="cf">then</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">err</span><span class="op">)</span> <span class="co">-- Calls __tostring: &quot;Error 500: Internal Server Failure&quot;</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">err</span><span class="op">.</span><span class="va">code</span><span class="op">)</span> <span class="co">-- Accesses table property: 500</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h2 id="important-caveats">Important Caveats</h2>
+<ol type="1">
+<li><strong>Stack Trace Information (<code>level</code>
+parameter):</strong> When passing a string, Lua uses the
+<code>level</code> parameter to prepend file and line number information
+to the message. When passing a table or non-string object, Lua ignores
+the <code>level</code> argument and does not append source position
+data, since doing so would mutate or change the type of your error
+object. If file and line numbers are required, you must capture them
+manually using <code>debug.getinfo()</code> or
+<code>debug.traceback()</code> before throwing the table.</li>
+<li><strong>Third-Party Compatibility:</strong> Some third-party Lua
+libraries assume all caught errors are strings and attempt string
+operations like <code>string.match(err, ...)</code> directly. If your
+code interfaces with libraries that do not handle arbitrary error types
+safely, provide a <code>__tostring</code> metamethod or verify library
+expectations.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/throwing-tables-and-objects-as-errors-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

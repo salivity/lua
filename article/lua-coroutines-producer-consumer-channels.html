@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Coroutines Producer Consumer Channels - lua</title>
+    <meta name="description" content="This article explores how to implement cooperative producer-consumer patterns in Lua using coroutines as lightweight communication channels. By relying on cooperative multitasking rather than OS-level threads, Lua allows data to be yielded and resumed sea">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-coroutines-producer-consumer-channels">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Coroutines Producer Consumer Channels - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-coroutines-producer-consumer-channels" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how to implement cooperative producer-consumer patterns in Lua using coroutines as lightweight communication channels. By relying on cooperative multitasking rather than OS-level threads, Lua allows data to be yielded and resumed sea" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-coroutines-producer-consumer-channels">Lua Coroutines
+Producer Consumer Channels</h1>
+<p>This article explores how to implement cooperative producer-consumer
+patterns in Lua using coroutines as lightweight communication channels.
+By relying on cooperative multitasking rather than OS-level threads, Lua
+allows data to be yielded and resumed seamlessly between components
+without the overhead of locks, race conditions, or complex
+synchronization primitives. Readers will learn the mechanics of
+coroutine data passing, how to build demand-driven pipelines, and how to
+implement two-way communication channels.</p>
+<h3 id="the-mechanics-of-data-transfer">The Mechanics of Data
+Transfer</h3>
+<p>In Lua, coroutines do not run concurrently in parallel; instead, they
+pass control explicitly. Communication happens at the synchronization
+boundary defined by <code>coroutine.resume</code> and
+<code>coroutine.yield</code>:</p>
+<ul>
+<li>Values passed into <code>coroutine.resume(co, ...)</code> are
+received by the coroutine as parameters to its main function (on initial
+start) or as return values of the previous
+<code>coroutine.yield()</code> call.</li>
+<li>Values passed to <code>coroutine.yield(...)</code> are returned to
+the caller by <code>coroutine.resume</code>.</li>
+</ul>
+<p>This bidirectional exchange turns a coroutine into a synchronous data
+channel.</p>
+<h3 id="demand-driven-consumer-led-implementation">Demand-Driven
+(Consumer-Led) Implementation</h3>
+<p>The most idiomatic way to implement a producer-consumer relationship
+in Lua is demand-driven. The consumer asks for data, prompting the
+producer to execute until it generates a value, at which point it yields
+control back.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Producer: Generates values and yields them</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> create_producer<span class="op">(</span><span class="va">limit</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">coroutine.create</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="va">limit</span> <span class="cf">do</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>            <span class="fu">coroutine.yield</span><span class="op">(</span><span class="va">i</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="op">)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- Consumer: Drives execution by resuming the producer</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> consumer<span class="op">(</span><span class="va">producer</span><span class="op">)</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">while</span> <span class="fu">coroutine.status</span><span class="op">(</span><span class="va">producer</span><span class="op">)</span> <span class="op">~=</span> <span class="st">&quot;dead&quot;</span> <span class="cf">do</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">value</span> <span class="op">=</span> <span class="fu">coroutine.resume</span><span class="op">(</span><span class="va">producer</span><span class="op">)</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">success</span> <span class="kw">and</span> <span class="va">value</span> <span class="cf">then</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>            <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Consumed:&quot;</span><span class="op">,</span> <span class="va">value</span><span class="op">)</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">channel</span> <span class="op">=</span> create_producer<span class="op">(</span><span class="dv">5</span><span class="op">)</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>consumer<span class="op">(</span><span class="va">channel</span><span class="op">)</span></span></code></pre></div>
+<p>In this pattern, the producer pauses its execution state immediately
+after yielding, preserving its local variables and instruction pointer
+until the consumer requests the next item.</p>
+<h3 id="idiomatic-iterators-using-coroutinewrap">Idiomatic Iterators
+Using <code>coroutine.wrap</code></h3>
+<p>Lua provides <code>coroutine.wrap</code>, which returns a function
+that resumes the coroutine directly instead of returning a status code.
+This allows producers to act directly as Lua iterator functions
+compatible with <code>for</code> loops:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> producer<span class="op">(</span><span class="va">max</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">coroutine.wrap</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="va">max</span> <span class="cf">do</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>            <span class="fu">coroutine.yield</span><span class="op">(</span><span class="va">i</span> <span class="op">*</span> <span class="dv">10</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- The consumer is simply a generic for loop</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">value</span> <span class="kw">in</span> producer<span class="op">(</span><span class="dv">3</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Received:&quot;</span><span class="op">,</span> <span class="va">value</span><span class="op">)</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h3 id="chaining-channels-with-filters">Chaining Channels with
+Filters</h3>
+<p>Producers and consumers can be extended into pipelines using filters.
+A filter acts as both a consumer of an upstream coroutine and a producer
+for a downstream consumer:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> source<span class="op">(</span><span class="va">n</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">coroutine.wrap</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="va">n</span> <span class="cf">do</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>            <span class="fu">coroutine.yield</span><span class="op">(</span><span class="va">i</span><span class="op">)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> filter<span class="op">(</span><span class="va">upstream</span><span class="op">)</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">coroutine.wrap</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> <span class="va">val</span> <span class="kw">in</span> <span class="va">upstream</span> <span class="cf">do</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>            <span class="co">-- Transform data and yield to next stage</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>            <span class="fu">coroutine.yield</span><span class="op">(</span><span class="va">val</span> <span class="op">*</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="op">)</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> sink<span class="op">(</span><span class="va">upstream</span><span class="op">)</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="va">val</span> <span class="kw">in</span> <span class="va">upstream</span> <span class="cf">do</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>        <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Sink output:&quot;</span><span class="op">,</span> <span class="va">val</span><span class="op">)</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a><span class="co">-- Pipeline: source -&gt; filter -&gt; sink</span></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>sink<span class="op">(</span>filter<span class="op">(</span>source<span class="op">(</span><span class="dv">4</span><span class="op">)))</span></span></code></pre></div>
+<h3 id="two-way-channel-communication">Two-Way Channel
+Communication</h3>
+<p>Channels can also pass messages back to the producer during
+execution. When the consumer calls
+<code>coroutine.resume(co, message)</code>, that message becomes the
+return value of the internal <code>coroutine.yield()</code>
+expression.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> interactive_producer<span class="op">()</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">coroutine.create</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">command</span> <span class="op">=</span> <span class="fu">coroutine.yield</span><span class="op">(</span><span class="st">&quot;READY&quot;</span><span class="op">)</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">while</span> <span class="va">command</span> <span class="op">~=</span> <span class="st">&quot;STOP&quot;</span> <span class="cf">do</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="va">command</span> <span class="op">==</span> <span class="st">&quot;PING&quot;</span> <span class="cf">then</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>                <span class="va">command</span> <span class="op">=</span> <span class="fu">coroutine.yield</span><span class="op">(</span><span class="st">&quot;PONG&quot;</span><span class="op">)</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>            <span class="cf">else</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>                <span class="va">command</span> <span class="op">=</span> <span class="fu">coroutine.yield</span><span class="op">(</span><span class="st">&quot;UNKNOWN&quot;</span><span class="op">)</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>            <span class="cf">end</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="op">)</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">co</span> <span class="op">=</span> interactive_producer<span class="op">()</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="co">-- Start the coroutine to reach the first yield</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="cn">_</span><span class="op">,</span> <span class="va">response</span> <span class="op">=</span> <span class="fu">coroutine.resume</span><span class="op">(</span><span class="va">co</span><span class="op">)</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;Initial:&quot;</span><span class="op">,</span> <span class="va">response</span><span class="op">)</span> <span class="co">-- READY</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a><span class="cn">_</span><span class="op">,</span> <span class="va">response</span> <span class="op">=</span> <span class="fu">coroutine.resume</span><span class="op">(</span><span class="va">co</span><span class="op">,</span> <span class="st">&quot;PING&quot;</span><span class="op">)</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;Response:&quot;</span><span class="op">,</span> <span class="va">response</span><span class="op">)</span> <span class="co">-- PONG</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="cn">_</span><span class="op">,</span> <span class="va">response</span> <span class="op">=</span> <span class="fu">coroutine.resume</span><span class="op">(</span><span class="va">co</span><span class="op">,</span> <span class="st">&quot;FOO&quot;</span><span class="op">)</span></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;Response:&quot;</span><span class="op">,</span> <span class="va">response</span><span class="op">)</span> <span class="co">-- UNKNOWN</span></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a><span class="fu">coroutine.resume</span><span class="op">(</span><span class="va">co</span><span class="op">,</span> <span class="st">&quot;STOP&quot;</span><span class="op">)</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;Status:&quot;</span><span class="op">,</span> <span class="fu">coroutine.status</span><span class="op">(</span><span class="va">co</span><span class="op">))</span> <span class="co">-- dead</span></span></code></pre></div>
+<p>Using these mechanisms, Lua coroutines provide a deterministic,
+zero-allocation way to stream data between cooperative producers and
+consumers.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-coroutines-producer-consumer-channels';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

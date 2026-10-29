@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LuaJIT vs PUC-Rio: Loops and Function Inlining - lua</title>
+    <meta name="description" content="This article provides an in-depth comparison of how LuaJIT and the standard PUC-Rio Lua interpreter handle loop execution and function inlining. While PUC-Rio relies on a traditional register-based bytecode interpreter that executes instructions sequentia">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-jit-vs-puc-rio-loops-and-function-inlining">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="LuaJIT vs PUC-Rio: Loops and Function Inlining - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-jit-vs-puc-rio-loops-and-function-inlining" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an in-depth comparison of how LuaJIT and the standard PUC-Rio Lua interpreter handle loop execution and function inlining. While PUC-Rio relies on a traditional register-based bytecode interpreter that executes instructions sequentia" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="luajit-vs-puc-rio-loops-and-function-inlining">LuaJIT vs
+PUC-Rio: Loops and Function Inlining</h1>
+<p>This article provides an in-depth comparison of how LuaJIT and the
+standard PUC-Rio Lua interpreter handle loop execution and function
+inlining. While PUC-Rio relies on a traditional register-based bytecode
+interpreter that executes instructions sequentially with fixed runtime
+overhead, LuaJIT employs an advanced trace compiler. LuaJIT identifies
+frequently executed code paths at runtime, inlines functions directly
+into recorded execution traces, and compiles hot loops into heavily
+optimized native machine code.</p>
+<h3 id="the-puc-rio-execution-baseline">The PUC-Rio Execution
+Baseline</h3>
+<p>The standard PUC-Rio interpreter compiles Lua source code into a
+linear sequence of register-based bytecode. During execution, a central
+virtual machine loop reads each bytecode instruction, decodes it, and
+branches to the corresponding C routine to execute it.</p>
+<p>For loops, PUC-Rio uses dedicated control-flow instructions like
+<code>FORPREP</code> and <code>FORLOOP</code> (for numeric
+<code>for</code> loops) or <code>TFORLOOP</code> (for generic
+<code>for</code> loops). Every single iteration requires:</p>
+<ul>
+<li>Re-evaluating loop counters or iterator functions.</li>
+<li>Fetching and dispatching the bytecode instructions inside the loop
+body.</li>
+<li>Checking conditional bounds and updating instruction pointers.</li>
+</ul>
+<p>Because PUC-Rio is a pure interpreter, it performs no dynamic code
+restructuring. Invariants inside the loop body are re-evaluated on every
+iteration, and table lookups undergo dynamic hash or array lookups each
+time they are encountered.</p>
+<p>Function calls in PUC-Rio always incur a fixed cost. When a function
+is invoked via the <code>CALL</code> opcode, the interpreter must:</p>
+<ol type="1">
+<li>Allocate or expand a call frame on the execution stack
+(<code>CallInfo</code>).</li>
+<li>Map parameters to the new frame's virtual registers.</li>
+<li>Validate call parameters and adjust stack boundaries.</li>
+<li>Jump to the target bytecode instructions and execute a
+<code>RETURN</code> sequence upon completion.</li>
+</ol>
+<p>PUC-Rio does not perform automatic function inlining. Small helper
+functions or functional paradigms (such as passing callbacks to
+iterators) consistently pay the penalty of full call-frame
+management.</p>
+<h3 id="luajits-approach-tracing-just-in-time-compilation">LuaJIT’s
+Approach: Tracing Just-In-Time Compilation</h3>
+<p>LuaJIT takes a radically different approach through trace
+compilation. Instead of compiling whole functions ahead of time, LuaJIT
+initially runs code using an optimized interpreter written in
+hand-crafted assembly. As code runs, LuaJIT maintains execution counters
+for loop iterations and backward jumps.</p>
+<h4 id="loop-optimization-via-linear-traces">Loop Optimization via
+Linear Traces</h4>
+<p>When a loop iteration counter exceeds a predefined hotness threshold,
+LuaJIT enters "recording mode." The trace recorder follows the execution
+path of the loop step by step, generating a linear Intermediate
+Representation (IR) of the actual instructions executed.</p>
+<p>Once a loop trace is recorded:</p>
+<ul>
+<li><strong>Loop-Invariant Code Motion (LICM):</strong> LuaJIT analyzes
+the IR to identify expressions, table accesses, and arithmetic that do
+not change across iterations, moving them outside the loop body.</li>
+<li><strong>Bounds-Check Elimination:</strong> For array accesses using
+induction variables, LuaJIT determines array limits up front,
+eliminating redundant boundary checks inside the loop.</li>
+<li><strong>Guard Specialization:</strong> Conditional branches are
+converted into lightweight "guards" (assertions). The compiler optimizes
+for the expected branch path; if a guard fails during execution, control
+seamlessly bails out back to the assembly interpreter.</li>
+<li><strong>Native Loop Generation:</strong> The optimized IR is
+translated directly into native machine code (x86, x64, ARM, etc.). The
+resulting machine code keeps loop counters and accumulator values
+directly in CPU registers, turning a Lua loop into a native CPU loop
+with zero interpreter dispatch overhead.</li>
+</ul>
+<h4 id="dynamic-function-inlining">Dynamic Function Inlining</h4>
+<p>Function inlining in LuaJIT is a natural byproduct of trace
+recording. Unlike traditional compilers that make complex static
+heuristics about whether to inline an Abstract Syntax Tree (AST) node,
+LuaJIT inlines execution paths dynamically.</p>
+<p>When the trace recorder encounters a function call within a hot
+loop:</p>
+<ol type="1">
+<li><strong>Frame Flattening:</strong> Rather than emitting a function
+call instruction, the recorder steps directly into the target function
+and continues recording its instructions into the same linear
+trace.</li>
+<li><strong>Elimination of Stack Allocation:</strong> Because the body
+of the called function becomes part of the single, continuous IR trace,
+no <code>CallInfo</code> structure or separate Lua call frame is created
+at runtime.</li>
+<li><strong>Argument Forwarding:</strong> Function arguments are mapped
+directly to IR single static assignment (SSA) references. Parameter
+passing often dissolves into zero-cost register assignments or constant
+propagation.</li>
+<li><strong>Devirtualization and Fast Callbacks:</strong> When functions
+or iterators are passed as arguments, LuaJIT observes the concrete
+function pointer during tracing. This devirtualizes the call, allowing
+higher-order functions to inline their callbacks completely.</li>
+</ol>
+<h3 id="performance-summary">Performance Summary</h3>
+<p>In PUC-Rio, loops are bound by the overhead of continuous bytecode
+dispatch, and small modular functions add non-trivial stack overhead. In
+contrast, LuaJIT uses trace-level recording to flatten nested function
+calls into straight-line IR, optimizes away redundant operations, and
+emits native assembly loops that rival compiled languages like C.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-jit-vs-puc-rio-loops-and-function-inlining';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

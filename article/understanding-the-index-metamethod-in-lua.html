@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding the __index Metamethod in Lua - lua</title>
+    <meta name="description" content="The index metamethod is one of the most fundamental mechanisms in the Lua programming language, primarily used to handle missing table key lookups. In standard Lua tables, attempting to access a key that does not exist simply returns nil. However, by asso">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/understanding-the-index-metamethod-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding the __index Metamethod in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/understanding-the-index-metamethod-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The index metamethod is one of the most fundamental mechanisms in the Lua programming language, primarily used to handle missing table key lookups. In standard Lua tables, attempting to access a key that does not exist simply returns nil. However, by asso" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="understanding-the-__index-metamethod-in-lua">Understanding the
+__index Metamethod in Lua</h1>
+<p>The <code>__index</code> metamethod is one of the most fundamental
+mechanisms in the Lua programming language, primarily used to handle
+missing table key lookups. In standard Lua tables, attempting to access
+a key that does not exist simply returns <code>nil</code>. However, by
+associating a metatable containing an <code>__index</code> field with a
+table, developers can redefine this lookup behavior. This article
+explains the purpose of the <code>__index</code> metamethod, how it
+works when assigned to either a table or a function, and how it serves
+as the foundation for object-oriented programming, default values, and
+dynamic property generation in Lua.</p>
+<h2 id="intercepting-missing-key-lookups">Intercepting Missing Key
+Lookups</h2>
+<p>In Lua, <code>__index</code> is only triggered when a read access
+(<code>table[key]</code>) targets a key that currently holds a
+<code>nil</code> value within that table. If the key already exists and
+has a non-nil value, Lua returns it immediately without invoking
+<code>__index</code>.</p>
+<p>When the key is missing, Lua checks whether the table has a
+metatable. If a metatable exists and contains the <code>__index</code>
+key, Lua delegates the lookup according to how <code>__index</code> is
+defined.</p>
+<h2 id="the-two-forms-of-__index">The Two Forms of
+<code>__index</code></h2>
+<p>The <code>__index</code> metamethod can be assigned either a table or
+a function. Each form serves a distinct architectural purpose.</p>
+<h3 id="1-using-a-table-as-__index">1. Using a Table as
+<code>__index</code></h3>
+<p>When <code>__index</code> points to another table, Lua searches that
+secondary table for the missing key. If the key exists there, its value
+is returned. If the secondary table also has an <code>__index</code>
+metatable, the lookup chains upward recursively.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">defaults</span> <span class="op">=</span> <span class="op">{</span> <span class="va">speed</span> <span class="op">=</span> <span class="dv">10</span><span class="op">,</span> <span class="va">power</span> <span class="op">=</span> <span class="dv">50</span> <span class="op">}</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">player</span> <span class="op">=</span> <span class="op">{</span> <span class="va">name</span> <span class="op">=</span> <span class="st">&quot;Hero&quot;</span> <span class="op">}</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">meta</span> <span class="op">=</span> <span class="op">{</span> <span class="bu">__index</span> <span class="op">=</span> <span class="va">defaults</span> <span class="op">}</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">setmetatable</span><span class="op">(</span><span class="va">player</span><span class="op">,</span> <span class="va">meta</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">player</span><span class="op">.</span><span class="va">name</span><span class="op">)</span>  <span class="co">-- Output: Hero (found directly in player)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">player</span><span class="op">.</span><span class="va">speed</span><span class="op">)</span> <span class="co">-- Output: 10 (missing in player, retrieved from defaults)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">player</span><span class="op">.</span><span class="va">mana</span><span class="op">)</span>  <span class="co">-- Output: nil (missing in both tables)</span></span></code></pre></div>
+<h3 id="2-using-a-function-as-__index">2. Using a Function as
+<code>__index</code></h3>
+<p>When <code>__index</code> is assigned a function, Lua executes that
+function whenever a missing key is accessed. The function automatically
+receives two arguments: the table itself and the missing key.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">dynamicTable</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">meta</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__index</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">tbl</span><span class="op">,</span> <span class="va">key</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">&quot;Key &#39;&quot;</span> <span class="op">..</span> <span class="fu">tostring</span><span class="op">(</span><span class="va">key</span><span class="op">)</span> <span class="op">..</span> <span class="st">&quot;&#39; does not exist.&quot;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">setmetatable</span><span class="op">(</span><span class="va">dynamicTable</span><span class="op">,</span> <span class="va">meta</span><span class="op">)</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">dynamicTable</span><span class="op">.</span><span class="va">score</span><span class="op">)</span> <span class="co">-- Output: Key &#39;score&#39; does not exist.</span></span></code></pre></div>
+<p>Using a function allows for dynamic evaluation, custom error
+throwing, lazy data loading, or automatic computation of values.</p>
+<h2 id="key-use-cases">Key Use Cases</h2>
+<h3 id="object-oriented-programming-and-inheritance">Object-Oriented
+Programming and Inheritance</h3>
+<p>Lua does not have native classes, but it supports prototype-based
+object orientation using <code>__index</code>. By setting an instance's
+metatable <code>__index</code> to point to a class table, all instances
+share the class's methods without duplicating functions in memory.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Car</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="va">Car</span><span class="op">.</span><span class="va">__index</span> <span class="op">=</span> <span class="va">Car</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Car</span><span class="op">.</span>new<span class="op">(</span><span class="va">brand</span><span class="op">)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">self</span> <span class="op">=</span> <span class="fu">setmetatable</span><span class="op">({},</span> <span class="va">Car</span><span class="op">)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span><span class="op">.</span><span class="va">brand</span> <span class="op">=</span> <span class="va">brand</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">self</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Car</span><span class="op">:</span>drive<span class="op">()</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">self</span><span class="op">.</span><span class="va">brand</span> <span class="op">..</span> <span class="st">&quot; is driving.&quot;</span><span class="op">)</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">myCar</span> <span class="op">=</span> <span class="va">Car</span><span class="op">.</span>new<span class="op">(</span><span class="st">&quot;Toyota&quot;</span><span class="op">)</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="va">myCar</span><span class="op">:</span>drive<span class="op">()</span> <span class="co">-- Output: Toyota is driving.</span></span></code></pre></div>
+<p>When <code>myCar:drive()</code> is called, Lua does not find
+<code>drive</code> directly on <code>myCar</code>. It queries the
+<code>__index</code> metamethod (which points to <code>Car</code>),
+finds the method, and invokes it with <code>myCar</code> passed as
+<code>self</code>.</p>
+<h3 id="default-configuration-values">Default Configuration Values</h3>
+<p>Libraries and applications frequently use <code>__index</code> to
+provide fallback configurations. User-defined options override the
+defaults, while unspecified options fall back seamlessly to
+predetermined values.</p>
+<h3 id="read-only-and-proxied-tables">Read-Only and Proxied Tables</h3>
+<p>Combined with other metamethods like <code>__newindex</code>,
+developers can create proxy tables that intercept all read and write
+requests to track mutations, create immutable tables, or log table
+access.</p>
+<h2 id="summary">Summary</h2>
+<p>The purpose of the <code>__index</code> metamethod is to define
+fallback behavior for missing keys in Lua tables. Whether configured as
+a table to enable prototype inheritance or as a function for dynamic
+computations, <code>__index</code> provides the foundation for
+extensible, memory-efficient data structures across the language.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/understanding-the-index-metamethod-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

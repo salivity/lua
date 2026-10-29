@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object Resurrection in Lua Finalizers - lua</title>
+    <meta name="description" content="Object resurrection in Lua is a phenomenon where a garbage-collected object is restored to life during the execution of its own finalizer. When Lua&#39;s garbage collector identifies an unreachable object that defines a gc metamethod, it must run this finaliz">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/object-resurrection-in-lua-finalizers">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Object Resurrection in Lua Finalizers - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/object-resurrection-in-lua-finalizers" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Object resurrection in Lua is a phenomenon where a garbage-collected object is restored to life during the execution of its own finalizer. When Lua&#39;s garbage collector identifies an unreachable object that defines a gc metamethod, it must run this finaliz" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="object-resurrection-in-lua-finalizers">Object Resurrection in
+Lua Finalizers</h1>
+<p>Object resurrection in Lua is a phenomenon where a garbage-collected
+object is restored to life during the execution of its own finalizer.
+When Lua's garbage collector identifies an unreachable object that
+defines a <code>__gc</code> metamethod, it must run this finalizer
+before reclaiming the memory. Because the object itself is passed as an
+argument to the finalizer, it can be re-anchored to an active, reachable
+reference, preventing the collector from deallocating it. This article
+explores how object resurrection occurs, how the Lua runtime manages
+resurrected objects across subsequent garbage collection cycles, and the
+potential pitfalls associated with this behavior.</p>
+<h2 id="how-lua-triggers-finalizers">How Lua Triggers Finalizers</h2>
+<p>In Lua, objects such as userdata and tables (from Lua 5.2 onwards)
+can register a finalizer by defining the <code>__gc</code> field in
+their metatable.</p>
+<p>The garbage collection (GC) process operates in phases:</p>
+<ol type="1">
+<li><strong>Marking:</strong> The GC traverses all reachable objects
+starting from root references (such as the global table <code>_G</code>
+and the Lua registry).</li>
+<li><strong>Separation:</strong> Objects identified as unreachable that
+possess a <code>__gc</code> metamethod are placed into a separate list
+for finalization.</li>
+<li><strong>Finalization:</strong> The collector iterates through the
+finalization list and executes each object's <code>__gc</code>
+method.</li>
+<li><strong>Sweeping:</strong> Unreachable objects without finalizers
+are collected and their memory is freed.</li>
+</ol>
+<h2 id="the-mechanism-of-resurrection">The Mechanism of
+Resurrection</h2>
+<p>To execute the finalizer, the runtime must pass the object to the
+<code>__gc</code> function as its primary parameter (<code>self</code>).
+At this precise moment, the object is temporarily accessible within the
+scope of the finalizer.</p>
+<p>If the finalizer assigns <code>self</code> to a globally accessible
+table, an upvalue, or any other live structure, the object regains a
+strong reference from the active environment. This action resurrects the
+object:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">graveyard</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">obj</span> <span class="op">=</span> <span class="op">{</span> <span class="va">name</span> <span class="op">=</span> <span class="st">&quot;Resurrected Object&quot;</span> <span class="op">}</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">mt</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__gc</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">self</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>        <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Finalizing:&quot;</span><span class="op">,</span> <span class="va">self</span><span class="op">.</span><span class="va">name</span><span class="op">)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Resurrection occurs here:</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>        <span class="fu">table.insert</span><span class="op">(</span><span class="va">graveyard</span><span class="op">,</span> <span class="va">self</span><span class="op">)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">setmetatable</span><span class="op">(</span><span class="va">obj</span><span class="op">,</span> <span class="va">mt</span><span class="op">)</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="co">-- Remove the only external reference</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="va">obj</span> <span class="op">=</span> <span class="kw">nil</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="co">-- Force garbage collection</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="fu">collectgarbage</span><span class="op">(</span><span class="st">&quot;collect&quot;</span><span class="op">)</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co">-- The object is alive again and accessible in &#39;graveyard&#39;</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(#</span><span class="va">graveyard</span><span class="op">)</span> <span class="co">-- Outputs: 1</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">graveyard</span><span class="op">[</span><span class="dv">1</span><span class="op">].</span><span class="va">name</span><span class="op">)</span> <span class="co">-- Outputs: Resurrected Object</span></span></code></pre></div>
+<p>Because <code>graveyard</code> is reachable, the collector detects
+that the object is no longer dead during subsequent mark-and-sweep
+phases.</p>
+<h2 id="lifecycle-after-resurrection">Lifecycle After Resurrection</h2>
+<p>Lua accommodates object resurrection without corrupting its internal
+memory allocator, but it imposes a strict lifecycle constraint to avoid
+infinite finalization loops:</p>
+<ul>
+<li><strong>Single Finalization Rule:</strong> In standard Lua, once an
+object's <code>__gc</code> metamethod has run, the runtime removes the
+object from the finalization pipeline. The object continues to exist as
+normal data.</li>
+<li><strong>Secondary Collection:</strong> If the resurrected object
+later loses its new reference (e.g., it is removed from
+<code>graveyard</code>) and becomes unreachable a second time, the
+garbage collector will reclaim its memory immediately without running
+the <code>__gc</code> metamethod again.</li>
+</ul>
+<p>Because the finalizer is not re-invoked automatically, any cleanup
+logic that was supposed to occur right before absolute memory release
+must have either completed during the initial execution or be handled
+manually.</p>
+<h2 id="risks-and-side-effects">Risks and Side Effects</h2>
+<ol type="1">
+<li><strong>Zombie States:</strong> An object whose finalizer closed
+internal OS handles, sockets, or native C pointers will be restored in
+an invalid or half-closed state, leading to runtime errors if
+application code attempts to reuse it.</li>
+<li><strong>Memory Leaks:</strong> Accidental resurrection—often caused
+by logging functions or event listeners retaining references to the
+object during cleanup—prevents memory from ever being freed.</li>
+<li><strong>Destructor Inconsistencies in C Modules:</strong> For native
+C userdata, resurrecting the userdata after calling <code>free()</code>
+on its internal pointer inside the <code>__gc</code> callback can cause
+use-after-free vulnerabilities or segmentation faults if Lua code
+subsequently accesses the userdata methods.</li>
+</ol>
+<p>To prevent resurrection issues, finalizers should avoid storing
+references to <code>self</code> in outside scopes and should solely
+focus on releasing non-memory resources.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/object-resurrection-in-lua-finalizers';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

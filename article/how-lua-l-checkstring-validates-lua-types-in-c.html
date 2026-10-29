@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How luaL_checkstring Validates Lua Types in C - lua</title>
+    <meta name="description" content="When extending Lua with C, ensuring that values passed from scripts match expected data types is critical for application stability and memory safety. The luaLcheckstring function serves as a primary guard in the Lua Auxiliary Library, tasked with retriev">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-l-checkstring-validates-lua-types-in-c">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How luaL_checkstring Validates Lua Types in C - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-l-checkstring-validates-lua-types-in-c" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="When extending Lua with C, ensuring that values passed from scripts match expected data types is critical for application stability and memory safety. The luaLcheckstring function serves as a primary guard in the Lua Auxiliary Library, tasked with retriev" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lual_checkstring-validates-lua-types-in-c">How
+luaL_checkstring Validates Lua Types in C</h1>
+<p>When extending Lua with C, ensuring that values passed from scripts
+match expected data types is critical for application stability and
+memory safety. The <code>luaL_checkstring</code> function serves as a
+primary guard in the Lua Auxiliary Library, tasked with retrieving and
+verifying string arguments passed into C functions. This article breaks
+down how <code>luaL_checkstring</code> works under the hood, exploring
+its implementation via <code>luaL_checklstring</code>, its interaction
+with the Lua virtual stack, automatic numeric coercion, and its
+integrated error-handling mechanisms.</p>
+<h3 id="macro-implementation-and-delegation">Macro Implementation and
+Delegation</h3>
+<p>In the Lua Auxiliary Library, <code>luaL_checkstring</code> is
+defined as a convenience macro rather than a standalone function. It
+delegates directly to <code>luaL_checklstring</code>, passing a
+<code>NULL</code> pointer for the length parameter:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define luaL_checkstring</span><span class="op">(</span>L<span class="op">,</span><span class="pp"> n</span><span class="op">)</span><span class="pp"> </span><span class="op">(</span><span class="pp">luaL_checklstring</span><span class="op">(</span>L<span class="op">,</span><span class="pp"> </span><span class="op">(</span><span class="pp">n</span><span class="op">),</span><span class="pp"> NULL</span><span class="op">))</span></span></code></pre></div>
+<p>This design allows developers to retrieve a standard null-terminated
+C string (<code>const char*</code>) when the string's byte length is not
+explicitly required.</p>
+<h3 id="stack-inspection-via-lua_tolstring">Stack Inspection via
+<code>lua_tolstring</code></h3>
+<p>To validate and retrieve the value, <code>luaL_checklstring</code>
+relies on the core API function <code>lua_tolstring</code>. The process
+follows these operational steps:</p>
+<ol type="1">
+<li><strong>Stack Indexing:</strong> The function takes the specified
+stack index <code>arg</code> representing the function argument's
+position on the Lua stack (e.g., index <code>1</code> for the first
+argument).</li>
+<li><strong>Type Evaluation:</strong> Lua evaluates the value at the
+given index. If the value is a string, a pointer to its internal
+character buffer is returned.</li>
+<li><strong>Automatic Number Coercion:</strong> If the value at the
+target index is a number instead of a string, Lua automatically converts
+the number into a string directly on the stack. The conversion mutates
+the stack element in-place, and <code>lua_tolstring</code> returns a
+valid pointer to this newly created string.</li>
+</ol>
+<h3 id="error-raising-and-execution-halting">Error Raising and Execution
+Halting</h3>
+<p>If the value at the target index is neither a string nor a
+convertible number (such as <code>nil</code>, a table, a boolean, or a
+function), <code>lua_tolstring</code> returns <code>NULL</code>.</p>
+<p>Upon receiving <code>NULL</code>, <code>luaL_checklstring</code>
+detects a type mismatch and immediately triggers an error using
+<code>luaL_typeerror</code>:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>LUALIB_API <span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>luaL_checklstring <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">int</span> arg<span class="op">,</span> <span class="dt">size_t</span> <span class="op">*</span>len<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>s <span class="op">=</span> lua_tolstring<span class="op">(</span>L<span class="op">,</span> arg<span class="op">,</span> len<span class="op">);</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> <span class="op">(!</span>s<span class="op">)</span> tag_error<span class="op">(</span>L<span class="op">,</span> arg<span class="op">,</span> LUA_TSTRING<span class="op">);</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> s<span class="op">;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><em>(Note: Depending on the Lua version, <code>tag_error</code> or
+<code>luaL_typeerror</code> is invoked).</em></p>
+<p>When <code>luaL_typeerror</code> runs, it inspects the actual type of
+the argument on the stack using <code>lua_type</code> and
+<code>lua_typename</code>. It then formats a standardized, descriptive
+error message (e.g.,
+<code>bad argument #1 to 'my_func' (string expected, got table)</code>).</p>
+<p>Once formatted, the function performs a non-local jump
+(<code>longjmp</code>) via Lua's panic or protected call mechanism
+(<code>lua_error</code>). This halts the execution of the calling C
+function immediately, preventing subsequent operations on invalid
+pointers and ensuring C memory safety.</p>
+<h3 id="summary-of-the-validation-workflow">Summary of the Validation
+Workflow</h3>
+<ul>
+<li><strong>Target Found as String:</strong> The pointer is returned
+immediately with zero overhead.</li>
+<li><strong>Target Found as Number:</strong> Coerced to a string
+in-place on the stack, and the pointer is returned.</li>
+<li><strong>Target Missing or Invalid Type:</strong> Execution halts via
+<code>longjmp</code>, and a Lua runtime error is raised describing the
+index, expected type, and received type.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-l-checkstring-validates-lua-types-in-c';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

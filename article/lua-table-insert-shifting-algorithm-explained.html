@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua table.insert Shifting Algorithm Explained - lua</title>
+    <meta name="description" content="In the Lua programming language, inserting an element into a specific index of a sequence using table.insert relies on a linear, in-place backward-shifting algorithm. When an element is added at an arbitrary position rather than appended to the end, Lua s">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-table-insert-shifting-algorithm-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua table.insert Shifting Algorithm Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-table-insert-shifting-algorithm-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, inserting an element into a specific index of a sequence using table.insert relies on a linear, in-place backward-shifting algorithm. When an element is added at an arbitrary position rather than appended to the end, Lua s" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-tableinsert-shifting-algorithm-explained">Lua table.insert
+Shifting Algorithm Explained</h1>
+<p>In the Lua programming language, inserting an element into a specific
+index of a sequence using <code>table.insert</code> relies on a linear,
+in-place backward-shifting algorithm. When an element is added at an
+arbitrary position rather than appended to the end, Lua shifts all
+subsequent elements one position to the right to make room for the new
+entry. This operation runs in linear time relative to the number of
+shifted elements, operating directly on the table's internal array
+storage without allocating temporary buffers.</p>
+<h3 id="the-shifting-mechanism-in-c-source-code">The Shifting Mechanism
+in C Source Code</h3>
+<p>The standard Lua library defines <code>table.insert</code> inside
+<code>ltablib.c</code> through the C function <code>luaB_tinsert</code>.
+When invoked with three
+arguments—<code>table.insert(t, pos, value)</code>—the function checks
+boundaries and calculates the sequence length <code>n</code>. If
+<code>pos</code> is less than or equal to <code>n</code>, Lua executes a
+descending linear loop:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="op">(</span>i <span class="op">=</span> e<span class="op">;</span> i <span class="op">&gt;</span> pos<span class="op">;</span> i<span class="op">--)</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    lua_rawgeti<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> i <span class="op">-</span> <span class="dv">1</span><span class="op">);</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    lua_rawseti<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> i<span class="op">);</span>  <span class="co">/* t[i] = t[i - 1] */</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>lua_settop<span class="op">(</span>L<span class="op">,</span> <span class="dv">3</span><span class="op">);</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>lua_rawseti<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> pos<span class="op">);</span>  <span class="co">/* t[pos] = v */</span></span></code></pre></div>
+<p>The algorithm copies each element from index <code>i - 1</code> into
+index <code>i</code>, starting from the tail of the array
+(<code>n + 1</code>) and moving backward until it reaches
+<code>pos</code>. This reverse direction is critical: moving rightward
+from the end ensures that existing elements are preserved rather than
+overwritten by their left-hand neighbors. Once the slot at
+<code>pos</code> is freed, Lua assigns the target value into that
+position.</p>
+<h3 id="algorithmic-complexity">Algorithmic Complexity</h3>
+<p>The shifting procedure exhibits the following complexity metrics:</p>
+<ul>
+<li><strong>Worst-Case Time Complexity:</strong> <span
+class="math inline">\(O(n)\)</span> occurs when inserting at index 1
+(<code>pos = 1</code>). In this scenario, every existing element must be
+shifted right by one position.</li>
+<li><strong>Best-Case Time Complexity:</strong> <span
+class="math inline">\(O(1)\)</span> occurs when inserting at
+<code>n + 1</code> (or omitting the <code>pos</code> argument). No
+elements shift; the value is simply assigned to the next open
+index.</li>
+<li><strong>Average-Case Time Complexity:</strong> <span
+class="math inline">\(O(n)\)</span> for arbitrary valid positions within
+the array portion of the table.</li>
+<li><strong>Auxiliary Space Complexity:</strong> <span
+class="math inline">\(O(1)\)</span> because values are moved in place
+via raw stack manipulation within the Lua C API, avoiding secondary data
+structure allocations.</li>
+</ul>
+<h3 id="internal-table-structure-and-reallocation">Internal Table
+Structure and Reallocation</h3>
+<p>Lua tables consist of two internal segments: an array part and a hash
+(node) part. When elements are kept in a contiguous sequence of integer
+keys, they reside in the array part.</p>
+<p>If shifting an element causes the sequence length to exceed the
+current allocated capacity of the array part, Lua invokes an internal
+resizing routine (<code>luaH_resizearray</code> or <code>rehash</code>).
+Lua uses an exponential growth strategy, typically doubling the array
+capacity when resized. While the shift itself remains an <span
+class="math inline">\(O(n)\)</span> loop, an individual insertion that
+triggers reallocation incurs an amortized cost to reallocate and copy
+the buffer in memory before completing the shift.</p>
+<h3 id="performance-considerations">Performance Considerations</h3>
+<p>Because <code>table.insert</code> shifts items using sequential,
+single-element lookups and assignments (<code>lua_rawgeti</code> and
+<code>lua_rawseti</code>), repeated insertions at the front of a
+sequence result in quadratic <span class="math inline">\(O(n^2)\)</span>
+time complexity. For use cases requiring frequent prepending or
+middle-of-the-list mutations, standard sequential tables are suboptimal;
+alternative approaches like maintaining explicit head/tail pointers,
+linked-node structures, or appending elements and reversing the list
+upon completion are commonly employed.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-table-insert-shifting-algorithm-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

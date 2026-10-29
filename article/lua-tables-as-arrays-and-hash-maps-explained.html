@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Tables as Arrays and Hash Maps Explained - lua</title>
+    <meta name="description" content="In Lua, the table is the sole data-structuring mechanism, uniquely designed to operate as an array and a hash map simultaneously within a single data structure. This article explains the internal architecture of Lua tables, detailing how the Lua runtime s">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-tables-as-arrays-and-hash-maps-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Tables as Arrays and Hash Maps Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-tables-as-arrays-and-hash-maps-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, the table is the sole data-structuring mechanism, uniquely designed to operate as an array and a hash map simultaneously within a single data structure. This article explains the internal architecture of Lua tables, detailing how the Lua runtime s" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-tables-as-arrays-and-hash-maps-explained">Lua Tables as
+Arrays and Hash Maps Explained</h1>
+<p>In Lua, the table is the sole data-structuring mechanism, uniquely
+designed to operate as an array and a hash map simultaneously within a
+single data structure. This article explains the internal architecture
+of Lua tables, detailing how the Lua runtime seamlessly splits tables
+into an array part and a hash part, how the re-hashing algorithm
+allocates data between them, and how developers can effectively utilize
+both paradigms at once.</p>
+<h3 id="the-internal-dual-part-architecture">The Internal Dual-Part
+Architecture</h3>
+<p>Under the hood, Lua tables are implemented in C as a
+<code>Table</code> struct consisting of two separate data segments: an
+<strong>array part</strong> and a <strong>hash part</strong>.</p>
+<ul>
+<li><strong>The Array Part:</strong> A contiguous block of memory
+optimized for dense, 1-based integer keys. Accessing an element here is
+an <span class="math inline">\(O(1)\)</span> direct array index offset.
+Because keys are implicit positions in memory, no storage overhead is
+required for storing keys.</li>
+<li><strong>The Hash Part:</strong> A closed hash table containing nodes
+with explicit key-value pairs. It handles non-integer keys (such as
+strings, booleans, and other tables) as well as sparse, non-positive, or
+excessively large integer keys.</li>
+</ul>
+<p>When you interact with a Lua table, the runtime abstracts these two
+segments away, presenting them as a unified data type.</p>
+<h3 id="how-lua-assigns-keys-to-memory">How Lua Assigns Keys to
+Memory</h3>
+<p>When a key-value pair is assigned to a table, Lua determines where it
+belongs based on the key type and value distribution:</p>
+<ol type="1">
+<li><strong>Integer Keys:</strong> If a key is a positive integer, Lua
+evaluates whether it fits into the dense array part. The runtime
+periodically runs a re-hashing routine to optimize memory usage. The
+array size is always resized to a power of two (<span
+class="math inline">\(2^n\)</span>) such that at least 50% of the
+allocated array slots contain non-nil values.</li>
+<li><strong>Other Keys:</strong> String keys, floating-point keys,
+negative or zero integer keys, and sparse integer keys that would
+violate the 50% density rule are placed into the hash part.</li>
+</ol>
+<h3 id="code-example-dual-functionality-in-practice">Code Example:
+Dual-Functionality in Practice</h3>
+<p>You can define and manipulate both array elements and key-value pairs
+within the exact same table:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">mixed</span> <span class="op">=</span> <span class="op">{</span><span class="st">&quot;first&quot;</span><span class="op">,</span> <span class="st">&quot;second&quot;</span><span class="op">,</span> <span class="st">&quot;third&quot;</span><span class="op">}</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Add hash-map style properties</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="va">mixed</span><span class="op">.</span><span class="va">status</span> <span class="op">=</span> <span class="st">&quot;active&quot;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="va">mixed</span><span class="op">[</span><span class="st">&quot;priority&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="dv">1</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- Access as an array (1-based index)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">mixed</span><span class="op">[</span><span class="dv">1</span><span class="op">])</span> <span class="co">-- Output: first</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(#</span><span class="va">mixed</span><span class="op">)</span>   <span class="co">-- Output: 3 (the length operator inspects the array sequence)</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co">-- Access as a hash map</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">mixed</span><span class="op">.</span><span class="va">status</span><span class="op">)</span>    <span class="co">-- Output: active</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">mixed</span><span class="op">[</span><span class="st">&quot;priority&quot;</span><span class="op">])</span> <span class="co">-- Output: 1</span></span></code></pre></div>
+<p>In this example, <code>"first"</code>, <code>"second"</code>, and
+<code>"third"</code> reside inside the internal array part at indices
+<code>1</code>, <code>2</code>, and <code>3</code>. The fields
+<code>status</code> and <code>priority</code> are stored inside the hash
+part.</p>
+<h3 id="iteration-behavior">Iteration Behavior</h3>
+<p>Because a table holds both types of data, Lua provides different
+iterators to traverse them:</p>
+<ul>
+<li><strong><code>ipairs()</code></strong>: Iterates strictly over the
+sequential integer keys starting at <code>1</code> and stops at the
+first <code>nil</code> entry. It interacts exclusively with the
+array-like sequence.</li>
+<li><strong><code>pairs()</code></strong>: Traverses the entire
+table—both the array part and the hash part—using the internal
+<code>next</code> function. The iteration order over the hash part is
+arbitrary and not guaranteed.</li>
+</ul>
+<h3 id="performance-and-memory-benefits">Performance and Memory
+Benefits</h3>
+<p>This hybrid approach gives developers the ergonomics of dynamic,
+associative mapping without sacrificing the raw performance of native
+arrays. Sequential operations benefit from cache locality and minimal
+memory overhead, while associative lookups maintain near-constant <span
+class="math inline">\(O(1)\)</span> access times.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-tables-as-arrays-and-hash-maps-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

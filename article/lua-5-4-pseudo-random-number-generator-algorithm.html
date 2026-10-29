@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua 5.4 Pseudo-Random Number Generator Algorithm - lua</title>
+    <meta name="description" content="Lua 5.4 officially introduced the xoshiro256 (XOR/shift/rotate) pseudo-random number generator into its standard library. This article examines the adoption of xoshiro256, why it replaced the platform-dependent generators used in previous Lua versions, an">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-5-4-pseudo-random-number-generator-algorithm">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua 5.4 Pseudo-Random Number Generator Algorithm - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-5-4-pseudo-random-number-generator-algorithm" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua 5.4 officially introduced the xoshiro256 (XOR/shift/rotate) pseudo-random number generator into its standard library. This article examines the adoption of xoshiro256, why it replaced the platform-dependent generators used in previous Lua versions, an" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-54-pseudo-random-number-generator-algorithm">Lua 5.4
+Pseudo-Random Number Generator Algorithm</h1>
+<p>Lua 5.4 officially introduced the xoshiro256** (XOR/shift/rotate)
+pseudo-random number generator into its standard library. This article
+examines the adoption of xoshiro256**, why it replaced the
+platform-dependent generators used in previous Lua versions, and how it
+improves randomness, performance, and cross-platform consistency for
+developers.</p>
+<h3 id="the-algorithm-xoshiro256">The Algorithm: xoshiro256**</h3>
+<p>Starting with version 5.4, Lua replaced its legacy random generation
+system with <strong>xoshiro256**</strong> (star-star), an all-purpose
+generator designed by David Blackman and Sebastiano Vigna. The name
+stands for "XOR / shift / rotate," representing the bitwise operations
+the algorithm uses to scramble its internal state.</p>
+<h3 id="why-lua-replaced-the-legacy-generator">Why Lua Replaced the
+Legacy Generator</h3>
+<p>Prior to Lua 5.4, functions like <code>math.random()</code> and
+<code>math.randomseed()</code> relied on the C runtime library's
+implementation of <code>rand()</code> and <code>srand()</code>. This
+design created several major problems:</p>
+<ul>
+<li><strong>Inconsistent Behavior:</strong> Because different operating
+systems and C compilers implement <code>rand()</code> differently, the
+same Lua script produced different random sequences on Windows, Linux,
+and macOS even when initialized with the same seed.</li>
+<li><strong>Low Statistical Quality:</strong> Many standard C libraries
+historically used weak Linear Congruential Generators (LCGs), which
+often suffer from poor randomness in lower-order bits and fail modern
+empirical randomness tests.</li>
+<li><strong>Short Periods:</strong> Traditional C <code>rand()</code>
+implementations frequently had short cycle periods (often <span
+class="math inline">\(2^{31} - 1\)</span> or <span
+class="math inline">\(2^{32}\)</span>), meaning sequences would repeat
+quickly in compute-heavy simulations.</li>
+</ul>
+<h3 id="key-features-of-xoshiro256-in-lua-54">Key Features of
+xoshiro256** in Lua 5.4</h3>
+<p>The integration of xoshiro256** brings several distinct
+improvements:</p>
+<ul>
+<li><strong>Massive Period:</strong> The generator maintains a 256-bit
+internal state, resulting in a period of <span
+class="math inline">\(2^{256} - 1\)</span>. A sequence will not repeat
+within any practical computational timeframe.</li>
+<li><strong>High Statistical Quality:</strong> The xoshiro256**
+algorithm passes rigorous statistical testing suites, such as BigCrush,
+eliminating common artifacts and biases found in older PRNGs.</li>
+<li><strong>Speed:</strong> The algorithm relies entirely on fast,
+low-level bitwise operations (shifts, rotations, and XORs) alongside
+standard addition and multiplication, making it exceptionally fast in
+pure software execution.</li>
+<li><strong>Deterministic Portability:</strong> Because Lua directly
+embeds the xoshiro256** implementation into its source code, any Lua 5.4
+program given identical seeds will produce the exact same sequence of
+pseudo-random numbers regardless of the host operating system.</li>
+</ul>
+<h3 id="enhancements-to-mathrandomseed">Enhancements to
+<code>math.randomseed</code></h3>
+<p>Lua 5.4 also updated the <code>math.randomseed()</code> function to
+support the expanded state requirements of xoshiro256**:</p>
+<ol type="1">
+<li><strong>Multi-argument Seeding:</strong>
+<code>math.randomseed(x, y)</code> accepts up to two 64-bit integer
+arguments, allowing developers to set all 256 bits of the state
+explicitly.</li>
+<li><strong>Automatic Seeding:</strong> Calling
+<code>math.randomseed()</code> without arguments automatically
+initializes the state using a non-deterministic seed provided by the
+host platform, eliminating the common requirement of manually passing
+<code>os.time()</code>.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-5-4-pseudo-random-number-generator-algorithm';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

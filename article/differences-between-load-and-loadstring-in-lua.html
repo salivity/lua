@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Differences Between load and loadstring in Lua - lua</title>
+    <meta name="description" content="In Lua, dynamically compiling and executing code chunks at runtime has evolved significantly across major releases. This article explains the functional differences between loadstring and load, tracing their distinct roles in Lua 5.1, the consolidation an">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/differences-between-load-and-loadstring-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Differences Between load and loadstring in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/differences-between-load-and-loadstring-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, dynamically compiling and executing code chunks at runtime has evolved significantly across major releases. This article explains the functional differences between loadstring and load, tracing their distinct roles in Lua 5.1, the consolidation an" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="differences-between-load-and-loadstring-in-lua">Differences
+Between load and loadstring in Lua</h1>
+<p>In Lua, dynamically compiling and executing code chunks at runtime
+has evolved significantly across major releases. This article explains
+the functional differences between <code>loadstring</code> and
+<code>load</code>, tracing their distinct roles in Lua 5.1, the
+consolidation and feature expansion introduced in Lua 5.2, and the
+complete removal of <code>loadstring</code> in Lua 5.3 and 5.4.</p>
+<h3 id="lua-51-separation-of-input-types">Lua 5.1: Separation of Input
+Types</h3>
+<p>In Lua 5.1, <code>loadstring</code> and <code>load</code> served
+mutually exclusive purposes based entirely on the data type of the code
+being compiled:</p>
+<ul>
+<li><strong><code>loadstring(string [, chunkname])</code></strong>:
+Specifically designed to parse code supplied as an in-memory string. It
+compiles the chunk and returns it as a function. If compilation fails,
+it returns <code>nil</code> plus the error message.</li>
+<li><strong><code>load(func [, chunkname])</code></strong>: Designed to
+load chunks piece-by-piece via a reader function. Each time Lua needed
+more data, it invoked <code>func</code>. The function was expected to
+return successive string pieces until returning <code>nil</code> or an
+empty string to signal the end of the stream. Passing a raw string
+directly to <code>load</code> in Lua 5.1 caused an error.</li>
+</ul>
+<p>In this version, neither function supported sandboxing parameters
+natively. Scoping code to an isolated environment required modifying the
+resulting function using <code>setfenv</code>.</p>
+<h3 id="lua-52-unification-and-sandboxing-improvements">Lua 5.2:
+Unification and Sandboxing Improvements</h3>
+<p>Lua 5.2 fundamentally changed this dynamic by expanding
+<code>load</code> to handle both strings and reader functions, rendering
+<code>loadstring</code> redundant.</p>
+<p>The signature of <code>load</code> was updated to:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">load</span><span class="op">(</span><span class="va">ld</span> <span class="op">[,</span> <span class="va">source</span> <span class="op">[,</span> <span class="va">mode</span> <span class="op">[,</span> <span class="va">env</span><span class="op">]]])</span></span></code></pre></div>
+<p>The functional changes introduced in Lua 5.2 include:</p>
+<ul>
+<li><strong>Dual Input Support</strong>: The <code>ld</code> parameter
+accepts either a string or a reader function. If <code>ld</code> is a
+string, <code>load</code> operates identically to the legacy
+<code>loadstring</code>.</li>
+<li><strong>Execution Environment (<code>env</code>)</strong>: Lua 5.2
+removed <code>setfenv</code> in favor of lexical environments
+(<code>_ENV</code>). The fourth parameter of <code>load</code> allows
+developers to directly assign an environment table to the compiled
+chunk's global scope, making secure sandboxing significantly
+easier.</li>
+<li><strong>Safety Modes (<code>mode</code>)</strong>: The third
+parameter controls the binary format of the code. It accepts
+<code>"b"</code> (binary bytecode only), <code>"t"</code> (text source
+code only), or <code>"bt"</code> (both, which is the default). This
+prevents arbitrary bytecode injection attacks by allowing applications
+to reject precompiled bytecode.</li>
+<li><strong>Deprecation of <code>loadstring</code></strong>: While
+retained solely for backward compatibility, <code>loadstring</code> was
+implemented merely as an alias calling <code>load(string)</code>.</li>
+</ul>
+<h3 id="lua-53-and-lua-54-removal-of-loadstring">Lua 5.3 and Lua 5.4:
+Removal of loadstring</h3>
+<p>In Lua 5.3 and Lua 5.4, <code>loadstring</code> was completely
+removed from the standard library. Codebases running on modern Lua
+versions must use <code>load</code> for all dynamic code compilation
+tasks.</p>
+<p>If legacy code containing <code>loadstring</code> must be run on Lua
+5.3+, developers must either enable backward-compatibility flags during
+Lua compilation (<code>LUA_COMPAT_5_2</code> or
+<code>LUA_COMPAT_5_1</code>) or define a polyfill in Lua code:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="er">loadstring</span> <span class="op">=</span> <span class="fu">load</span></span></code></pre></div>
+<h3 id="summary-of-differences-across-versions">Summary of Differences
+Across Versions</h3>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Feature / Behavior</th>
+<th style="text-align: left;">Lua 5.1</th>
+<th style="text-align: left;">Lua 5.2</th>
+<th style="text-align: left;">Lua 5.3 / 5.4</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Accepts strings</strong></td>
+<td style="text-align: left;"><code>loadstring</code> only</td>
+<td style="text-align: left;">Both <code>load</code> and
+<code>loadstring</code></td>
+<td style="text-align: left;"><code>load</code> only</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Accepts reader
+functions</strong></td>
+<td style="text-align: left;"><code>load</code> only</td>
+<td style="text-align: left;"><code>load</code> only</td>
+<td style="text-align: left;"><code>load</code> only</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Custom environment
+parameter</strong></td>
+<td style="text-align: left;">No (requires <code>setfenv</code>)</td>
+<td style="text-align: left;">Yes (<code>env</code> argument in
+<code>load</code>)</td>
+<td style="text-align: left;">Yes (<code>env</code> argument in
+<code>load</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Bytecode filtering
+(<code>mode</code>)</strong></td>
+<td style="text-align: left;">No</td>
+<td style="text-align: left;">Yes (<code>"b"</code>, <code>"t"</code>,
+<code>"bt"</code>)</td>
+<td style="text-align: left;">Yes (<code>"b"</code>, <code>"t"</code>,
+<code>"bt"</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong><code>loadstring</code>
+status</strong></td>
+<td style="text-align: left;">Standard API</td>
+<td style="text-align: left;">Deprecated</td>
+<td style="text-align: left;">Removed</td>
+</tr>
+</tbody>
+</table></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/differences-between-load-and-loadstring-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

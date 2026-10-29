@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua __metatable: Protect Object State from Modification - lua</title>
+    <meta name="description" content="In Lua, securing an object&#39;s encapsulated state requires restricting access to its internal mechanisms and metatable. The metatable metamethod provides a built-in defense mechanism that prevents unauthorized code from reading or overwriting an object&#39;s me">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-metatable-protect-object-state-from-modification">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua __metatable: Protect Object State from Modification - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-metatable-protect-object-state-from-modification" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, securing an object&#39;s encapsulated state requires restricting access to its internal mechanisms and metatable. The metatable metamethod provides a built-in defense mechanism that prevents unauthorized code from reading or overwriting an object&#39;s me" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-__metatable-protect-object-state-from-modification">Lua
+__metatable: Protect Object State from Modification</h1>
+<p>In Lua, securing an object's encapsulated state requires restricting
+access to its internal mechanisms and metatable. The
+<code>__metatable</code> metamethod provides a built-in defense
+mechanism that prevents unauthorized code from reading or overwriting an
+object's metatable. By defining this field, developers can hide the true
+metatable and disallow calls to <code>setmetatable</code>, thereby
+locking down the object's behavior and shielding its internal properties
+from external tampering.</p>
+<h3 id="the-risk-of-unprotected-metatables">The Risk of Unprotected
+Metatables</h3>
+<p>By default, any table in Lua with an assigned metatable remains fully
+open to inspection and modification:</p>
+<ul>
+<li><code>getmetatable(obj)</code> returns the actual metatable
+reference.</li>
+<li><code>setmetatable(obj, new_meta)</code> allows external code to
+replace the metatable entirely.</li>
+</ul>
+<p>If third-party or untrusted code obtains a direct reference to an
+object's metatable, it can modify underlying metamethods (such as
+<code>__index</code> or <code>__newindex</code>), overwrite shared class
+methods, or replace the metatable with an empty one. This breaks
+encapsulation, exposes private data stored in closures or hidden tables,
+and leaves the object vulnerable to state corruption.</p>
+<h3 id="how-__metatable-restricts-access">How <code>__metatable</code>
+Restricts Access</h3>
+<p>The <code>__metatable</code> key is a special metamethod recognized
+by Lua's standard functions. When added to a metatable, it alters the
+standard behavior of both <code>getmetatable</code> and
+<code>setmetatable</code>:</p>
+<ol type="1">
+<li><strong>Masking with <code>getmetatable</code></strong>: Instead of
+returning the actual metatable, <code>getmetatable(obj)</code> returns
+whatever value is assigned to the <code>__metatable</code> field
+(commonly a string message like <code>"Access denied"</code> or a
+boolean <code>false</code>).</li>
+<li><strong>Blocking with <code>setmetatable</code></strong>: Any
+attempt to reassign the metatable using
+<code>setmetatable(obj, ...)</code> immediately raises a runtime error:
+<code>cannot change a protected metatable</code>.</li>
+</ol>
+<h3 id="practical-implementation">Practical Implementation</h3>
+<p>The following example demonstrates how to create a protected object
+using <code>__metatable</code>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> create_secure_account<span class="op">(</span><span class="va">initial_balance</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">self</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>        <span class="va">balance</span> <span class="op">=</span> <span class="va">initial_balance</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">mt</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>        <span class="bu">__index</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>            <span class="va">deposit</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">account</span><span class="op">,</span> <span class="va">amount</span><span class="op">)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>                <span class="cf">if</span> <span class="va">amount</span> <span class="op">&gt;</span> <span class="dv">0</span> <span class="cf">then</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>                    <span class="va">account</span><span class="op">.</span><span class="va">balance</span> <span class="op">=</span> <span class="va">account</span><span class="op">.</span><span class="va">balance</span> <span class="op">+</span> <span class="va">amount</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>                <span class="cf">end</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>            <span class="kw">end</span><span class="op">,</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>            <span class="va">get_balance</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">account</span><span class="op">)</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>                <span class="cf">return</span> <span class="va">account</span><span class="op">.</span><span class="va">balance</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>            <span class="kw">end</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>        <span class="op">},</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Protect the metatable</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>        <span class="bu">__metatable</span> <span class="op">=</span> <span class="st">&quot;Protected metatable&quot;</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">setmetatable</span><span class="op">(</span><span class="va">self</span><span class="op">,</span> <span class="va">mt</span><span class="op">)</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">account</span> <span class="op">=</span> create_secure_account<span class="op">(</span><span class="dv">100</span><span class="op">)</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="co">-- Attempting to inspect the metatable</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">getmetatable</span><span class="op">(</span><span class="va">account</span><span class="op">))</span> </span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="co">-- Output: Protected metatable</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="co">-- Attempting to overwrite the metatable</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">pcall</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    <span class="fu">setmetatable</span><span class="op">(</span><span class="va">account</span><span class="op">,</span> <span class="op">{})</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span><span class="op">)</span></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">err</span><span class="op">)</span> </span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a><span class="co">-- Output: cannot change a protected metatable</span></span></code></pre></div>
+<h3 id="protection-limitations">Protection Limitations</h3>
+<p>While <code>__metatable</code> successfully prevents external
+tampering via standard Lua functions, it operates within specific
+boundaries:</p>
+<ul>
+<li><strong>Raw Access Functions</strong>: The <code>__metatable</code>
+field protects the metatable itself, but standard table operations like
+<code>rawset(account, "balance", 0)</code> or <code>rawget</code> can
+still bypass metamethods on the object table directly unless the
+internal state is stored exclusively in C-closures or upvalues.</li>
+<li><strong>C API Access</strong>: C modules running in the same Lua
+state can bypass <code>__metatable</code> using low-level functions such
+as <code>lua_getmetatable</code> and <code>lua_setmetatable</code>.</li>
+</ul>
+<p>Within standard Lua scripting boundaries, setting
+<code>__metatable</code> remains the definitive technique for enforcing
+metatable immutability and safeguarding object integrity.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-metatable-protect-object-state-from-modification';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

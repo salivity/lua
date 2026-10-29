@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wireshark Lua Dissector Using the Proto Class - lua</title>
+    <meta name="description" content="Creating a custom protocol dissector in Wireshark via Lua&#39;s Proto class allows developers to parse proprietary or unsupported network protocols without recompiling Wireshark from source. This guide demonstrates how to declare a new Proto object, define pr">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/wireshark-lua-dissector-using-the-proto-class">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Wireshark Lua Dissector Using the Proto Class - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/wireshark-lua-dissector-using-the-proto-class" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Creating a custom protocol dissector in Wireshark via Lua&#39;s Proto class allows developers to parse proprietary or unsupported network protocols without recompiling Wireshark from source. This guide demonstrates how to declare a new Proto object, define pr" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="wireshark-lua-dissector-using-the-proto-class">Wireshark Lua
+Dissector Using the Proto Class</h1>
+<p>Creating a custom protocol dissector in Wireshark via Lua's
+<code>Proto</code> class allows developers to parse proprietary or
+unsupported network protocols without recompiling Wireshark from source.
+This guide demonstrates how to declare a new <code>Proto</code> object,
+define protocol fields using <code>ProtoField</code>, construct a
+detailed protocol decoding tree, write the main dissector callback
+function, and register the script with Wireshark's packet-handling
+tables.</p>
+<h3 id="1-initialize-the-protocol">1. Initialize the Protocol</h3>
+<p>Every custom dissector begins by instantiating the <code>Proto</code>
+class. This defines the protocol's internal identifier and user-facing
+description.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">my_proto</span> <span class="op">=</span> Proto<span class="op">(</span><span class="st">&quot;myproto&quot;</span><span class="op">,</span> <span class="st">&quot;My Custom Protocol&quot;</span><span class="op">)</span></span></code></pre></div>
+<h3 id="2-define-protocol-fields">2. Define Protocol Fields</h3>
+<p>Protocol fields determine how individual bytes in the payload are
+displayed and filtered within Wireshark. Fields are defined using the
+<code>ProtoField</code> class and registered directly into the
+protocol's <code>.fields</code> table.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">f_version</span> <span class="op">=</span> <span class="va">ProtoField</span><span class="op">.</span>uint8<span class="op">(</span><span class="st">&quot;myproto.version&quot;</span><span class="op">,</span> <span class="st">&quot;Version&quot;</span><span class="op">,</span> <span class="va">base</span><span class="op">.</span><span class="cn">DEC</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">f_msg_type</span> <span class="op">=</span> <span class="va">ProtoField</span><span class="op">.</span>uint8<span class="op">(</span><span class="st">&quot;myproto.type&quot;</span><span class="op">,</span> <span class="st">&quot;Message Type&quot;</span><span class="op">,</span> <span class="va">base</span><span class="op">.</span><span class="cn">HEX</span><span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">f_length</span>   <span class="op">=</span> <span class="va">ProtoField</span><span class="op">.</span>uint16<span class="op">(</span><span class="st">&quot;myproto.length&quot;</span><span class="op">,</span> <span class="st">&quot;Payload Length&quot;</span><span class="op">,</span> <span class="va">base</span><span class="op">.</span><span class="cn">DEC</span><span class="op">)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">f_payload</span>  <span class="op">=</span> <span class="va">ProtoField</span><span class="op">.</span>string<span class="op">(</span><span class="st">&quot;myproto.payload&quot;</span><span class="op">,</span> <span class="st">&quot;Payload Data&quot;</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="va">my_proto</span><span class="op">.</span><span class="va">fields</span> <span class="op">=</span> <span class="op">{</span> <span class="va">f_version</span><span class="op">,</span> <span class="va">f_msg_type</span><span class="op">,</span> <span class="va">f_length</span><span class="op">,</span> <span class="va">f_payload</span> <span class="op">}</span></span></code></pre></div>
+<h3 id="3-implement-the-dissector-function">3. Implement the Dissector
+Function</h3>
+<p>The core logic resides in the <code>dissector</code> method of the
+<code>Proto</code> object. This function accepts three arguments:</p>
+<ul>
+<li><code>buffer</code>: The <code>Tvb</code> (Testy Virtual Buffer)
+containing the raw packet data.</li>
+<li><code>pinfo</code>: The packet information structure holding
+metadata (e.g., source, destination, columns).</li>
+<li><code>tree</code>: The root <code>TreeItem</code> used to build the
+Wireshark protocol details pane.</li>
+</ul>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">my_proto</span><span class="op">.</span>dissector<span class="op">(</span><span class="va">buffer</span><span class="op">,</span> <span class="va">pinfo</span><span class="op">,</span> <span class="va">tree</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Guard against incomplete packets</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">length</span> <span class="op">=</span> <span class="va">buffer</span><span class="op">:</span><span class="fu">len</span><span class="op">()</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">length</span> <span class="op">&lt;</span> <span class="dv">4</span> <span class="cf">then</span> <span class="cf">return</span> <span class="cf">end</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Update the Wireshark GUI columns</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">pinfo</span><span class="op">.</span><span class="va">cols</span><span class="op">.</span><span class="va">protocol</span> <span class="op">=</span> <span class="va">my_proto</span><span class="op">.</span><span class="va">name</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">pinfo</span><span class="op">.</span><span class="va">cols</span><span class="op">.</span><span class="va">info</span> <span class="op">=</span> <span class="st">&quot;Custom Protocol Packet&quot;</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Add the top-level protocol subtree</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">subtree</span> <span class="op">=</span> <span class="va">tree</span><span class="op">:</span>add<span class="op">(</span><span class="va">my_proto</span><span class="op">,</span> buffer<span class="op">(),</span> <span class="st">&quot;My Custom Protocol Data&quot;</span><span class="op">)</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Parse and add individual fields from buffer offsets: (offset, length)</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">subtree</span><span class="op">:</span>add<span class="op">(</span><span class="va">f_version</span><span class="op">,</span> buffer<span class="op">(</span><span class="dv">0</span><span class="op">,</span> <span class="dv">1</span><span class="op">))</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="va">subtree</span><span class="op">:</span>add<span class="op">(</span><span class="va">f_msg_type</span><span class="op">,</span> buffer<span class="op">(</span><span class="dv">1</span><span class="op">,</span> <span class="dv">1</span><span class="op">))</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="va">subtree</span><span class="op">:</span>add<span class="op">(</span><span class="va">f_length</span><span class="op">,</span> buffer<span class="op">(</span><span class="dv">2</span><span class="op">,</span> <span class="dv">2</span><span class="op">))</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">payload_len</span> <span class="op">=</span> buffer<span class="op">(</span><span class="dv">2</span><span class="op">,</span> <span class="dv">2</span><span class="op">):</span>uint<span class="op">()</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">length</span> <span class="op">&gt;=</span> <span class="dv">4</span> <span class="op">+</span> <span class="va">payload_len</span> <span class="cf">then</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>        <span class="va">subtree</span><span class="op">:</span>add<span class="op">(</span><span class="va">f_payload</span><span class="op">,</span> buffer<span class="op">(</span><span class="dv">4</span><span class="op">,</span> <span class="va">payload_len</span><span class="op">))</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="4-register-the-dissector">4. Register the Dissector</h3>
+<p>To make Wireshark trigger the dissector on relevant traffic, bind the
+<code>Proto</code> instance to a transport-layer table, such as UDP or
+TCP ports:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">udp_port</span> <span class="op">=</span> <span class="va">DissectorTable</span><span class="op">.</span>get<span class="op">(</span><span class="st">&quot;udp.port&quot;</span><span class="op">)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="va">udp_port</span><span class="op">:</span>add<span class="op">(</span><span class="dv">9999</span><span class="op">,</span> <span class="va">my_proto</span><span class="op">)</span></span></code></pre></div>
+<p>For TCP-based protocols requiring stream reassembly, bind the
+protocol to <code>"tcp.port"</code> instead.</p>
+<h3 id="5-load-and-test-the-script">5. Load and Test the Script</h3>
+<ol type="1">
+<li>Save the code into a <code>.lua</code> file (for example,
+<code>my_proto.lua</code>).</li>
+<li>Place the file in Wireshark’s personal plugins directory, which can
+be found under <strong>Help &gt; About Wireshark &gt; Folders &gt;
+Personal Lua Plugins</strong>.</li>
+<li>Reload active Lua plugins inside Wireshark by pressing
+<code>Ctrl + Shift + L</code> (or <code>Cmd + Shift + L</code> on
+macOS).</li>
+<li>Inspect or capture packets on the configured port to verify that the
+protocol hierarchy and custom fields appear in the packet details
+pane.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/wireshark-lua-dissector-using-the-proto-class';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

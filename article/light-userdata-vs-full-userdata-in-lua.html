@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Light Userdata vs Full Userdata in Lua - lua</title>
+    <meta name="description" content="In the Lua programming language, userdata is the primary mechanism used to bind arbitrary C/C++ data to Lua scripts. Lua divides this mechanism into two distinct types: full userdata and light userdata. While both represent external C memory, they fundame">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/light-userdata-vs-full-userdata-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Light Userdata vs Full Userdata in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/light-userdata-vs-full-userdata-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, userdata is the primary mechanism used to bind arbitrary C/C++ data to Lua scripts. Lua divides this mechanism into two distinct types: full userdata and light userdata. While both represent external C memory, they fundame" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="light-userdata-vs-full-userdata-in-lua">Light Userdata vs Full
+Userdata in Lua</h1>
+<p>In the Lua programming language, userdata is the primary mechanism
+used to bind arbitrary C/C++ data to Lua scripts. Lua divides this
+mechanism into two distinct types: full userdata and light userdata.
+While both represent external C memory, they fundamentally differ in
+memory management, garbage collection behavior, metatable support, and
+equality semantics. This article breaks down the operational differences
+between these two types to help you choose the right approach when
+extending Lua with C.</p>
+<h3 id="memory-management-and-ownership">Memory Management and
+Ownership</h3>
+<p>The most critical functional distinction is how memory is allocated
+and freed.</p>
+<ul>
+<li><strong>Full Userdata:</strong> Represents a block of raw memory
+allocated directly by the Lua runtime via the C API function
+<code>lua_newuserdata</code> (or <code>lua_newuserdatauv</code> in Lua
+5.4). Because Lua allocates this memory, it is a fully managed Lua value
+and is subject to Lua's garbage collector (GC).</li>
+<li><strong>Light Userdata:</strong> Represents a plain C pointer
+(<code>void*</code>) pushed into the Lua stack using
+<code>lua_pushlightuserdata</code>. Lua does not allocate, manage, or
+free the memory address the pointer references. The host application or
+external C library retains full responsibility for the allocation and
+deallocation of that memory.</li>
+</ul>
+<h3 id="metatables-and-metamethods">Metatables and Metamethods</h3>
+<p>Metatables define how values behave in Lua, such as operator
+overloading and object-oriented syntax.</p>
+<ul>
+<li><strong>Full Userdata:</strong> Each full userdata instance can have
+its own individual metatable. This allows you to define custom behavior,
+implement object-oriented method dispatch (via the <code>__index</code>
+metamethod), and attach a finalizer. The <code>__gc</code> metamethod is
+particularly important, as it enables C cleanup code to run
+automatically when Lua collects the object.</li>
+<li><strong>Light Userdata:</strong> Light userdata instances cannot
+have individual metatables. Instead, all light userdata values share a
+single, global metatable across the entire Lua state. Consequently, you
+cannot give distinct behavior or method sets to different types of C
+pointers. Furthermore, light userdata does not support the
+<code>__gc</code> metamethod because Lua has no lifecycle awareness of
+the underlying resource.</li>
+</ul>
+<h3 id="equality-and-identity">Equality and Identity</h3>
+<p>The two types evaluate equality (<code>==</code>) using different
+criteria.</p>
+<ul>
+<li><strong>Full Userdata:</strong> A full userdata is evaluated by
+identity. Two full userdata objects are equal only if they refer to the
+exact same Lua-allocated memory block, unless an <code>__eq</code>
+metamethod is provided to redefine equality.</li>
+<li><strong>Light Userdata:</strong> A light userdata is evaluated
+purely by the value of the pointer it holds. Any two light userdata
+values wrapping the exact same <code>void*</code> memory address are
+always strictly equal (<code>==</code>), regardless of where or when
+they were pushed to the stack.</li>
+</ul>
+<h3 id="practical-use-cases">Practical Use Cases</h3>
+<ul>
+<li><strong>Use Full Userdata when:</strong>
+<ul>
+<li>You are exposing complex C structs or C++ objects to Lua
+scripts.</li>
+<li>You need the resource to automatically free itself (e.g., closing
+file descriptors, releasing sockets, freeing database handles) via the
+<code>__gc</code> metamethod.</li>
+<li>You want to provide an object-oriented API in Lua using metatables
+and methods.</li>
+</ul></li>
+<li><strong>Use Light Userdata when:</strong>
+<ul>
+<li>The memory lifecycle is already strictly managed by C or an external
+framework.</li>
+<li>You need to pass an identifier, handle, or callback context into Lua
+with zero memory allocation overhead.</li>
+<li>You want to use raw C pointers as fast, unique keys in Lua
+tables.</li>
+</ul></li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/light-userdata-vs-full-userdata-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

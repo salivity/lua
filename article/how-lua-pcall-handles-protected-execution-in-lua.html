@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How lua_pcall Handles Protected Execution in Lua - lua</title>
+    <meta name="description" content="This article explains how the luapcall function provides protected execution and manages runtime errors within the Lua C API. It covers the internal mechanics of protected calls, the structure of function parameters, status return codes, stack cleanup beh">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-pcall-handles-protected-execution-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How lua_pcall Handles Protected Execution in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-pcall-handles-protected-execution-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains how the luapcall function provides protected execution and manages runtime errors within the Lua C API. It covers the internal mechanics of protected calls, the structure of function parameters, status return codes, stack cleanup beh" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua_pcall-handles-protected-execution-in-lua">How lua_pcall
+Handles Protected Execution in Lua</h1>
+<p>This article explains how the <code>lua_pcall</code> function
+provides protected execution and manages runtime errors within the Lua C
+API. It covers the internal mechanics of protected calls, the structure
+of function parameters, status return codes, stack cleanup behaviors,
+and the implementation of custom message handlers for debugging.</p>
+<h3 id="the-role-of-lua_pcall-vs-lua_call">The Role of lua_pcall vs.
+lua_call</h3>
+<p>In the Lua C API, running functions through <code>lua_call</code>
+invokes unprotected execution. If an unhandled runtime error occurs
+during <code>lua_call</code>, Lua triggers a panic routine or executes a
+C <code>longjmp</code>, which bypasses normal execution flow and
+typically terminates the host application.</p>
+<p>To prevent crashes and handle faults gracefully, the API provides
+<code>lua_pcall</code>. Operating similarly to <code>pcall</code> in Lua
+scripts, <code>lua_pcall</code> establishes a protected environment
+using a catch point. Any runtime error raised within the target function
+is trapped, allowing the host C application to remain stable and decide
+how to recover.</p>
+<h3 id="function-signature-and-parameters">Function Signature and
+Parameters</h3>
+<p>The signature of <code>lua_pcall</code> is defined as:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> lua_pcall<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">int</span> nargs<span class="op">,</span> <span class="dt">int</span> nresults<span class="op">,</span> <span class="dt">int</span> msgh<span class="op">);</span></span></code></pre></div>
+<ul>
+<li><strong><code>nargs</code></strong>: The number of arguments
+currently pushed onto the stack for the function.</li>
+<li><strong><code>nresults</code></strong>: The desired number of return
+values. This can be <code>LUA_MULTRET</code> to return all generated
+values.</li>
+<li><strong><code>msgh</code></strong>: The stack index of an error
+message handler function. Passing <code>0</code> indicates no custom
+message handler.</li>
+</ul>
+<p>Before calling <code>lua_pcall</code>, the target function and all
+its arguments must be pushed onto the stack sequentially
+(<code>[func, arg1, arg2, ...]</code>).</p>
+<h3 id="status-codes-and-error-types">Status Codes and Error Types</h3>
+<p>When <code>lua_pcall</code> completes, it returns an integer status
+code reflecting the outcome of the execution:</p>
+<ul>
+<li><strong><code>LUA_OK</code> (0)</strong>: The function completed
+successfully.</li>
+<li><strong><code>LUA_ERRRUN</code></strong>: A standard runtime error
+occurred during function execution.</li>
+<li><strong><code>LUA_ERRMEM</code></strong>: A memory allocation
+failure occurred; Lua was unable to allocate required memory.</li>
+<li><strong><code>LUA_ERRERR</code></strong>: A secondary error occurred
+while attempting to execute the custom message handler specified by
+<code>msgh</code>.</li>
+</ul>
+<h3 id="stack-behavior-on-success-and-failure">Stack Behavior on Success
+and Failure</h3>
+<p>The Lua stack layout changes depending on whether the execution
+succeeds or encounters an error:</p>
+<ul>
+<li><strong>On Success</strong>: The function and its arguments are
+popped from the stack. The function's return values are pushed onto the
+stack, adjusted to the count specified by <code>nresults</code>.</li>
+<li><strong>On Failure</strong>: The function and its arguments are
+discarded from the stack. Lua pushes a single object—the error message
+or error object—onto the top of the stack. The host program can inspect
+this error using functions like <code>lua_tostring(L, -1)</code> and
+must pop it manually to restore stack balance.</li>
+</ul>
+<h3 id="message-handlers-and-debugging">Message Handlers and
+Debugging</h3>
+<p>The fourth parameter, <code>msgh</code>, allows developers to
+intercept errors before Lua unwinds the call stack.</p>
+<p>When a runtime error occurs:</p>
+<ol type="1">
+<li>If <code>msgh</code> is <code>0</code>, Lua unwinds the stack
+immediately and returns the original error object.</li>
+<li>If <code>msgh</code> specifies a valid stack index pointing to a
+function, Lua calls that handler before unwinding.</li>
+</ol>
+<p>Because the stack remains intact while the message handler runs, the
+handler can inspect local variables or generate complete stack traces
+using functions such as Lua's <code>debug.traceback</code>. The value
+returned by the message handler becomes the final error object placed on
+the stack for the C caller.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-pcall-handles-protected-execution-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

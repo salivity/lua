@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Run Lua Close Handlers with os.exit - lua</title>
+    <meta name="description" content="In Lua 5.4 and later, to-be-closed variables allow developers to define cleanup logic that automatically triggers when a variable goes out of scope. However, terminating a script prematurely with os.exit normally bypasses these handlers by default. This a">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-run-lua-close-handlers-with-os-exit">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Run Lua Close Handlers with os.exit - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-run-lua-close-handlers-with-os-exit" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua 5.4 and later, to-be-closed variables allow developers to define cleanup logic that automatically triggers when a variable goes out of scope. However, terminating a script prematurely with os.exit normally bypasses these handlers by default. This a" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-run-lua-close-handlers-with-osexit">How to Run Lua Close
+Handlers with os.exit</h1>
+<p>In Lua 5.4 and later, to-be-closed variables allow developers to
+define cleanup logic that automatically triggers when a variable goes
+out of scope. However, terminating a script prematurely with
+<code>os.exit</code> normally bypasses these handlers by default. This
+article explains how to properly configure the second argument of
+<code>os.exit</code> to guarantee that all active
+<code>&lt;close&gt;</code> metamethods run before the process
+terminates.</p>
+<h2 id="understanding-the-osexit-function">Understanding the
+<code>os.exit</code> Function</h2>
+<p>The standard <code>os.exit</code> function accepts two optional
+parameters:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">os.exit</span><span class="op">([</span><span class="va">code</span> <span class="op">[,</span> <span class="fu">close</span><span class="op">]])</span></span></code></pre></div>
+<ol type="1">
+<li><strong><code>code</code></strong>: A boolean or integer
+representing the exit status returned to the host environment (default
+is <code>true</code>, representing success).</li>
+<li><strong><code>close</code></strong>: A boolean indicating whether to
+close the primary Lua state before exiting (default is
+<code>false</code>).</li>
+</ol>
+<p>When <code>os.exit</code> is called with only an exit code, or with
+<code>close</code> set to <code>false</code>, the Lua runtime
+immediately calls the host system's <code>exit</code> function. This
+halts execution instantly without unwinding the call stack, preventing
+any pending to-be-closed variables (<code>&lt;close&gt;</code>) or
+garbage collector finalizers (<code>__gc</code>) from executing.</p>
+<h2 id="enabling-close-handlers">Enabling Close Handlers</h2>
+<p>To force Lua to invoke active close handlers upon termination, you
+must explicitly pass <code>true</code> as the second argument:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">os.exit</span><span class="op">(</span><span class="dv">0</span><span class="op">,</span> <span class="kw">true</span><span class="op">)</span></span></code></pre></div>
+<p>Setting <code>close</code> to <code>true</code> directs Lua to call
+<code>lua_close</code> on the main Lua state prior to process
+termination. This process closes all active to-be-closed variables on
+the call stack and triggers their corresponding <code>__close</code>
+metamethods in reverse order of declaration.</p>
+<h2 id="implementation-example">Implementation Example</h2>
+<p>The following code illustrates how to define a to-be-closed resource
+and exit cleanly:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Define a closable resource</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> create_resource<span class="op">(</span><span class="va">name</span><span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">setmetatable</span><span class="op">({</span> <span class="va">name</span> <span class="op">=</span> <span class="va">name</span> <span class="op">},</span> <span class="op">{</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>        <span class="bu">__close</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">self</span><span class="op">,</span> <span class="va">err</span><span class="op">)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>            <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Cleaning up resource: &quot;</span> <span class="op">..</span> <span class="va">self</span><span class="op">.</span><span class="va">name</span><span class="op">)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>        <span class="kw">end</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">})</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> main<span class="op">()</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Declare to-be-closed variables</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">res1</span> <span class="at">&lt;close&gt;</span> <span class="op">=</span> create_resource<span class="op">(</span><span class="st">&quot;DatabaseConnection&quot;</span><span class="op">)</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">res2</span> <span class="at">&lt;close&gt;</span> <span class="op">=</span> create_resource<span class="op">(</span><span class="st">&quot;FileHandle&quot;</span><span class="op">)</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Working with resources...&quot;</span><span class="op">)</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Terminate execution while ensuring cleanup occurs</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    <span class="fu">os.exit</span><span class="op">(</span><span class="dv">0</span><span class="op">,</span> <span class="kw">true</span><span class="op">)</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>main<span class="op">()</span></span></code></pre></div>
+<h3 id="output">Output:</h3>
+<pre class="text"><code>Working with resources...
+Cleaning up resource: FileHandle
+Cleaning up resource: DatabaseConnection</code></pre>
+<p>If <code>os.exit(0)</code> or <code>os.exit(0, false)</code> had been
+used instead, the output would simply read
+<code>Working with resources...</code>, skipping the cleanup phase
+entirely.</p>
+<h2 id="key-considerations">Key Considerations</h2>
+<ul>
+<li><strong>Scope Coverage</strong>: Only to-be-closed variables
+currently in active scopes on the main thread will be executed when the
+state closes.</li>
+<li><strong>Coroutines</strong>: Pending to-be-closed variables inside
+suspended coroutines are not automatically closed unless the coroutines
+themselves are explicitly closed using
+<code>coroutine.close</code>.</li>
+<li><strong>Error Handling</strong>: The <code>__close</code> metamethod
+receives the error object as its second argument if the scope exited due
+to an error; when exited via <code>os.exit(code, true)</code>, this
+error parameter is <code>nil</code>.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-to-run-lua-close-handlers-with-os-exit';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

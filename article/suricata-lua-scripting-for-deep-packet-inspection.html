@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suricata Lua Scripting for Deep Packet Inspection - lua</title>
+    <meta name="description" content="Suricata integrates the Lua programming language to provide security analysts with flexible, programmable deep packet inspection capabilities that extend beyond static signature-based rules. By embedding a Lua runtime directly into its multi-threaded arch">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/suricata-lua-scripting-for-deep-packet-inspection">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Suricata Lua Scripting for Deep Packet Inspection - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/suricata-lua-scripting-for-deep-packet-inspection" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Suricata integrates the Lua programming language to provide security analysts with flexible, programmable deep packet inspection capabilities that extend beyond static signature-based rules. By embedding a Lua runtime directly into its multi-threaded arch" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="suricata-lua-scripting-for-deep-packet-inspection">Suricata Lua
+Scripting for Deep Packet Inspection</h1>
+<p>Suricata integrates the Lua programming language to provide security
+analysts with flexible, programmable deep packet inspection capabilities
+that extend beyond static signature-based rules. By embedding a Lua
+runtime directly into its multi-threaded architecture, Suricata allows
+custom scripts to access normalized protocol buffers, evaluate complex
+payload logic, and perform custom logging. This article explains the
+technical mechanics of how Suricata embeds Lua, exposes packet and
+stream data to the runtime, and executes scripts during packet
+analysis.</p>
+<h3 id="embedding-architecture-and-the-lua-c-api">Embedding Architecture
+and the Lua C API</h3>
+<p>Suricata embeds Lua using standard C API bindings, typically
+leveraging LuaJIT for just-in-time compilation and high-throughput
+performance. When compiled with Lua support (via the
+<code>--enable-lua</code> flag), Suricata links the Lua virtual machine
+directly into its core binary.</p>
+<p>To maintain scalability across multi-core systems, Suricata uses a
+multi-threaded architecture where worker threads process packets
+independently. Rather than sharing a single global Lua state—which would
+cause heavy lock contention—Suricata initializes an independent
+<code>lua_State</code> instance for each processing thread. Each worker
+thread runs its own isolated Lua environment, ensuring thread safety and
+lock-free script execution during high-volume packet processing.</p>
+<h3 id="the-lua-rule-keyword-interface">The Lua Rule Keyword
+Interface</h3>
+<p>Lua scripts integrate into Suricata's detection engine primarily
+through the <code>lua</code> (or <code>luajit</code>) rule option within
+standard Suricata signatures. A rule references an external script:</p>
+<pre class="text"><code>alert tcp any any -&gt; any any (msg:&quot;Custom Lua Inspection&quot;; lua:custom_inspect.lua; sid:1000001; rev:1;)</code></pre>
+<p>When Suricata loads the signature, it registers the script and calls
+an initialization function within the Lua file. For each packet or flow
+that reaches the evaluation stage of that rule, Suricata invokes the
+script's matching entry point.</p>
+<p>A standard Suricata Lua inspection script implements three core
+functions:</p>
+<ul>
+<li><code>init (args)</code>: Sets up required protocol buffers and
+registers dependencies.</li>
+<li><code>match (args)</code>: Evaluates the packet or flow data and
+returns <code>1</code> (match) or <code>0</code> (no match).</li>
+<li><code>deinit ()</code>: Cleans up allocated states or outputs
+summary metrics when Suricata shuts down.</li>
+</ul>
+<h3 id="data-exposure-passing-packets-and-streams-to-lua">Data Exposure:
+Passing Packets and Streams to Lua</h3>
+<p>Suricata exposes internal C structures to Lua by pushing C functions
+and userdata into the Lua execution stack. Through Suricata's Lua API,
+scripts can access several layers of network data:</p>
+<ol type="1">
+<li><strong>Raw Packet Data:</strong> Scripts can directly inspect raw
+layer 2 through layer 4 packet headers and payload slices.</li>
+<li><strong>Reassembled Stream Buffers:</strong> For TCP traffic,
+Suricata's stream reassembly engine provides Lua with access to
+continuous data streams, avoiding the need for scripts to handle
+out-of-order packets or TCP fragmentation.</li>
+<li><strong>Application Layer Protocol Contexts:</strong> Suricata’s
+protocol decoders parse protocols such as HTTP, TLS, DNS, SSH, and SMTP.
+The parsed metadata is exposed to Lua through helper functions (e.g.,
+<code>Http.get_uri()</code>, <code>Tls.get_sni()</code>). This allows
+scripts to evaluate normalized data fields rather than parsing complex
+protocols manually.</li>
+</ol>
+<h3 id="execution-flow-in-the-detection-pipeline">Execution Flow in the
+Detection Pipeline</h3>
+<p>During packet processing, Suricata applies pre-filters such as IP
+addresses, ports, and fast-pattern matches before running
+computationally intensive checks. If a packet satisfies the preliminary
+conditions of a rule containing a Lua keyword, Suricata pauses native
+rule evaluation and transfers execution context to the embedded Lua
+interpreter.</p>
+<p>The worker thread pushes a reference to the current packet context
+onto the thread's Lua stack and calls the Lua <code>match()</code>
+function. The script executes its logic using the provided API functions
+to query payloads or flow variables. Once the script finishes, it leaves
+a boolean integer on the stack, which Suricata reads to determine
+whether to trigger an alert or proceed down the rule evaluation
+tree.</p>
+<h3 id="custom-logging-and-output-scripting">Custom Logging and Output
+Scripting</h3>
+<p>Beyond signature matching, Suricata embeds Lua into its output
+sub-system. Users can replace or supplement standard EVE-JSON logging
+with Lua scripts specified in the <code>suricata.yaml</code>
+configuration file.</p>
+<p>In this mode, Suricata invokes Lua callback functions whenever an
+event—such as a flow timeout, an alert, or an application transaction—is
+finalized. The script extracts relevant fields from the Suricata data
+structures and formats them into custom outputs, such as direct database
+writes, filtered JSON files, or external API calls, without requiring
+modifications to Suricata's core C codebase.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/suricata-lua-scripting-for-deep-packet-inspection';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

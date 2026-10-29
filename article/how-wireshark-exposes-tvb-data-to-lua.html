@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Wireshark Exposes TVB Data to Lua - lua</title>
+    <meta name="description" content="Wireshark exposes packet payload bytes to the Lua scripting environment by wrapping its internal C-based Test Virtual Buffer (TVB) data structures into native Lua userdata objects. This article examines the mechanics of how the Wireshark packet analysis e">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-wireshark-exposes-tvb-data-to-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Wireshark Exposes TVB Data to Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-wireshark-exposes-tvb-data-to-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Wireshark exposes packet payload bytes to the Lua scripting environment by wrapping its internal C-based Test Virtual Buffer (TVB) data structures into native Lua userdata objects. This article examines the mechanics of how the Wireshark packet analysis e" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-wireshark-exposes-tvb-data-to-lua">How Wireshark Exposes TVB
+Data to Lua</h1>
+<p>Wireshark exposes packet payload bytes to the Lua scripting
+environment by wrapping its internal C-based Test Virtual Buffer (TVB)
+data structures into native Lua userdata objects. This article examines
+the mechanics of how the Wireshark packet analysis engine abstracts the
+underlying C memory buffers, the specific Lua objects (<code>Tvb</code>
+and <code>TvbRange</code>) created during this process, and how
+developers interact with raw frame data within custom Lua
+dissectors.</p>
+<h3 id="the-underlying-engine-tvbuff_t-in-c">The Underlying Engine:
+<code>tvbuff_t</code> in C</h3>
+<p>At its core in the C engine (<code>epan</code>), Wireshark manages
+raw frame data using the <code>tvbuff_t</code> structure. This structure
+provides a uniform interface for accessing packet bytes whether they
+reside in contiguous memory, fragmented buffers, or composite segments
+across reassembled packets. Crucially, <code>tvbuff_t</code> handles
+bounds checking to protect the engine from buffer overflow exceptions
+when parsing malformed or truncated packets.</p>
+<h3 id="bridging-c-to-lua-via-wslua_tvbc">Bridging C to Lua via
+<code>wslua_tvb.c</code></h3>
+<p>Wireshark uses the Lua C API inside its <code>epan/wslua</code>
+subsystem (specifically <code>wslua_tvb.c</code>) to bridge the gap
+between native C code and Lua scripts. When a packet is passed to a
+Lua-based dissector, the engine:</p>
+<ol type="1">
+<li>Instantiates a Lua userdata container wrapping the pointer to the
+active <code>tvbuff_t</code>.</li>
+<li>Assigns a metatable representing the <code>Tvb</code> class to this
+userdata.</li>
+<li>Injects this <code>Tvb</code> object as the first argument into the
+registered dissector function:
+<code>proto.dissector(tvb, pinfo, tree)</code>.</li>
+</ol>
+<p>Because the object is a lightweight userdata reference, the Lua
+runtime does not copy the raw packet bytes into memory. Instead, it
+maintains a safe reference to the underlying packet buffer allocated by
+Wireshark.</p>
+<h3 id="tvb-sub-ranges-the-tvbrange-object">TVB Sub-ranges: The
+<code>TvbRange</code> Object</h3>
+<p>Directly accessing the entire <code>Tvb</code> object as a single
+block is rare. Instead, Wireshark encourages offset-based parsing via
+the <code>TvbRange</code> object.</p>
+<p>When a Lua script calls <code>tvb(offset, length)</code>, the C
+bridge invokes an internal slicing function that creates a
+<code>TvbRange</code> userdata object. This object stores:</p>
+<ul>
+<li>A reference to the parent <code>tvbuff_t</code>.</li>
+<li>An integer offset representing the start position.</li>
+<li>An integer length representing the size of the window.</li>
+</ul>
+<p>Wireshark performs boundary validation during this call. If the
+offset and length exceed the captured data, the engine throws an
+out-of-bounds runtime exception, ensuring the Lua dissector cannot read
+invalid memory.</p>
+<h3 id="data-extraction-and-endianness-handling">Data Extraction and
+Endianness Handling</h3>
+<p>To extract typed data from packet buffers, the <code>Tvb</code> and
+<code>TvbRange</code> metatables expose C accessor functions directly to
+the Lua environment. The engine maps these accessors to internal
+Wireshark functions that automatically manage endianness:</p>
+<ul>
+<li><strong>Numeric extraction</strong>: Methods like
+<code>:uint()</code>, <code>:le_uint()</code>, <code>:int()</code>, and
+<code>:le_int()</code> extract unsigned or signed integers in big-endian
+(network order) or little-endian format.</li>
+<li><strong>String extraction</strong>: Methods like
+<code>:string()</code> extract ASCII or UTF-8 characters up to a
+specified length or null-terminator.</li>
+<li><strong>Raw byte arrays</strong>: The <code>:bytes()</code> method
+converts a slice of the TVB into a <code>ByteArray</code> object for
+binary manipulation.</li>
+<li><strong>Protocol Tree Integration</strong>: When adding fields to
+the Wireshark packet details pane via
+<code>tree:add(field, tvbrange)</code>, the engine inspects the
+<code>TvbRange</code> coordinates to highlight the corresponding hex
+bytes in the packet bytes pane automatically.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-wireshark-exposes-tvb-data-to-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

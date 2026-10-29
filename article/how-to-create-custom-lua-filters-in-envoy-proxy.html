@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Create Custom Lua Filters in Envoy Proxy - lua</title>
+    <meta name="description" content="Envoy proxy provides native support for custom filter creation by embedding LuaJIT into its HTTP filter chain. This capability allows developers to intercept, inspect, and modify HTTP requests and responses dynamically without recompiling the Envoy binary">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-create-custom-lua-filters-in-envoy-proxy">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Create Custom Lua Filters in Envoy Proxy - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-create-custom-lua-filters-in-envoy-proxy" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Envoy proxy provides native support for custom filter creation by embedding LuaJIT into its HTTP filter chain. This capability allows developers to intercept, inspect, and modify HTTP requests and responses dynamically without recompiling the Envoy binary" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-create-custom-lua-filters-in-envoy-proxy">How to Create
+Custom Lua Filters in Envoy Proxy</h1>
+<p>Envoy proxy provides native support for custom filter creation by
+embedding LuaJIT into its HTTP filter chain. This capability allows
+developers to intercept, inspect, and modify HTTP requests and responses
+dynamically without recompiling the Envoy binary or managing external
+WebAssembly (Wasm) toolchains. By utilizing the built-in Lua HTTP
+filter, teams can rapidly implement custom routing logic, header
+manipulation, authentication checks, and external API lookups directly
+within the proxy data plane.</p>
+<h3 id="the-lua-filter-architecture">The Lua Filter Architecture</h3>
+<p>Envoy embeds LuaJIT directly into its
+<code>envoy.filters.http.lua</code> filter module. When placed within
+the HTTP connection manager's filter chain, the Lua filter executes
+scripts during different phases of the HTTP request-response
+lifecycle.</p>
+<p>Each Envoy worker thread maintains its own independent Lua state.
+This design ensures thread safety and isolates executions, preventing
+race conditions without requiring locks. However, because each worker
+thread has its own isolated memory, global variables are not shared
+across threads or across separate HTTP requests.</p>
+<h3 id="lifecycle-hooks-and-script-execution">Lifecycle Hooks and Script
+Execution</h3>
+<p>The embedded Lua engine hooks into stream events through designated
+callback functions. When a request traverses the filter chain, Envoy
+invokes these functions if they are defined in the Lua script:</p>
+<ul>
+<li><strong><code>envoy_on_request(request_handle)</code></strong>:
+Executed when request headers arrive. It allows you to inspect incoming
+headers, modify them, buffer or stream the body, or prematurely
+terminate the request by sending an immediate local response.</li>
+<li><strong><code>envoy_on_response(response_handle)</code></strong>:
+Executed when upstream response headers arrive. It allows modification
+of response headers, status codes, and response bodies before they are
+returned to the downstream client.</li>
+</ul>
+<h3 id="core-capabilities-of-the-lua-api">Core Capabilities of the Lua
+API</h3>
+<p>The script interacts with Envoy through an object model exposed
+directly to the Lua environment:</p>
+<ol type="1">
+<li><strong>Header and Metadata Manipulation</strong>: Scripts can read,
+add, or remove headers using methods like <code>headers():get()</code>,
+<code>headers():add()</code>, and <code>headers():remove()</code>.
+Dynamic metadata can also be shared with subsequent filters in the
+chain.</li>
+<li><strong>Body Inspection and Modification</strong>: Payloads can be
+buffered and transformed. The <code>body()</code> method can retrieve
+chunks of data or buffer the entire payload for inspection, hashing, or
+modification.</li>
+<li><strong>Out-of-Band HTTP Calls</strong>: Scripts can make
+asynchronous HTTP requests to external services using
+<code>httpCall()</code>. Envoy suspends the execution of the specific
+stream until the external call returns, without blocking the underlying
+worker thread. This is commonly used for inline token verification,
+authorization services, or external logging.</li>
+<li><strong>Immediate Responses</strong>: Scripts can short-circuit the
+filter chain using <code>respond()</code>. This returns a custom HTTP
+status, custom headers, and a body directly to the client without
+forwarding the request upstream.</li>
+</ol>
+<h3 id="configuration">Configuration</h3>
+<p>The Lua filter is defined in Envoy’s configuration file under the
+HTTP connection manager filters. It can be loaded globally using an
+inline string or an external file, and can also be overridden on a
+per-route basis.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">name</span><span class="kw">:</span><span class="at"> envoy.filters.http.lua</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">typed_config</span><span class="kw">:</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">&quot;@type&quot;</span><span class="kw">:</span><span class="at"> type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">default_source_code</span><span class="kw">:</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">    inline_string</span><span class="kw">: </span><span class="ch">|</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>      function envoy_on_request(handle)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>        local auth_header = handle:headers():get(&quot;authorization&quot;)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>        if not auth_header then</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>          handle:respond({[&quot;:status&quot;] = &quot;401&quot;}, &quot;Unauthorized: Missing Token&quot;)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>        else</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>          handle:headers():add(&quot;x-validated-by&quot;, &quot;envoy-lua&quot;)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>        end</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>      end</span></code></pre></div>
+<h3 id="performance-and-operational-considerations">Performance and
+Operational Considerations</h3>
+<p>Because Envoy utilizes LuaJIT, script execution is compiled to native
+machine code where possible, offering minimal latency overhead for
+common tasks such as header verification and routing tweaks.</p>
+<p>However, heavy CPU-bound tasks or synchronous blocking operations
+should be avoided within Lua scripts. While <code>httpCall()</code> is
+non-blocking to the worker event loop, extensive memory allocations or
+large body transformations within LuaJIT can impact overall throughput.
+For lightweight, dynamic logic, the embedded Lua filter provides an
+efficient middle ground between native C++ extensions and complex
+external processing services.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-to-create-custom-lua-filters-in-envoy-proxy';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

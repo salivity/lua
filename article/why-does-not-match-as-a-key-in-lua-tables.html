@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why {} Does Not Match as a Key in Lua Tables - lua</title>
+    <meta name="description" content="In the Lua programming language, tables are compared by reference rather than by value or structure. When using table constructors like {} as keys in a lookup table, Lua assigns each instance a unique memory address rather than evaluating its empty conten">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-does-not-match-as-a-key-in-lua-tables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why {} Does Not Match as a Key in Lua Tables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-does-not-match-as-a-key-in-lua-tables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, tables are compared by reference rather than by value or structure. When using table constructors like {} as keys in a lookup table, Lua assigns each instance a unique memory address rather than evaluating its empty conten" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why--does-not-match-as-a-key-in-lua-tables">Why {} Does Not
+Match as a Key in Lua Tables</h1>
+<p>In the Lua programming language, tables are compared by reference
+rather than by value or structure. When using table constructors like
+<code>{}</code> as keys in a lookup table, Lua assigns each instance a
+unique memory address rather than evaluating its empty contents.
+Consequently, two visually identical empty tables are treated as
+completely distinct entities, meaning retrieving a value using a newly
+constructed <code>{}</code> will fail to match a previously stored
+<code>{}</code> key and will return <code>nil</code>.</p>
+<h3 id="reference-identity-vs-value-identity">Reference Identity vs.
+Value Identity</h3>
+<p>Lua distinguishes between primitive value types and reference
+types:</p>
+<ul>
+<li><strong>Value Types:</strong> Types such as numbers, booleans, and
+strings are compared by value. If you use the number <code>42</code> or
+the string <code>"key"</code> twice, both instances point to the exact
+same value conceptually, and strings are interned by the Lua
+runtime.</li>
+<li><strong>Reference Types:</strong> Tables, functions, threads, and
+userdata are compared strictly by identity (their pointer address in
+memory).</li>
+</ul>
+<p>Two tables are considered equal if and only if they refer to the
+exact same table in memory.</p>
+<h3 id="how-the-table-constructor--works">How the Table Constructor
+<code>{}</code> Works</h3>
+<p>Every time the <code>{}</code> constructor executes, the Lua virtual
+machine allocates a new block of memory for that table.</p>
+<p>Consider the following operation:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">lookup</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="va">lookup</span><span class="op">[{}]</span> <span class="op">=</span> <span class="st">&quot;Found&quot;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">lookup</span><span class="op">[{}])</span> <span class="co">-- Output: nil</span></span></code></pre></div>
+<p>In this snippet:</p>
+<ol type="1">
+<li><code>lookup[{}] = "Found"</code> evaluates the expression
+<code>{}</code> on the left side, allocates <strong>Table A</strong> in
+memory, and maps <strong>Table A</strong> to <code>"Found"</code>.</li>
+<li><code>lookup[{}]</code> inside the print statement evaluates a
+completely separate constructor, allocating <strong>Table B</strong> in
+memory.</li>
+<li>Lua checks <code>lookup</code> for the presence of <strong>Table
+B</strong>. Because <strong>Table B</strong> has a different memory
+address than <strong>Table A</strong>, the lookup fails, returning
+<code>nil</code>.</li>
+</ol>
+<p>You can observe this directly using the equality operator:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">({}</span> <span class="op">==</span> <span class="op">{})</span> <span class="co">-- Output: false</span></span></code></pre></div>
+<h3 id="retrieving-values-with-table-keys">Retrieving Values with Table
+Keys</h3>
+<p>To use a table as a key and successfully retrieve its corresponding
+value later, you must retain a variable reference to the specific table
+instance that was inserted:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">lookup</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">myKey</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="va">lookup</span><span class="op">[</span><span class="va">myKey</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;Found&quot;</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">lookup</span><span class="op">[</span><span class="va">myKey</span><span class="op">])</span> <span class="co">-- Output: &quot;Found&quot;</span></span></code></pre></div>
+<p>Because <code>myKey</code> holds a reference to a single memory
+address, passing <code>myKey</code> during both the assignment and the
+retrieval refers to the exact same table.</p>
+<h3 id="metatables-do-not-change-table-hashing">Metatables Do Not Change
+Table Hashing</h3>
+<p>A common misconception is that the <code>__eq</code> metamethod can
+make two distinct tables match as keys in a lookup table. While
+<code>__eq</code> customizes behavior for the equality operator
+(<code>==</code>), Lua's internal table implementation relies on the
+memory address directly to hash and find reference-type keys. Custom
+equality methods will not alter how standard table indexing locates
+keys.</p>
+<p>If value-based or structural table lookups are required, tables must
+first be serialized (for example, into a string representation) or
+indexed using a custom retrieval function rather than Lua's native
+indexing operator.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/why-does-not-match-as-a-key-in-lua-tables';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>
