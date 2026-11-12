@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Goto Backward Jump and Local Variables - lua</title>
+    <meta name="description" content="In the Lua programming language, using a goto statement to jump backward across a local variable declaration is completely valid and does not cause a compilation error. When a backward jump targets a label positioned before a local variable&#39;s declaration,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-goto-backward-jump-and-local-variables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Goto Backward Jump and Local Variables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-goto-backward-jump-and-local-variables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, using a goto statement to jump backward across a local variable declaration is completely valid and does not cause a compilation error. When a backward jump targets a label positioned before a local variable&#39;s declaration," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-goto-backward-jump-and-local-variables">Lua Goto Backward
+Jump and Local Variables</h1>
+<p>In the Lua programming language, using a <code>goto</code> statement
+to jump backward across a local variable declaration is completely valid
+and does not cause a compilation error. When a backward jump targets a
+label positioned before a local variable's declaration, the program
+exits the scope of that variable, destroying it, and then re-allocates
+and re-initializes a fresh instance of the variable when execution flows
+forward again.</p>
+<h3 id="scope-rules-jumping-forward-vs-jumping-backward">Scope Rules:
+Jumping Forward vs. Jumping Backward</h3>
+<p>Lua enforces strict scoping rules regarding labels and jumps. A
+<code>goto</code> statement is strictly forbidden from jumping
+<em>forward</em> into the scope of a local variable that is not visible
+at the jump site. Doing so results in a compile-time error such as
+<code>&lt;goto&gt; jumps into the scope of local</code>.</p>
+<p>However, jumping <em>backward</em> across a local variable allocation
+is legal because it does not jump into an active scope. Instead, it
+jumps <em>out</em> of the variable's current scope and returns to an
+earlier execution state where the variable does not yet exist.</p>
+<h3 id="variable-lifecycle-and-re-allocation">Variable Lifecycle and
+Re-allocation</h3>
+<p>When a backward jump executes:</p>
+<ol type="1">
+<li><strong>Scope Exit:</strong> The current local variable immediately
+goes out of scope and becomes eligible for garbage collection once no
+other references exist.</li>
+<li><strong>Re-allocation:</strong> As execution proceeds forward from
+the label, the <code>local</code> declaration is encountered anew.</li>
+<li><strong>Re-initialization:</strong> Lua creates a distinct,
+brand-new storage slot for the variable and assigns any initial value
+provided in the statement.</li>
+</ol>
+<p>Consider the following loop structure using <code>goto</code>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">count</span> <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="op">::</span><span class="va">repeat_loop</span><span class="op">::</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">message</span> <span class="op">=</span> <span class="st">&quot;Attempt: &quot;</span> <span class="op">..</span> <span class="va">count</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">message</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="va">count</span> <span class="op">=</span> <span class="va">count</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">count</span> <span class="op">&lt;</span> <span class="dv">3</span> <span class="cf">then</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">goto</span> <span class="va">repeat_loop</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>In every iteration, the jump sends execution back to
+<code>::repeat_loop::</code>. The variable <code>message</code> from the
+prior iteration is discarded, and a new <code>message</code> variable is
+created on the next line.</p>
+<h3 id="interaction-with-to-be-closed-variables-lua-54">Interaction with
+To-Be-Closed Variables (Lua 5.4)</h3>
+<p>In Lua 5.4 and later, local variables can be marked with the
+<code>&lt;close&gt;</code> attribute to run a <code>__close</code>
+metamethod automatically upon leaving scope.</p>
+<p>When a <code>goto</code> jumps backward across a
+<code>&lt;close&gt;</code> variable declaration, Lua guarantees that the
+variable's <code>__close</code> metamethod executes immediately at the
+moment of the jump. After the jump completes and execution re-encounters
+the declaration, a fresh to-be-closed variable is created. This ensures
+resources such as file handles or custom locks are safely cleaned up
+even in manual control loops created with <code>goto</code>.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-goto-backward-jump-and-local-variables';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

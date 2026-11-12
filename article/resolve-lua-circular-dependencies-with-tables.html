@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resolve Lua Circular Dependencies with Tables - lua</title>
+    <meta name="description" content="Circular dependencies occur in Lua when two modules require each other, often causing one module to receive an empty or incomplete table because the initial module has not finished executing. This article explains how to resolve this problem cleanly using">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/resolve-lua-circular-dependencies-with-tables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Resolve Lua Circular Dependencies with Tables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/resolve-lua-circular-dependencies-with-tables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Circular dependencies occur in Lua when two modules require each other, often causing one module to receive an empty or incomplete table because the initial module has not finished executing. This article explains how to resolve this problem cleanly using" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="resolve-lua-circular-dependencies-with-tables">Resolve Lua
+Circular Dependencies with Tables</h1>
+<p>Circular dependencies occur in Lua when two modules require each
+other, often causing one module to receive an empty or incomplete table
+because the initial module has not finished executing. This article
+explains how to resolve this problem cleanly using the table
+pass-through technique. By leveraging Lua’s reference-based table
+semantics and manipulating <code>package.loaded</code>, developers can
+expose a shared module table before loading the dependent module,
+ensuring mutual dependencies resolve reliably without architectural
+redesigns.</p>
+<h3 id="understanding-the-circular-dependency-problem">Understanding the
+Circular Dependency Problem</h3>
+<p>When <code>require("module_a")</code> is executed, Lua performs the
+following steps:</p>
+<ol type="1">
+<li>Checks <code>package.loaded["module_a"]</code>. If it exists, Lua
+returns that value immediately.</li>
+<li>If it does not exist, Lua loads and compiles the file.</li>
+<li>Lua executes the module chunk and stores the returned value into
+<code>package.loaded["module_a"]</code>.</li>
+</ol>
+<p>If <code>module_a</code> requires <code>module_b</code>, and
+<code>module_b</code> simultaneously requires <code>module_a</code>, the
+loading process creates a deadlock. When <code>module_b</code> requests
+<code>module_a</code>, <code>package.loaded["module_a"]</code> is either
+<code>nil</code> (in older Lua versions or custom loaders) or a
+placeholder boolean/empty state, because <code>module_a</code> has not
+yet returned its table. As a result, <code>module_b</code> gets an
+incomplete reference, resulting in runtime errors such as indexing nil
+values.</p>
+<h3 id="the-table-pass-through-solution">The Table Pass-Through
+Solution</h3>
+<p>Lua passes tables by reference. If a module creates its export table
+and immediately registers it inside <code>package.loaded</code> before
+requiring the second module, the second module will receive that exact
+reference. Even if the table is currently empty, any fields, functions,
+or variables added to it later will be accessible to the dependent
+module at runtime.</p>
+<p>This mechanism is called the table pass-through pattern.</p>
+<h3 id="implementation-example">Implementation Example</h3>
+<p>Consider two modules: <code>node.lua</code> and
+<code>graph.lua</code>. A <code>Node</code> needs to be added to a
+<code>Graph</code>, and a <code>Graph</code> needs to instantiate
+<code>Node</code> objects.</p>
+<h4 id="1-define-the-first-module-nodelua">1. Define the First Module
+(<code>node.lua</code>)</h4>
+<p>Pre-populate <code>package.loaded</code> with the local module table
+prior to requiring <code>graph.lua</code>:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- node.lua</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Node</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- Register the table immediately in package.loaded</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="va">package.loaded</span><span class="op">[</span><span class="st">&quot;node&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="va">Node</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- Require the interdependent module</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Graph</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;graph&quot;</span><span class="op">)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="va">Node</span><span class="op">.</span><span class="va">new</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">name</span><span class="op">)</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">self</span> <span class="op">=</span> <span class="op">{</span> <span class="va">name</span> <span class="op">=</span> <span class="va">name</span> <span class="op">}</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">setmetatable</span><span class="op">(</span><span class="va">self</span><span class="op">,</span> <span class="op">{</span> <span class="bu">__index</span> <span class="op">=</span> <span class="va">Node</span> <span class="op">})</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="va">Node</span><span class="op">.</span><span class="va">attachToDefaultGraph</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">self</span><span class="op">)</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Graph is fully populated by the time this method is called at runtime</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">defaultGraph</span> <span class="op">=</span> <span class="va">Graph</span><span class="op">.</span>getDefault<span class="op">()</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="va">defaultGraph</span><span class="op">:</span>addNode<span class="op">(</span><span class="va">self</span><span class="op">)</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">Node</span></span></code></pre></div>
+<h4 id="2-define-the-second-module-graphlua">2. Define the Second Module
+(<code>graph.lua</code>)</h4>
+<p>The second module can now safely require <code>node.lua</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- graph.lua</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Graph</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="va">package.loaded</span><span class="op">[</span><span class="st">&quot;graph&quot;</span><span class="op">]</span> <span class="op">=</span> <span class="va">Graph</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Node</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;node&quot;</span><span class="op">)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">defaultInstance</span> <span class="op">=</span> <span class="kw">nil</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="va">Graph</span><span class="op">.</span><span class="va">new</span> <span class="op">=</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">self</span> <span class="op">=</span> <span class="op">{</span> <span class="va">nodes</span> <span class="op">=</span> <span class="op">{}</span> <span class="op">}</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">setmetatable</span><span class="op">(</span><span class="va">self</span><span class="op">,</span> <span class="op">{</span> <span class="bu">__index</span> <span class="op">=</span> <span class="va">Graph</span> <span class="op">})</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="va">Graph</span><span class="op">.</span><span class="va">getDefault</span> <span class="op">=</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="va">defaultInstance</span> <span class="cf">then</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">defaultInstance</span> <span class="op">=</span> <span class="va">Graph</span><span class="op">.</span>new<span class="op">()</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">defaultInstance</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a><span class="va">Graph</span><span class="op">.</span><span class="va">createAndAddNode</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">self</span><span class="op">,</span> <span class="va">name</span><span class="op">)</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Node functions are available here because the reference is updated</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">node</span> <span class="op">=</span> <span class="va">Node</span><span class="op">.</span>new<span class="op">(</span><span class="va">name</span><span class="op">)</span></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">table.insert</span><span class="op">(</span><span class="va">self</span><span class="op">.</span><span class="va">nodes</span><span class="op">,</span> <span class="va">node</span><span class="op">)</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">node</span></span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a><span class="va">Graph</span><span class="op">.</span><span class="va">addNode</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">self</span><span class="op">,</span> <span class="va">node</span><span class="op">)</span></span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">table.insert</span><span class="op">(</span><span class="va">self</span><span class="op">.</span><span class="va">nodes</span><span class="op">,</span> <span class="va">node</span><span class="op">)</span></span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">Graph</span></span></code></pre></div>
+<h3 id="critical-rules-for-table-pass-throughs">Critical Rules for Table
+Pass-Throughs</h3>
+<p>To ensure the table pass-through pattern functions reliably, adhere
+to the following rules:</p>
+<ul>
+<li><strong>De-reference at Runtime, Not Load Time:</strong> Avoid
+accessing functions or properties of the imported module at the root
+file scope. Only invoke or index members inside function bodies
+(methods, callbacks, or factories) so they run after all files have
+fully finished loading.</li>
+<li><strong>Exact Module Naming:</strong> The key used in
+<code>package.loaded["..."]</code> must match the string passed to
+subsequent <code>require("...")</code> calls across your codebase.</li>
+<li><strong>Always Return the Same Table:</strong> Ensure the table
+returned at the end of the file matches the table registered in
+<code>package.loaded</code> (<code>return Node</code>). Creating a new
+table at the end will break the reference passed to the cyclic
+dependency.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/resolve-lua-circular-dependencies-with-tables';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua error Function: Setting Error Levels for Callers - lua</title>
+    <meta name="description" content="In the Lua programming language, the built-in error function terminates the protected call currently running and returns an error message. When developing libraries, throwing an error from an internal implementation detail can confuse users by pointing to">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-error-function-setting-error-levels-for-callers">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua error Function: Setting Error Levels for Callers - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-error-function-setting-error-levels-for-callers" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the built-in error function terminates the protected call currently running and returns an error message. When developing libraries, throwing an error from an internal implementation detail can confuse users by pointing to" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-error-function-setting-error-levels-for-callers">Lua error
+Function: Setting Error Levels for Callers</h1>
+<p>In the Lua programming language, the built-in <code>error</code>
+function terminates the protected call currently running and returns an
+error message. When developing libraries, throwing an error from an
+internal implementation detail can confuse users by pointing to the
+library's internal line numbers rather than the offending call in their
+own code. This article explains how to use the optional
+<code>level</code> parameter in Lua's <code>error</code> function to
+shift the reported error location directly to the caller, making
+debugging significantly easier for consumers of your library.</p>
+<h2 id="the-syntax-of-error">The Syntax of <code>error</code></h2>
+<p>The standard Lua <code>error</code> function accepts two
+arguments:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">error</span><span class="op">(</span><span class="va">message</span> <span class="op">[,</span> <span class="va">level</span><span class="op">])</span></span></code></pre></div>
+<ul>
+<li><strong><code>message</code></strong>: A string (or other value)
+describing the failure.</li>
+<li><strong><code>level</code></strong>: An optional integer that
+specifies how the error location (file name and line number) should be
+reported. The default value is <code>1</code>.</li>
+</ul>
+<h2 id="how-error-levels-work">How Error Levels Work</h2>
+<p>The <code>level</code> parameter tells Lua where to look in the call
+stack to attribute the source of the error:</p>
+<ul>
+<li><strong>Level 1 (Default):</strong> Attributes the error to the
+function calling <code>error()</code>. This means the error message will
+display the file and line number inside your library function where
+<code>error()</code> was executed.</li>
+<li><strong>Level 2:</strong> Attributes the error to the caller of the
+function that called <code>error()</code>. This points the error message
+directly to the line of user code that invoked your library
+function.</li>
+<li><strong>Level 3+:</strong> Attributes the error higher up the call
+stack, skipping intermediate functions.</li>
+<li><strong>Level 0:</strong> Removes all position information. The
+error message will not include any file name or line number prefix.</li>
+</ul>
+<h2 id="practical-example-level-1-vs-level-2">Practical Example: Level 1
+vs. Level 2</h2>
+<p>Consider a library function that expects a positive number:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Inside mylibrary.lua</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">mylibrary</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">mylibrary</span><span class="op">.</span>calculate<span class="op">(</span><span class="va">value</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="fu">type</span><span class="op">(</span><span class="va">value</span><span class="op">)</span> <span class="op">~=</span> <span class="st">&quot;number&quot;</span> <span class="kw">or</span> <span class="va">value</span> <span class="op">&lt;=</span> <span class="dv">0</span> <span class="cf">then</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Default level (Level 1)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>        <span class="fu">error</span><span class="op">(</span><span class="st">&quot;value must be a positive number&quot;</span><span class="op">)</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">value</span> <span class="op">*</span> <span class="dv">2</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">mylibrary</span></span></code></pre></div>
+<p>If a user calls <code>mylibrary.calculate(-5)</code> from
+<code>main.lua</code> at line 10, the output with Level 1 will look like
+this:</p>
+<pre><code>mylibrary.lua:5: value must be a positive number</code></pre>
+<p>This points to line 5 of <code>mylibrary.lua</code>. The user sees an
+error inside the library code rather than identifying where they misused
+the API.</p>
+<p>To attribute the fault to the user, supply <code>2</code> as the
+error level:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Inside mylibrary.lua</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">mylibrary</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">mylibrary</span><span class="op">.</span>calculate<span class="op">(</span><span class="va">value</span><span class="op">)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="fu">type</span><span class="op">(</span><span class="va">value</span><span class="op">)</span> <span class="op">~=</span> <span class="st">&quot;number&quot;</span> <span class="kw">or</span> <span class="va">value</span> <span class="op">&lt;=</span> <span class="dv">0</span> <span class="cf">then</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Level 2 attributes the error to the caller</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>        <span class="fu">error</span><span class="op">(</span><span class="st">&quot;value must be a positive number&quot;</span><span class="op">,</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">value</span> <span class="op">*</span> <span class="dv">2</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="va">mylibrary</span></span></code></pre></div>
+<p>Running the same invalid call now produces:</p>
+<pre><code>main.lua:10: value must be a positive number</code></pre>
+<p>The error now points directly to line 10 in <code>main.lua</code>,
+immediately showing the caller where the mistake occurred.</p>
+<h2 id="accounting-for-internal-helper-functions">Accounting for
+Internal Helper Functions</h2>
+<p>If your library validates arguments using internal helper functions,
+you must increase the level to match the depth of your internal call
+stack:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> assert_positive<span class="op">(</span><span class="va">value</span><span class="op">)</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="fu">type</span><span class="op">(</span><span class="va">value</span><span class="op">)</span> <span class="op">~=</span> <span class="st">&quot;number&quot;</span> <span class="kw">or</span> <span class="va">value</span> <span class="op">&lt;=</span> <span class="dv">0</span> <span class="cf">then</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Level 1 is assert_positive</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Level 2 is mylibrary.calculate</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Level 3 is the external caller</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>        <span class="fu">error</span><span class="op">(</span><span class="st">&quot;argument must be a positive number&quot;</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">mylibrary</span><span class="op">.</span>calculate<span class="op">(</span><span class="va">value</span><span class="op">)</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    assert_positive<span class="op">(</span><span class="va">value</span><span class="op">)</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">value</span> <span class="op">*</span> <span class="dv">2</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Using <code>level = 3</code> skips both the
+<code>assert_positive</code> helper and the public
+<code>calculate</code> wrapper, correctly pointing to the caller in
+<code>main.lua</code>.</p>
+<h2 id="best-practices">Best Practices</h2>
+<ul>
+<li><strong>Use Level 2 for API Boundaries:</strong> Standard public API
+entry points should use level 2 when checking inputs, ensuring errors
+are reported on the consumer's line of code.</li>
+<li><strong>Use Level 0 for Non-Location Errors:</strong> If the error
+is not tied to a specific location in code (such as a lost network
+connection), set the level to <code>0</code> to omit misleading line
+numbers.</li>
+<li><strong>Avoid Hardcoding Deep Levels:</strong> Avoid using levels
+greater than 3 when possible. Refactoring internal helper functions can
+easily misalign stack depths, causing errors to point to unexpected
+layers of code.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-error-function-setting-error-levels-for-callers';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

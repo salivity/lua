@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unhandled Errors in Lua Coroutines Explained - lua</title>
+    <meta name="description" content="When an unhandled error occurs inside a running Lua coroutine, the runtime does not crash the host program if the coroutine was launched using the standard coroutine.resume function. Instead, Lua treats the coroutine invocation as a protected call, immedi">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/unhandled-errors-in-lua-coroutines-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Unhandled Errors in Lua Coroutines Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/unhandled-errors-in-lua-coroutines-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="When an unhandled error occurs inside a running Lua coroutine, the runtime does not crash the host program if the coroutine was launched using the standard coroutine.resume function. Instead, Lua treats the coroutine invocation as a protected call, immedi" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="unhandled-errors-in-lua-coroutines-explained">Unhandled Errors
+in Lua Coroutines Explained</h1>
+<p>When an unhandled error occurs inside a running Lua coroutine, the
+runtime does not crash the host program if the coroutine was launched
+using the standard <code>coroutine.resume</code> function. Instead, Lua
+treats the coroutine invocation as a protected call, immediately halts
+the coroutine's execution, marks its state as permanently "dead," and
+returns the error message to the caller. However, if the coroutine was
+created using <code>coroutine.wrap</code>, the unhandled error is
+propagated directly up the call stack to the invoking thread.</p>
+<h3 id="the-protected-nature-of-coroutineresume">The Protected Nature of
+<code>coroutine.resume</code></h3>
+<p>The primary method for executing a coroutine in Lua is
+<code>coroutine.resume</code>. This function behaves similarly to Lua's
+protected call mechanism, <code>pcall</code>. When code inside the
+coroutine raises an unhandled error—either via an explicit call to
+<code>error()</code> or due to a runtime fault like attempting to index
+a <code>nil</code> value—the error is caught at the coroutine
+boundary.</p>
+<p>When this occurs:</p>
+<ul>
+<li><strong>Return Values:</strong> <code>coroutine.resume</code>
+returns <code>false</code> as its first return value, indicating a
+failure, followed by the error object or string as the second return
+value.</li>
+<li><strong>Execution Halt:</strong> The coroutine ceases execution
+immediately at the exact line where the error occurred. No subsequent
+code in that coroutine will run.</li>
+<li><strong>Main Thread Safety:</strong> The calling thread continues
+running normally, allowing the developer to log, handle, or ignore the
+failure.</li>
+</ul>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">co</span> <span class="op">=</span> <span class="fu">coroutine.create</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Coroutine started&quot;</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">error</span><span class="op">(</span><span class="st">&quot;Something went wrong inside the coroutine&quot;</span><span class="op">)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;This line will never run&quot;</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">coroutine.resume</span><span class="op">(</span><span class="va">co</span><span class="op">)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">success</span><span class="op">)</span> <span class="co">-- Output: false</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">err</span><span class="op">)</span>     <span class="co">-- Output: [string &quot;...&quot;]:3: Something went wrong inside the coroutine</span></span></code></pre></div>
+<h3 id="the-state-transitions-to-dead">The State Transitions to
+"Dead"</h3>
+<p>Once an unhandled error occurs, the coroutine's internal status
+changes permanently to <code>"dead"</code>. You can inspect this status
+using <code>coroutine.status(co)</code>.</p>
+<p>A dead coroutine cannot be revived or restarted. If your program
+attempts to call <code>coroutine.resume</code> on a coroutine that has
+terminated due to an error, the call will fail, returning
+<code>false</code> and the error message
+<code>"cannot resume dead coroutine"</code>.</p>
+<h3 id="behavior-with-coroutinewrap">Behavior with
+<code>coroutine.wrap</code></h3>
+<p>Lua provides an alternative interface called
+<code>coroutine.wrap</code>. Instead of returning a coroutine object
+that you manipulate with <code>resume</code>,
+<code>coroutine.wrap</code> returns a plain Lua function.</p>
+<p>When an unhandled error occurs inside a coroutine invoked via
+<code>coroutine.wrap</code>:</p>
+<ul>
+<li>The error is <strong>not</strong> trapped inside a boolean return
+value.</li>
+<li>Lua propagates the error directly to the caller, effectively turning
+it into an unhandled error in the parent thread unless wrapped inside an
+explicit <code>pcall</code> or <code>xpcall</code>.</li>
+<li>Despite re-raising the error, the underlying coroutine still
+transitions to the <code>"dead"</code> state and cannot be run
+again.</li>
+</ul>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">wrapped</span> <span class="op">=</span> <span class="fu">coroutine.wrap</span><span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">error</span><span class="op">(</span><span class="st">&quot;Fatal wrap error&quot;</span><span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span><span class="op">)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- This will halt the script with a runtime error unless enclosed in pcall:</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>wrapped<span class="op">()</span> </span></code></pre></div>
+<h3 id="stack-traces-and-debugging">Stack Traces and Debugging</h3>
+<p>Because an unhandled error inside <code>coroutine.resume</code>
+unwinds the call stack up to the resume point, standard stack trace
+information may be lost if you only read the returned error string.</p>
+<p>To capture the stack trace of an error inside a coroutine:</p>
+<ol type="1">
+<li>Wrap the coroutine's inner logic with <code>xpcall</code> and pass
+<code>debug.traceback</code> as the error handler.</li>
+<li>Alternatively, invoke <code>debug.traceback(co)</code> immediately
+after <code>coroutine.resume</code> returns <code>false</code> to
+inspect the execution state of the failed coroutine.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/unhandled-errors-in-lua-coroutines-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

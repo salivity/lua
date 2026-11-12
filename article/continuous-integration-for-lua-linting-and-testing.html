@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Continuous Integration for Lua: Linting and Testing - lua</title>
+    <meta name="description" content="Continuous integration (CI) pipelines automate the validation of Lua applications by systematically running static analysis tools and unit tests upon every code commit. This article explains how to configure a Lua CI workflow, detailing the primary tools">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/continuous-integration-for-lua-linting-and-testing">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Continuous Integration for Lua: Linting and Testing - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/continuous-integration-for-lua-linting-and-testing" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Continuous integration (CI) pipelines automate the validation of Lua applications by systematically running static analysis tools and unit tests upon every code commit. This article explains how to configure a Lua CI workflow, detailing the primary tools" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="continuous-integration-for-lua-linting-and-testing">Continuous
+Integration for Lua: Linting and Testing</h1>
+<p>Continuous integration (CI) pipelines automate the validation of Lua
+applications by systematically running static analysis tools and unit
+tests upon every code commit. This article explains how to configure a
+Lua CI workflow, detailing the primary tools used for linting,
+type-checking, and test execution, as well as the pipeline orchestration
+steps required to ensure robust, production-ready code.</p>
+<h3 id="pipeline-environment-setup">Pipeline Environment Setup</h3>
+<p>Because Lua is a lightweight, embeddable scripting language, a CI
+runner—such as GitHub Actions, GitLab CI, or Jenkins—must first
+initialize an environment containing the target Lua runtime and package
+management tools. Most pipelines rely on the standard Lua interpreter
+(such as Lua 5.1, 5.4, or LuaJIT) and LuaRocks, the package manager for
+Lua modules.</p>
+<p>In a typical pipeline configuration, dependencies are provisioned
+using container images (such as Alpine Linux with pre-compiled Lua
+packages) or setup actions (such as <code>leafo/gh-actions-lua</code> in
+GitHub Actions). Caching the <code>luarocks</code> directory between
+runs prevents redundant network requests and accelerates pipeline
+execution.</p>
+<h3 id="automating-static-checks">Automating Static Checks</h3>
+<p>Static analysis detects syntax errors, undefined variables, and style
+inconsistencies without executing the code. In Lua, this step is
+critical due to the language’s dynamic typing and permissive handling of
+global variables.</p>
+<ol type="1">
+<li><p><strong>Linting with Luacheck</strong>: <code>luacheck</code> is
+the standard static analyzer for Lua. It inspects files for common
+issues, such as accessing undeclared globals, unused local variables,
+and unreachable code. In the CI pipeline, it is executed via a CLI
+command:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luacheck</span> src/ spec/</span></code></pre></div>
+<p>If warnings or errors exceed predefined thresholds,
+<code>luacheck</code> exits with a non-zero status, prompting the CI
+system to fail the build.</p></li>
+<li><p><strong>Static Type Checking</strong>: Projects utilizing typed
+supersets of Lua—such as Teal or Luau—integrate their respective
+compilers or checkers directly into the CI stage. Running
+<code>tl check</code> or <code>luau-analyze</code> ensures that type
+definitions and interfaces are respected across the codebase prior to
+execution.</p></li>
+<li><p><strong>Code Formatting</strong>: Pipelines frequently
+incorporate format checkers such as <code>StyLua</code> to enforce
+consistent styling. The command <code>stylua --check src/</code>
+validates that the source files adhere to the established style guide,
+rejecting pull requests with formatting discrepancies.</p></li>
+</ol>
+<h3 id="automating-test-runs">Automating Test Runs</h3>
+<p>Once static analysis passes, the pipeline initiates unit and
+integration testing to verify code behavior.</p>
+<ol type="1">
+<li><p><strong>Test Frameworks</strong>: Common testing frameworks
+include Busted, LuaUnit, and Telescope. Busted is particularly popular
+in CI environments because it supports structured output formats (such
+as TAP or JUnit XML) that CI engines natively parse to display detailed
+test results.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">busted</span> <span class="at">--output</span><span class="op">=</span>TAP</span></code></pre></div></li>
+<li><p><strong>Code Coverage with LuaCov</strong>: To track test
+completeness, test commands are wrapped with coverage profilers like
+<code>LuaCov</code>. Executing tests via <code>busted --coverage</code>
+generates a <code>luacov.stats.out</code> file. The pipeline then runs
+<code>luacov</code> to produce a human-readable report or an integration
+file for services like Codecov, failing the pipeline if coverage falls
+below a specified percentage.</p></li>
+</ol>
+<h3 id="pipeline-orchestration-and-quality-gates">Pipeline Orchestration
+and Quality Gates</h3>
+<p>A robust Lua CI pipeline arranges these processes sequentially to
+optimize compute time:</p>
+<ul>
+<li><strong>Stage 1 (Lint &amp; Format):</strong> Executes
+<code>stylua</code> and <code>luacheck</code>. Because static checks run
+rapidly and do not require heavy dependencies, failing early saves
+runner resources.</li>
+<li><strong>Stage 2 (Test &amp; Coverage):</strong> Executes the test
+suite across multiple Lua versions using a matrix strategy (e.g., Lua
+5.1, Lua 5.4, and LuaJIT) to verify cross-runtime compatibility.</li>
+<li><strong>Stage 3 (Artifact Generation or Deployment):</strong> If all
+preceding steps succeed, the pipeline can package the Lua module into a
+<code>.rock</code> file and publish it to LuaRocks or a private
+registry.</li>
+</ul>
+<p>By combining these automated checks, the pipeline establishes a
+strict quality gate, preventing regressions and maintaining high code
+standards across development teams.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/continuous-integration-for-lua-linting-and-testing';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

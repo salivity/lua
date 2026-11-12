@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Understanding Weak Tables and the __mode Field in Lua - lua</title>
+    <meta name="description" content="In Lua, tables maintain strong references to their elements by default, preventing the garbage collector from reclaiming keys or values that remain inside them. Setting the mode field in a table&#39;s metatable alters this fundamental behavior by instructing">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/understanding-weak-tables-and-the-mode-field-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Understanding Weak Tables and the __mode Field in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/understanding-weak-tables-and-the-mode-field-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, tables maintain strong references to their elements by default, preventing the garbage collector from reclaiming keys or values that remain inside them. Setting the mode field in a table&#39;s metatable alters this fundamental behavior by instructing" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1
+id="understanding-weak-tables-and-the-__mode-field-in-lua">Understanding
+Weak Tables and the __mode Field in Lua</h1>
+<p>In Lua, tables maintain strong references to their elements by
+default, preventing the garbage collector from reclaiming keys or values
+that remain inside them. Setting the <code>__mode</code> field in a
+table's metatable alters this fundamental behavior by instructing Lua's
+garbage collector to treat references as weak. This article explains how
+the <code>__mode</code> field interfaces directly with the garbage
+collection lifecycle, how it differentiates between keys and values, and
+why this mechanism is essential for memory management tasks like
+caching.</p>
+<h3 id="luas-reference-model-and-garbage-collection">Lua's Reference
+Model and Garbage Collection</h3>
+<p>Lua manages memory automatically using an incremental mark-and-sweep
+garbage collector. In a standard table, every stored key and value is
+treated as a "strong reference." During the marking phase of garbage
+collection, Lua traverses all reachable objects starting from root
+references (such as the global environment and active thread stacks). If
+an object is kept inside a standard table, that object is marked as
+reachable, preventing it from being collected even if no other part of
+the program references it.</p>
+<h3 id="how-the-__mode-field-alters-gc-behavior">How the
+<code>__mode</code> Field Alters GC Behavior</h3>
+<p>The <code>__mode</code> field is a special metamethod recognized
+directly by the Lua C runtime engine. When a metatable contains a
+<code>__mode</code> field, Lua checks its string value during the
+garbage collection cycles and reclassifies the table's reference
+semantics.</p>
+<p>Instead of treating the contents as roots that keep objects alive,
+the garbage collector modifies its traversal:</p>
+<ol type="1">
+<li><strong>Mark Phase Bypass:</strong> When traversing a weak table,
+the collector does not immediately mark weakly held objects as
+permanently alive.</li>
+<li><strong>Ephemeron and Weak Processing:</strong> If an object stored
+in a weak position has no strong references elsewhere in the program, it
+remains unmarked.</li>
+<li><strong>Atomic Clearing Phase:</strong> Before reclaiming memory,
+Lua inspects weak tables. Any entry whose key (in a weak-key table) or
+value (in a weak-value table) was not marked as alive is cleared from
+the table automatically.</li>
+</ol>
+<p>Because this clearing occurs internally within the collector, it
+prevents memory leaks and stale dangling pointers without requiring
+manual cleanup logic.</p>
+<h3 id="configuration-options-for-__mode">Configuration Options for
+<code>__mode</code></h3>
+<p>The <code>__mode</code> field is defined as a string that controls
+whether keys, values, or both are considered weak:</p>
+<ul>
+<li><strong>Weak Keys (<code>__mode = "k"</code>):</strong> The table
+weakly references its keys. If an object used as a key loses all other
+strong references, the entire key-value pair is deleted from the table.
+This pattern is commonly used for attaching external metadata or private
+attributes to objects without modifying the objects themselves.</li>
+<li><strong>Weak Values (<code>__mode = "v"</code>):</strong> The table
+weakly references its values. If an object stored as a value has no
+other strong references, the pair is removed. This configuration is
+standard for caches and memoization tables where an object should only
+be cached as long as another part of the system is actively using
+it.</li>
+<li><strong>Fully Weak (<code>__mode = "kv"</code> or
+<code>"vk"</code>):</strong> Both keys and values are weak. If either
+the key or the value is collected, the entire entry is purged.</li>
+</ul>
+<h3 id="ephemeron-table-support">Ephemeron Table Support</h3>
+<p>Starting in Lua 5.2, tables with weak keys and strong values
+(<code>__mode = "k"</code>) behave as <em>ephemeron tables</em>. In an
+ephemeron table, the accessibility of a value depends strictly on the
+accessibility of its corresponding key. If the key is reachable solely
+through its value in the same pair, the collector breaks the cyclic
+dependency, allowing both the key and the value to be collected
+cleanly.</p>
+<h3 id="summary">Summary</h3>
+<p>The <code>__mode</code> field turns a standard table into a weak
+table because Lua's runtime explicitly hooks into this metatable
+property to change how the garbage collector traverses table elements.
+By using <code>"k"</code>, <code>"v"</code>, or <code>"kv"</code>,
+developers bypass default strong-reference retention, allowing the
+garbage collector to reclaim unreferenced memory and automatically clean
+up associated table entries.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/understanding-weak-tables-and-the-mode-field-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compiling Lua for Embedded POSIX vs Non-POSIX - lua</title>
+    <meta name="description" content="This article outlines the configuration, build system, and source-level modifications required to compile the Lua programming language for embedded environments, contrasting POSIX-compliant systems with non-POSIX targets such as bare-metal microcontroller">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/compiling-lua-for-embedded-posix-vs-non-posix">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Compiling Lua for Embedded POSIX vs Non-POSIX - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/compiling-lua-for-embedded-posix-vs-non-posix" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article outlines the configuration, build system, and source-level modifications required to compile the Lua programming language for embedded environments, contrasting POSIX-compliant systems with non-POSIX targets such as bare-metal microcontroller" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="compiling-lua-for-embedded-posix-vs-non-posix">Compiling Lua for
+Embedded POSIX vs Non-POSIX</h1>
+<p>This article outlines the configuration, build system, and
+source-level modifications required to compile the Lua programming
+language for embedded environments, contrasting POSIX-compliant systems
+with non-POSIX targets such as bare-metal microcontrollers and real-time
+operating systems (RTOS). It covers necessary adjustments in
+<code>luaconf.h</code>, <code>Makefile</code> modifications, handling
+standard library dependencies, and tailoring memory management to
+constrained hardware.</p>
+<h2 id="build-system-and-target-definitions">Build System and Target
+Definitions</h2>
+<p>Lua is written in clean, standard ANSI C (C89/C99), allowing it to
+compile on virtually any platform. However, the build system
+differentiates between targets that provide POSIX interfaces and those
+that do not.</p>
+<h3 id="posix-targets">POSIX Targets</h3>
+<p>For embedded Linux, QNX, or other embedded POSIX environments, the
+build system utilizes POSIX-specific APIs for dynamic module loading,
+high-resolution timers, and terminal handling.</p>
+<ul>
+<li><strong>Makefile Target:</strong> Typically built using
+<code>make posix</code> or platform-specific targets like
+<code>make linux</code>.</li>
+<li><strong>Compiler Flags:</strong> Compiles with
+<code>-DLUA_USE_POSIX</code>. If dynamic loading is required, it
+includes <code>-DLUA_USE_DLOPEN</code>.</li>
+<li><strong>Linker Flags:</strong> Requires linking against system
+libraries, typically <code>-ldl</code> for dynamic library loading and
+optionally <code>-lreadline</code> (often stripped for embedded systems
+to reduce binary size).</li>
+</ul>
+<h3 id="non-posix-targets">Non-POSIX Targets</h3>
+<p>Bare-metal microcontrollers (e.g., ARM Cortex-M, RISC-V) and RTOS
+platforms (e.g., FreeRTOS, Zephyr) lack POSIX system calls and standard
+dynamic linkers.</p>
+<ul>
+<li><strong>Makefile Target:</strong> Built using
+<code>make generic</code> or by directly invoking the cross-compiler
+toolchain (e.g., <code>arm-none-eabi-gcc</code>) on the core source
+files.</li>
+<li><strong>Compiler Flags:</strong> Omit <code>-DLUA_USE_POSIX</code>
+and <code>-DLUA_USE_DLOPEN</code>. Define <code>-DLUA_USE_C89</code> to
+ensure strict standard C compliance without assuming external POSIX
+abstractions.</li>
+<li><strong>Linker Flags:</strong> Remove <code>-ldl</code>,
+<code>-lm</code> (if soft-float or custom math is integrated elsewhere),
+and any terminal libraries.</li>
+</ul>
+<hr />
+<h2 id="modifying-luaconfh">Modifying <code>luaconf.h</code></h2>
+<p>The <code>src/luaconf.h</code> file contains Lua's platform
+configuration options. Adjusting this header is the primary method for
+adapting the engine to different target architectures.</p>
+<h3 id="posix-configurations">POSIX Configurations</h3>
+<p>On an embedded POSIX system, <code>luaconf.h</code> enables features
+that rely on the underlying OS:</p>
+<ul>
+<li><strong>Dynamic Loading:</strong> <code>LUA_USE_DLOPEN</code> is
+enabled, allowing <code>package.loadlib</code> and the loading of shared
+objects (<code>.so</code>).</li>
+<li><strong>Path Separation:</strong> Directory separators are set to
+<code>/</code>, with system paths such as
+<code>/usr/local/share/lua/</code> configured for
+<code>package.path</code>.</li>
+<li><strong>Pipes and System Commands:</strong> <code>lua_popen</code>
+and <code>lua_pclose</code> are mapped directly to the POSIX
+<code>popen</code> and <code>pclose</code>.</li>
+</ul>
+<h3 id="non-posix-configurations">Non-POSIX Configurations</h3>
+<p>For non-POSIX and bare-metal environments, OS dependencies must be
+disabled or redirected:</p>
+<ul>
+<li><strong>Disable Dynamic Loading:</strong> Ensure
+<code>LUA_USE_DLOPEN</code> is undefined. Lua will rely strictly on
+statically linked C modules registered via
+<code>luaL_requiref</code>.</li>
+<li><strong>Path Management:</strong> Disable default file system search
+paths in <code>LUA_PATH_DEFAULT</code> and
+<code>LUA_CPATH_DEFAULT</code> if no underlying file system exists.</li>
+<li><strong>Remove Shell Access:</strong> Undefine or stub
+<code>lua_popen</code> and <code>lua_pclose</code>, as shells and
+process forks do not exist.</li>
+<li><strong>Numeric Representation:</strong> For microcontrollers
+without a Hardware Floating Point Unit (FPU), configure Lua to use
+32-bit integers or single-precision floats:
+<ul>
+<li>Define <code>LUA_32BITS</code> to reduce memory consumption and map
+<code>lua_Integer</code> to 32 bits.</li>
+<li>Define <code>LUA_FLOAT_TYPE</code> as <code>LUA_FLOAT_FLOAT</code>
+instead of the default <code>LUA_FLOAT_DOUBLE</code>.</li>
+</ul></li>
+</ul>
+<hr />
+<h2 id="handling-the-standard-libraries-and-linitc">Handling the
+Standard Libraries and <code>linit.c</code></h2>
+<p>The default Lua distribution opens several standard libraries during
+initialization via <code>luaL_openlibs</code>.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">/* Standard library array in linit.c */</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">const</span> luaL_Reg loadedlibs<span class="op">[]</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>LUA_GNAME<span class="op">,</span> luaopen_base<span class="op">},</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>LUA_LOADLIBNAME<span class="op">,</span> luaopen_package<span class="op">},</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>LUA_COLIBNAME<span class="op">,</span> luaopen_coroutine<span class="op">},</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>LUA_TABLIBNAME<span class="op">,</span> luaopen_table<span class="op">},</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>LUA_IOLIBNAME<span class="op">,</span> luaopen_io<span class="op">},</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>LUA_OSLIBNAME<span class="op">,</span> luaopen_os<span class="op">},</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>LUA_STRLIBNAME<span class="op">,</span> luaopen_string<span class="op">},</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>LUA_MATHLIBNAME<span class="op">,</span> luaopen_math<span class="op">},</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>LUA_UTF8LIBNAME<span class="op">,</span> luaopen_utf8<span class="op">},</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>LUA_DBLIBNAME<span class="op">,</span> luaopen_debug<span class="op">},</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>NULL<span class="op">,</span> NULL<span class="op">}</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="op">};</span></span></code></pre></div>
+<h3 id="posix-strategy">POSIX Strategy</h3>
+<p>In POSIX environments, all standard libraries can generally remain
+enabled. <code>luaopen_io</code> handles standard streams and file
+access through regular POSIX file descriptors, and
+<code>luaopen_os</code> maps cleanly to standard system calls
+(<code>time</code>, <code>system</code>, <code>getenv</code>,
+<code>rename</code>, <code>remove</code>).</p>
+<h3 id="non-posix-strategy">Non-POSIX Strategy</h3>
+<p>In bare-metal or RTOS environments, standard C runtime
+implementations of file and system operations may crash, hang, or result
+in unresolved linker errors.</p>
+<ul>
+<li><strong>Modify <code>linit.c</code>:</strong> Remove
+<code>{LUA_IOLIBNAME, luaopen_io}</code> and
+<code>{LUA_OSLIBNAME, luaopen_os}</code> to eliminate references to
+unavailable system calls.</li>
+<li><strong>Selective Implementation in <code>loslib.c</code>:</strong>
+If basic timing is required, retain <code>luaopen_os</code> but manually
+edit <code>src/loslib.c</code> to stub out <code>os.execute</code>,
+<code>os.remove</code>, <code>os.rename</code>, and
+<code>os.tmpname</code>, while preserving <code>os.clock</code> and
+<code>os.difftime</code> mapped to an RTOS tick counter.</li>
+<li><strong>Package Library:</strong> If files cannot be loaded from
+disk, remove <code>luaopen_package</code> or replace the package
+searchers with a custom in-memory table lookup.</li>
+</ul>
+<hr />
+<h2 id="memory-allocation-configuration">Memory Allocation
+Configuration</h2>
+<h3 id="posix-targets-1">POSIX Targets</h3>
+<p>POSIX systems utilize standard virtual memory management.
+Initializing Lua using <code>luaL_newstate()</code> safely routes
+allocation requests to the standard C library's <code>malloc</code>,
+<code>realloc</code>, and <code>free</code>.</p>
+<h3 id="non-posix-targets-1">Non-POSIX Targets</h3>
+<p>Bare-metal devices often feature limited static RAM (SRAM) and lack
+robust heap implementations.</p>
+<ul>
+<li><strong>Avoid <code>luaL_newstate()</code>:</strong> Do not call
+<code>luaL_newstate()</code>, as it defaults directly to standard
+<code>malloc</code>.</li>
+<li><strong>Use <code>lua_newstate()</code>:</strong> Provide a custom
+allocator function <code>lua_Alloc</code> that restricts Lua to a
+statically allocated buffer or an RTOS-managed memory pool (e.g.,
+<code>pvPortMalloc</code> in FreeRTOS):</li>
+</ul>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> <span class="op">*</span>custom_allocator<span class="op">(</span><span class="dt">void</span> <span class="op">*</span>ud<span class="op">,</span> <span class="dt">void</span> <span class="op">*</span>ptr<span class="op">,</span> <span class="dt">size_t</span> osize<span class="op">,</span> <span class="dt">size_t</span> nsize<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">(</span><span class="dt">void</span><span class="op">)</span>ud<span class="op">;</span> <span class="op">(</span><span class="dt">void</span><span class="op">)</span>osize<span class="op">;</span> <span class="co">/* Unused parameters */</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">(</span>nsize <span class="op">==</span> <span class="dv">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>        embedded_free<span class="op">(</span>ptr<span class="op">);</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> NULL<span class="op">;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> embedded_realloc<span class="op">(</span>ptr<span class="op">,</span> nsize<span class="op">);</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="co">/* Initialization */</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>lua_State <span class="op">*</span>L <span class="op">=</span> lua_newstate<span class="op">(</span>custom_allocator<span class="op">,</span> NULL<span class="op">);</span></span></code></pre></div>
+<p>Using this approach prevents memory fragmentation across the global
+system heap and guarantees that Lua operates strictly within its
+designated physical memory footprint.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/compiling-lua-for-embedded-posix-vs-non-posix';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

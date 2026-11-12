@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safe Multithreading in Lua with Isolated States - lua</title>
+    <meta name="description" content="Multithreading in standard Lua cannot be accomplished using shared-memory threading models because the core Lua runtime is fundamentally single-threaded and not reentrant across threads. However, true operating-system-level multithreading can be achieved">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/safe-multithreading-in-lua-with-isolated-states">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Safe Multithreading in Lua with Isolated States - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/safe-multithreading-in-lua-with-isolated-states" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Multithreading in standard Lua cannot be accomplished using shared-memory threading models because the core Lua runtime is fundamentally single-threaded and not reentrant across threads. However, true operating-system-level multithreading can be achieved" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="safe-multithreading-in-lua-with-isolated-states">Safe
+Multithreading in Lua with Isolated States</h1>
+<p>Multithreading in standard Lua cannot be accomplished using
+shared-memory threading models because the core Lua runtime is
+fundamentally single-threaded and not reentrant across threads. However,
+true operating-system-level multithreading can be achieved safely by
+deploying an isolated-state model—often referred to as an actor or
+shared-nothing architecture. By assigning an independent
+<code>lua_State</code> to each operating system thread and coordinating
+execution through explicit message passing, developers can utilize
+multi-core processors without exposing the Lua virtual machine to race
+conditions or lock contention.</p>
+<h3 id="the-shared-nothing-architecture">The Shared-Nothing
+Architecture</h3>
+<p>The core of safe multithreading in Lua lies in the isolation of
+state. A single <code>lua_State</code> structure holds internal memory
+allocators, global tables, string intern pools, and garbage-collection
+metadata. Sharing a single state across multiple OS threads requires
+coarse-grained mutex locking at the C API level, which serializes
+execution and negates the performance benefits of concurrency.</p>
+<p>Instead, the shared-nothing model spins up an independent OS thread
+(via POSIX threads, Windows threads, or C++ <code>std::thread</code>)
+and initializes a dedicated <code>lua_State</code> via
+<code>luaL_newstate()</code> for each thread. Because each state manages
+its own memory and garbage collector completely independently, threads
+execute code in true parallelism without needing synchronization locks
+inside the Lua VM.</p>
+<h3 id="inter-thread-communication">Inter-Thread Communication</h3>
+<p>Because isolated states do not share memory, threads must communicate
+via explicit inter-thread communication (ITC) channels. This is handled
+at the host level (usually in C or C++) using safe synchronization
+primitives.</p>
+<ol type="1">
+<li><strong>Thread-Safe Queues:</strong> The host application implements
+a thread-safe FIFO queue guarded by a mutex and condition variable.
+Threads push tasks into the queue and pull completed results out.</li>
+<li><strong>Data Serialization:</strong> When passing data between Lua
+states, values must be marshaled. Strings, numbers, and booleans can be
+read from one state and pushed directly to another. Complex data (like
+nested tables) can be serialized using lightweight formats like
+MessagePack, JSON, or Lua bytecode, then unpacked inside the target
+thread's state.</li>
+<li><strong>Deep Copying:</strong> For high-throughput scenarios, custom
+C routines can recursively traverse a Lua table and replicate its
+structure inside the destination state without serializing to an
+intermediate string format.</li>
+</ol>
+<h3 id="architectural-workflow-in-an-embedded-environment">Architectural
+Workflow in an Embedded Environment</h3>
+<p>When building a multithreaded engine embedding Lua, the standard
+implementation pattern operates as follows:</p>
+<ul>
+<li><strong>State Initialization:</strong> The main application creates
+a pool of worker threads. Each worker creates its own
+<code>lua_State</code>, opens the required standard libraries
+(<code>luaL_openlibs</code>), and pre-loads common scripts or
+definitions.</li>
+<li><strong>Job Dispatching:</strong> The main Lua state creates a job
+definition and hands it to a C dispatch function. The C dispatcher
+serializes the parameters and places a task item into a shared
+thread-safe queue.</li>
+<li><strong>Worker Execution:</strong> An idle worker thread unblocks,
+extracts the task item, deserializes parameters onto its private Lua
+stack, calls the target function via <code>lua_pcall</code>, and
+captures the return values.</li>
+<li><strong>Result Retrieval:</strong> The worker writes the result back
+into a response queue. The main thread inspects this queue during its
+event loop, moving results back into the primary Lua state.</li>
+</ul>
+<h3 id="dedicated-multithreading-libraries">Dedicated Multithreading
+Libraries</h3>
+<p>For projects that run entirely in Lua without a custom C host
+application, third-party libraries implement this isolated-state model
+out of the box:</p>
+<ul>
+<li><strong>LuaLanes:</strong> One of the most mature libraries for Lua
+concurrency. It creates separate OS threads and isolated Lua states
+(called "lanes") and provides "Linda" objects—shared tuple spaces that
+act as thread-safe communication channels for passing deep-copied
+data.</li>
+<li><strong>Effil:</strong> A modern multithreading library supporting
+Lua 5.1+, LuaJIT, and Lua 5.3+. It provides isolated states wrapped in
+thread abstractions, supporting native channels, cancelable threads, and
+shared tables that manage access through internal synchronization
+locks.</li>
+</ul>
+<h3 id="managing-shared-resources-and-state-overhead">Managing Shared
+Resources and State Overhead</h3>
+<p>While the isolated-state model guarantees safety from data races
+within Lua, it introduces distinct architectural considerations:</p>
+<ul>
+<li><strong>Memory Footprint:</strong> Each <code>lua_State</code>
+incurs an initial memory footprint for its base environment and standard
+libraries. Memory usage should be controlled by utilizing a fixed-size
+worker pool rather than spawning short-lived states per task.</li>
+<li><strong>Serialization Bottlenecks:</strong> Passing large volumes of
+data across states can negate parallel processing gains due to
+deep-copying costs. To minimize this overhead, pass lightweight
+identifiers (such as database primary keys, file paths, or memory-mapped
+handles) rather than large raw datasets.</li>
+<li><strong>External Resource Sharing:</strong> When states need access
+to external resources (such as database connections or sockets), manage
+the handles via thread-safe C user-data wrappers with atomic reference
+counters or dedicate specific IO-bound worker threads to own those
+resources exclusively.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/safe-multithreading-in-lua-with-isolated-states';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

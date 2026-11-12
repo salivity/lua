@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Lua Garbage Collection in C with lua_gc - lua</title>
+    <meta name="description" content="The luagc function in the Lua C API provides developers with granular programmatic control over Lua&#39;s automatic memory management directly from host C applications. This article covers how luagc operates, its primary operational modes, and the specific co">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/control-lua-garbage-collection-in-c-with-lua-gc">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Control Lua Garbage Collection in C with lua_gc - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/control-lua-garbage-collection-in-c-with-lua-gc" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The luagc function in the Lua C API provides developers with granular programmatic control over Lua&#39;s automatic memory management directly from host C applications. This article covers how luagc operates, its primary operational modes, and the specific co" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="control-lua-garbage-collection-in-c-with-lua_gc">Control Lua
+Garbage Collection in C with lua_gc</h1>
+<p>The <code>lua_gc</code> function in the Lua C API provides developers
+with granular programmatic control over Lua's automatic memory
+management directly from host C applications. This article covers how
+<code>lua_gc</code> operates, its primary operational modes, and the
+specific commands used to stop, restart, step, and tune the garbage
+collection cycle to prevent latency spikes in performance-critical
+environments.</p>
+<h3 id="the-signature-and-mechanism-of-lua_gc">The Signature and
+Mechanism of lua_gc</h3>
+<p>The primary interface for memory management in Lua's C API is defined
+as:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> lua_gc<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">int</span> what<span class="op">,</span> <span class="op">...);</span></span></code></pre></div>
+<p>The function acts as a centralized dispatcher. By passing a specific
+command via the <code>what</code> parameter—frequently accompanied by
+additional arguments depending on the Lua version—the host program
+directly instructs the Lua runtime's internal collector on what action
+to perform and receives status data or previous configuration values in
+return.</p>
+<h3 id="controlling-the-cycle-lifecycle">Controlling the Cycle
+Lifecycle</h3>
+<p>Direct cycle management revolves around freezing, resuming, and
+forcing collection states:</p>
+<ul>
+<li><strong>Pausing Execution (<code>LUA_GCSTOP</code>):</strong> Halts
+the automatic garbage collector entirely. This is essential during
+performance-critical frames (such as in game engines or real-time audio
+processing) or during bulk object creation to prevent unexpected
+collection pauses.</li>
+<li><strong>Resuming Execution (<code>LUA_GCRESTART</code>):</strong>
+Re-enables the automatic collector after a stopped state, allowing it to
+continue operating according to its internal thresholds.</li>
+<li><strong>Full Collection (<code>LUA_GCCOLLECT</code>):</strong>
+Forces the runtime to perform a complete, synchronous garbage collection
+cycle. This flushes all unreferenced objects immediately, making it
+useful during scene transitions, level loads, or after major
+deallocations.</li>
+</ul>
+<h3 id="incremental-stepping">Incremental Stepping</h3>
+<p>Rather than suffering the non-deterministic pauses of full collection
+cycles, <code>lua_gc</code> allows developers to interleave memory
+cleanup with application logic using <code>LUA_GCSTEP</code>.</p>
+<p>When called with an integer step size argument (representing work
+units or allocation metrics, depending on the Lua version), the
+collector performs an incremental step equivalent to allocating that
+amount of memory. Passing a value such as <code>0</code> instructs the
+engine to perform a single basic processing step. This mechanism lets
+real-time loops allocate a fixed time budget to garbage collection at
+the end of each frame, spreading cleanup costs evenly across
+execution.</p>
+<h3 id="fine-tuning-performance-parameters">Fine-Tuning Performance
+Parameters</h3>
+<p><code>lua_gc</code> allows host applications to configure internal
+collector ratios at runtime:</p>
+<ul>
+<li><strong>Pause Multiplier (<code>LUA_GCSETPAUSE</code>):</strong>
+Controls how long the collector waits before starting a new cycle after
+completing the previous one. A higher value reduces collection frequency
+at the expense of higher memory usage.</li>
+<li><strong>Step Multiplier (<code>LUA_GCSETSTEPMUL</code>):</strong>
+Configures the speed of the collector relative to memory allocation.
+Setting this higher makes the collector more aggressive during
+incremental steps, reducing memory bloat during bursts of
+allocations.</li>
+</ul>
+<p>In Lua 5.4, <code>lua_gc</code> also enables switching between
+generational mode (<code>LUA_GCGEN</code>), which is optimized for
+programs where most objects have short lifespans, and incremental mode
+(<code>LUA_GCINC</code>), allowing native code to match the collector
+strategy to the application's exact allocation patterns.</p>
+<h3 id="monitoring-memory-usage">Monitoring Memory Usage</h3>
+<p>Effective programmatic control requires state monitoring. Using
+<code>LUA_GCCOUNT</code> and <code>LUA_GCCOUNTB</code>, the C host reads
+the current memory footprint of the Lua state in kilobytes and remainder
+bytes. By tracking these values over time, C code can make informed
+runtime decisions about when to trigger <code>LUA_GCSTEP</code> or
+execute a full <code>LUA_GCCOLLECT</code>.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/control-lua-garbage-collection-in-c-with-lua-gc';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

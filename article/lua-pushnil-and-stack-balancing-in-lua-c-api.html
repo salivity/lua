@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>lua_pushnil and Stack Balancing in Lua C API - lua</title>
+    <meta name="description" content="The luapushnil function is a fundamental utility in the Lua C API used to push a Lua nil value onto the virtual data stack. This article explains the mechanics of luapushnil, how it manipulates the Lua stack, and the specific roles it plays in stack balan">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-pushnil-and-stack-balancing-in-lua-c-api">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="lua_pushnil and Stack Balancing in Lua C API - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-pushnil-and-stack-balancing-in-lua-c-api" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The luapushnil function is a fundamental utility in the Lua C API used to push a Lua nil value onto the virtual data stack. This article explains the mechanics of luapushnil, how it manipulates the Lua stack, and the specific roles it plays in stack balan" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua_pushnil-and-stack-balancing-in-lua-c-api">lua_pushnil and
+Stack Balancing in Lua C API</h1>
+<p>The <code>lua_pushnil</code> function is a fundamental utility in the
+Lua C API used to push a Lua <code>nil</code> value onto the virtual
+data stack. This article explains the mechanics of
+<code>lua_pushnil</code>, how it manipulates the Lua stack, and the
+specific roles it plays in stack balancing, table iteration, and
+clearing object references inside C functions.</p>
+<h2 id="what-is-lua_pushnil">What is lua_pushnil?</h2>
+<p>In the Lua C API, communication between C code and the Lua runtime
+occurs through a virtual stack. The <code>lua_pushnil</code> function
+has the following signature:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> lua_pushnil<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">);</span></span></code></pre></div>
+<p>When called, it pushes a value of type <code>LUA_TNIL</code> onto the
+top of the stack, growing the stack size by one element. In Lua,
+<code>nil</code> represents the absence of a useful value and evaluates
+to <code>false</code> in conditional expressions.</p>
+<h2 id="the-lua-stack-mechanics">The Lua Stack Mechanics</h2>
+<p>The Lua stack uses one-based positive indices representing positions
+from the bottom up, and negative indices representing positions from the
+top down.</p>
+<p>When you invoke <code>lua_pushnil(L)</code>:</p>
+<ol type="1">
+<li>The stack top index increases by <code>1</code>.</li>
+<li>The new top position (<code>-1</code>) holds the value
+<code>nil</code>.</li>
+<li>Any previous top element is now accessible at index
+<code>-2</code>.</li>
+</ol>
+<h2 id="using-lua_pushnil-for-stack-balancing-and-returns">Using
+lua_pushnil for Stack Balancing and Returns</h2>
+<p>In Lua C API conventions, functions return an integer indicating how
+many values on the stack should be passed back to the Lua caller.
+<code>lua_pushnil</code> plays an essential role in maintaining
+consistent return signatures:</p>
+<h3 id="1-handling-multi-value-error-returns">1. Handling Multi-Value
+Error Returns</h3>
+<p>The idiomatic Lua error-handling convention returns a result followed
+by an error message on success, or <code>nil</code> followed by an error
+message on failure:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> my_safe_divide<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">double</span> a <span class="op">=</span> luaL_checknumber<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">);</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">double</span> b <span class="op">=</span> luaL_checknumber<span class="op">(</span>L<span class="op">,</span> <span class="dv">2</span><span class="op">);</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">(</span>b <span class="op">==</span> <span class="fl">0.0</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>        lua_pushnil<span class="op">(</span>L<span class="op">);</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>        lua_pushstring<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;division by zero&quot;</span><span class="op">);</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="dv">2</span><span class="op">;</span> <span class="co">/* returns nil, &quot;division by zero&quot; */</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    lua_pushnumber<span class="op">(</span>L<span class="op">,</span> a <span class="op">/</span> b<span class="op">);</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">1</span><span class="op">;</span> <span class="co">/* returns result */</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Here, <code>lua_pushnil</code> explicitly defines the first return
+value, keeping the stack balanced according to Lua's idiomatic return
+conventions.</p>
+<h3 id="2-table-traversal-with-lua_next">2. Table Traversal with
+lua_next</h3>
+<p><code>lua_pushnil</code> is required to initiate traversal over Lua
+tables using <code>lua_next</code>. The <code>lua_next</code> function
+pops a key from the stack and pushes the next key-value pair. To start
+at the beginning of the table, an initial <code>nil</code> key must be
+pushed:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">/* Assume table is at index 1 */</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>lua_pushnil<span class="op">(</span>L<span class="op">);</span> <span class="co">/* First key */</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="cf">while</span> <span class="op">(</span>lua_next<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">)</span> <span class="op">!=</span> <span class="dv">0</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">/* &#39;key&#39; is at index -2 and &#39;value&#39; is at index -1 */</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    lua_pop<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">);</span> <span class="co">/* Remove &#39;value&#39;, keep &#39;key&#39; for next iteration */</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h2 id="clearing-references-vs-emptying-the-stack">Clearing References
+vs. Emptying the Stack</h2>
+<p>It is important to distinguish between removing an entry from the
+stack and setting a slot's value to <code>nil</code>:</p>
+<ul>
+<li><strong><code>lua_pop(L, n)</code> or
+<code>lua_settop(L, index)</code></strong>: Reduces the stack size by
+removing elements entirely.</li>
+<li><strong><code>lua_pushnil(L)</code></strong>: Increases the stack
+size by adding a <code>nil</code> element.</li>
+</ul>
+<p>However, <code>lua_pushnil</code> can be used to "clear" references
+to large objects (such as tables, functions, or full userdata) to make
+them eligible for garbage collection without altering the positions of
+other items on the stack:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>lua_pushnil<span class="op">(</span>L<span class="op">);</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>lua_replace<span class="op">(</span>L<span class="op">,</span> target_index<span class="op">);</span></span></code></pre></div>
+<p>By pushing <code>nil</code> and replacing the value at
+<code>target_index</code>, the reference to the original object is
+removed from the stack, allowing the Lua garbage collector to reclaim
+the object even if the stack frame remains open.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-pushnil-and-stack-balancing-in-lua-c-api';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

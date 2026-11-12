@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Length Operator Works on Non-Array Tables - lua</title>
+    <meta name="description" content="The length operator (#) in Lua is specifically optimized for sequences—tables with contiguous positive integer keys starting at 1. When applied to a table containing &quot;holes&quot; (nil values between non-nil keys) or non-numeric keys, the # operator does not ca">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-length-operator-works-on-non-array-tables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Length Operator Works on Non-Array Tables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-length-operator-works-on-non-array-tables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The length operator (#) in Lua is specifically optimized for sequences—tables with contiguous positive integer keys starting at 1. When applied to a table containing &quot;holes&quot; (nil values between non-nil keys) or non-numeric keys, the # operator does not ca" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-length-operator-works-on-non-array-tables">How Lua
+Length Operator Works on Non-Array Tables</h1>
+<p>The length operator (<code>#</code>) in Lua is specifically optimized
+for sequences—tables with contiguous positive integer keys starting at
+1. When applied to a table containing "holes" (nil values between
+non-nil keys) or non-numeric keys, the <code>#</code> operator does not
+calculate a true total count of elements. Instead, Lua’s language
+specification only guarantees that the operator will return a
+"border"—an index where a non-nil value is immediately followed by a nil
+value—due to the underlying binary search algorithm used for
+performance.</p>
+<h3 id="what-is-a-border-in-lua">What is a Border in Lua?</h3>
+<p>In Lua, a border in a table <code>t</code> is defined as any
+non-negative integer <code>i</code> that satisfies the condition:</p>
+<p><code>(i == 0 or t[i] ~= nil) and t[i + 1] == nil</code></p>
+<p>For a proper sequence (like <code>{10, 20, 30}</code>), there is only
+one border: index 3 (<code>t[3] == 30</code> and
+<code>t[4] == nil</code>). Therefore, <code>#t</code> reliably returns
+3.</p>
+<p>However, if a table contains internal <code>nil</code> values,
+multiple indices can satisfy the definition of a border. Consider the
+following table:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">t</span> <span class="op">=</span> <span class="op">{</span> <span class="op">[</span><span class="dv">1</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;a&quot;</span><span class="op">,</span> <span class="op">[</span><span class="dv">2</span><span class="op">]</span> <span class="op">=</span> <span class="kw">nil</span><span class="op">,</span> <span class="op">[</span><span class="dv">3</span><span class="op">]</span> <span class="op">=</span> <span class="st">&quot;c&quot;</span> <span class="op">}</span></span></code></pre></div>
+<p>In this table, both <code>i = 1</code> and <code>i = 3</code> are
+valid borders:</p>
+<ul>
+<li><code>t[1] ~= nil</code> and <code>t[2] == nil</code></li>
+<li><code>t[3] ~= nil</code> and <code>t[4] == nil</code></li>
+</ul>
+<p>Because both fit the specification, Lua can return either 1 or 3 as
+the result of <code>#t</code>.</p>
+<h3 id="why-lua-implements-borders-instead-of-true-counts">Why Lua
+Implements Borders Instead of True Counts</h3>
+<p>The primary reason for this behavior is computational efficiency.</p>
+<p>Lua tables are implemented internally as hybrid data structures
+consisting of an array part and a hash part. Determining the exact count
+of arbitrary keys or identifying all non-nil elements across both parts
+would require an <span class="math inline">\(O(n)\)</span> linear
+traversal of the entire table every time <code>#</code> is called.</p>
+<p>To make the length operation virtually instantaneous, Lua specifies
+<code>#</code> to run in <span class="math inline">\(O(\log n)\)</span>
+time. It achieves this by using a binary search to find a boundary:</p>
+<ol type="1">
+<li><strong>Check the Array Boundary:</strong> Lua checks if the end of
+its internal array buffer is a border.</li>
+<li><strong>Binary Search:</strong> If keys extend beyond the array
+buffer into the hash part, Lua performs a binary search between known
+bounds to locate an index followed by <code>nil</code>.</li>
+</ol>
+<p>Because binary search requires monotonic data to guarantee a specific
+target, using it on an array with arbitrary gaps produces
+non-deterministic results. The algorithm simply stops at the first
+border it converges upon, which can change depending on how the table
+was allocated or resized in memory.</p>
+<h3 id="handling-non-array-elements">Handling Non-Array Elements</h3>
+<p>The <code>#</code> operator completely ignores keys that are not
+positive integers, including:</p>
+<ul>
+<li>Negative numbers and <code>0</code></li>
+<li>Floating-point numbers</li>
+<li>Strings, booleans, and other table references</li>
+</ul>
+<p>Because these keys are stored exclusively in the hash part and cannot
+form part of a contiguous integer sequence starting at 1, they are not
+factored into the border search.</p>
+<h3 id="how-to-get-a-true-count-of-non-array-tables">How to Get a True
+Count of Non-Array Tables</h3>
+<p>To find the true count of elements in a table that contains holes or
+non-integer keys, avoid using <code>#</code> and use one of the
+following approaches:</p>
+<p><strong>1. Linear Traversal with <code>pairs</code></strong> Iterate
+through the table using <code>pairs</code> and increment a counter to
+get an exact <span class="math inline">\(O(n)\)</span> count of all
+keys:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> countElements<span class="op">(</span><span class="va">t</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">count</span> <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="cn">_</span> <span class="kw">in</span> <span class="fu">pairs</span><span class="op">(</span><span class="va">t</span><span class="op">)</span> <span class="cf">do</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">count</span> <span class="op">=</span> <span class="va">count</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">count</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p><strong>2. Maintain an Explicit Counter</strong> If frequent lookups
+are required, maintain a dedicated counter variable that tracks
+additions and removals alongside table modifications, preserving <span
+class="math inline">\(O(1)\)</span> read access without relying on
+<code>#</code>.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-length-operator-works-on-non-array-tables';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

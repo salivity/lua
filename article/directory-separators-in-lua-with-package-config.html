@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Directory Separators in Lua with package.config - lua</title>
+    <meta name="description" content="The package.config string in Lua is a built-in configuration mechanism that exposes compile-time path and system settings, most notably providing the platform-specific directory separator. By reading the first character of this string, developers can iden">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/directory-separators-in-lua-with-package-config">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Directory Separators in Lua with package.config - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/directory-separators-in-lua-with-package-config" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The package.config string in Lua is a built-in configuration mechanism that exposes compile-time path and system settings, most notably providing the platform-specific directory separator. By reading the first character of this string, developers can iden" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="directory-separators-in-lua-with-packageconfig">Directory
+Separators in Lua with package.config</h1>
+<p>The <code>package.config</code> string in Lua is a built-in
+configuration mechanism that exposes compile-time path and system
+settings, most notably providing the platform-specific directory
+separator. By reading the first character of this string, developers can
+identify whether the host environment uses a forward slash
+(<code>/</code>) or a backslash (<code>\</code>), allowing for reliable,
+cross-platform path construction without external libraries or brittle
+OS detection routines.</p>
+<h3 id="structure-of-packageconfig">Structure of package.config</h3>
+<p>In Lua, <code>package.config</code> is a single string containing
+five lines separated by newline (<code>\n</code>) characters. Each line
+represents a specific configuration parameter defined when the Lua
+binary was compiled:</p>
+<ol type="1">
+<li><strong>Directory separator:</strong> The character used to separate
+directories in file system paths (<code>/</code> on Unix-like systems,
+<code>\</code> on Windows).</li>
+<li><strong>Template separator:</strong> The character used to separate
+different templates in a search path (typically <code>;</code>).</li>
+<li><strong>Substitution point:</strong> The placeholder replaced by the
+module name in path templates (typically <code>?</code>).</li>
+<li><strong>Executable directory mark:</strong> A placeholder replaced
+by the directory of the running executable in Windows environments
+(typically <code>!</code>).</li>
+<li><strong>Ignore mark:</strong> A character that ignores everything
+before it when constructing <code>luaopen_</code> loader function names
+(typically <code>-</code>).</li>
+</ol>
+<h3 id="accessing-the-directory-separator">Accessing the Directory
+Separator</h3>
+<p>Because the directory separator is guaranteed to be the first
+character on the first line of <code>package.config</code>, retrieving
+it is straightforward. Lua provides several ways to extract this
+character cleanly:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Method 1: Using string sub</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">sep</span> <span class="op">=</span> <span class="va">package.config</span><span class="op">:</span><span class="fu">sub</span><span class="op">(</span><span class="dv">1</span><span class="op">,</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- Method 2: Matching the first line</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">sep</span> <span class="op">=</span> <span class="va">package.config</span><span class="op">:</span><span class="fu">match</span><span class="op">(</span><span class="st">&quot;^[^</span><span class="sc">\n</span><span class="st">]+&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>On Linux, macOS, and other POSIX-compliant systems, <code>sep</code>
+evaluates to <code>/</code>. On Windows environments, it evaluates to
+<code>\</code>.</p>
+<h3 id="practical-role-in-cross-platform-code">Practical Role in
+Cross-Platform Code</h3>
+<p>Standard Lua does not include a native file system or path
+manipulation module. Consequently, developers must manually concatenate
+file paths when working with standard I/O functions like
+<code>io.open</code>.</p>
+<p>Using <code>package.config</code> eliminates the need to hardcode
+separators or guess the operating system through environment variables.
+For example, a basic path-joining utility can use this separator
+directly:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">sep</span> <span class="op">=</span> <span class="va">package.config</span><span class="op">:</span><span class="fu">sub</span><span class="op">(</span><span class="dv">1</span><span class="op">,</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> join_paths<span class="op">(...)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">table.concat</span><span class="op">({...},</span> <span class="va">sep</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">config_path</span> <span class="op">=</span> join_paths<span class="op">(</span><span class="st">&quot;etc&quot;</span><span class="op">,</span> <span class="st">&quot;app&quot;</span><span class="op">,</span> <span class="st">&quot;settings.conf&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>By leveraging <code>package.config</code>, Lua programs remain
+portable, robust, and completely independent of third-party dependencies
+for basic platform path resolution.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/directory-separators-in-lua-with-package-config';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua utf8.len Counts Characters vs Bytes - lua</title>
+    <meta name="description" content="In the Lua programming language, string measurement differs significantly depending on whether you are evaluating raw storage size or visible text. The standard string.len function calculates length strictly in terms of bytes, which works reliably for sin">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-utf-8-len-counts-characters-vs-bytes">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua utf8.len Counts Characters vs Bytes - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-utf-8-len-counts-characters-vs-bytes" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, string measurement differs significantly depending on whether you are evaluating raw storage size or visible text. The standard string.len function calculates length strictly in terms of bytes, which works reliably for sin" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-utf8len-counts-characters-vs-bytes">How Lua utf8.len
+Counts Characters vs Bytes</h1>
+<p>In the Lua programming language, string measurement differs
+significantly depending on whether you are evaluating raw storage size
+or visible text. The standard <code>string.len</code> function
+calculates length strictly in terms of bytes, which works reliably for
+single-byte ASCII characters but fails when handling multi-byte UTF-8
+sequences. To accurately count human-readable characters, Lua 5.3
+introduced the <code>utf8.len</code> function, which decodes the
+underlying byte stream to return the total number of Unicode code points
+while validating the structural integrity of the encoding.</p>
+<h3 id="bytes-vs-characters-in-standard-lua">Bytes vs. Characters in
+Standard Lua</h3>
+<p>Lua strings are inherently 8-bit clean byte arrays. By default,
+functions in the standard <code>string</code> library operate directly
+on bytes rather than character representations:</p>
+<ul>
+<li><strong><code>string.len(s)</code> (or <code>#s</code>)</strong>:
+Counts the total number of bytes in the string.</li>
+<li><strong>ASCII Characters</strong>: Require exactly 1 byte per
+character, meaning byte count matches character count.</li>
+<li><strong>UTF-8 Characters</strong>: Can occupy anywhere from 1 to 4
+bytes per character. Accented letters, non-Latin scripts, and emojis use
+multiple bytes.</li>
+</ul>
+<p>When multi-byte characters are measured using <code>#</code> or
+<code>string.len</code>, Lua reports a number higher than the visible
+character count.</p>
+<h3 id="how-utf8len-measures-characters">How <code>utf8.len</code>
+Measures Characters</h3>
+<p>The <code>utf8.len</code> function parses the string according to the
+UTF-8 specification. UTF-8 uses specific prefix bits in each byte to
+indicate whether a byte is a standalone character (ASCII) or part of a
+multi-byte sequence:</p>
+<ol type="1">
+<li><strong>Single-byte (ASCII)</strong>: <code>0xxxxxxx</code></li>
+<li><strong>Two-byte leading byte</strong>: <code>110xxxxx</code>
+followed by one continuation byte (<code>10xxxxxx</code>)</li>
+<li><strong>Three-byte leading byte</strong>: <code>1110xxxx</code>
+followed by two continuation bytes</li>
+<li><strong>Four-byte leading byte</strong>: <code>11110xxx</code>
+followed by three continuation bytes</li>
+</ol>
+<p>Instead of incrementing for every byte encountered,
+<code>utf8.len</code> steps through the byte stream, recognizes complete
+code point sequences, and increments the count once per decoded code
+point.</p>
+<h3 id="comparative-example">Comparative Example</h3>
+<p>Consider a string containing an English word, a non-ASCII letter, and
+an emoji:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">text</span> <span class="op">=</span> <span class="st">&quot;café ☕&quot;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(#</span><span class="va">text</span><span class="op">)</span>            <span class="co">-- Output: 9 (bytes)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">string.len</span><span class="op">(</span><span class="va">text</span><span class="op">))</span> <span class="co">-- Output: 9 (bytes)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">utf8.len</span><span class="op">(</span><span class="va">text</span><span class="op">))</span>   <span class="co">-- Output: 6 (characters/codepoints)</span></span></code></pre></div>
+<p>In this string:</p>
+<ul>
+<li><code>c</code>, <code>a</code>, <code>f</code>, and the space are
+each 1 byte (4 bytes total).</li>
+<li><code>é</code> occupies 2 bytes (<code>0xC3 0xA9</code>).</li>
+<li><code>☕</code> occupies 3 bytes (<code>0xE2 0x98 0x95</code>).</li>
+<li>Total bytes: <code>4 + 2 + 3 = 9</code>.</li>
+<li>Total UTF-8 code points: <code>4 + 1 + 1 = 6</code>.</li>
+</ul>
+<h3 id="validation-and-error-handling">Validation and Error
+Handling</h3>
+<p>A fundamental difference between byte counting and
+<code>utf8.len</code> is error detection. While <code>string.len</code>
+always succeeds on any sequence of bytes, <code>utf8.len</code> acts as
+a validator.</p>
+<p>If <code>utf8.len</code> encounters an invalid UTF-8 byte sequence
+(such as a malformed leading byte or a missing continuation byte), it
+does not return a count. Instead, it returns:</p>
+<ol type="1">
+<li><code>nil</code> as the first return value.</li>
+<li>The byte position of the first invalid byte as the second return
+value.</li>
+</ol>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">invalid_utf8</span> <span class="op">=</span> <span class="st">&quot;hello</span><span class="sc">\xFF</span><span class="st">world&quot;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">len</span><span class="op">,</span> <span class="va">err_pos</span> <span class="op">=</span> <span class="fu">utf8.len</span><span class="op">(</span><span class="va">invalid_utf8</span><span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">len</span><span class="op">)</span>     <span class="co">-- Output: nil</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">err_pos</span><span class="op">)</span> <span class="co">-- Output: 6</span></span></code></pre></div>
+<h3 id="positional-range-parameters">Positional Range Parameters</h3>
+<p><code>utf8.len</code> accepts optional second and third arguments:
+<code>utf8.len(s [, i [, j]])</code>. These positions (<code>i</code>
+and <code>j</code>) are specified as <strong>byte indices</strong>, not
+character indices:</p>
+<ul>
+<li><code>i</code> defines the starting byte position (default is
+1).</li>
+<li><code>j</code> defines the ending byte position (default is -1,
+representing the end of the string).</li>
+</ul>
+<p>If <code>i</code> or <code>j</code> lands in the middle of a
+multi-byte UTF-8 sequence, the function identifies it as an invalid
+sequence and returns <code>nil</code> along with the failure
+position.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-utf-8-len-counts-characters-vs-bytes';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

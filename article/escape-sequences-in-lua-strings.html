@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escape Sequences in Lua Strings - lua</title>
+    <meta name="description" content="In the Lua programming language, double-quoted and single-quoted string literals follow the exact same escaping rules, allowing developers to embed control characters, byte values, and quotation marks directly into text. This article provides a comprehens">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/escape-sequences-in-lua-strings">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Escape Sequences in Lua Strings - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/escape-sequences-in-lua-strings" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, double-quoted and single-quoted string literals follow the exact same escaping rules, allowing developers to embed control characters, byte values, and quotation marks directly into text. This article provides a comprehens" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="escape-sequences-in-lua-strings">Escape Sequences in Lua
+Strings</h1>
+<p>In the Lua programming language, double-quoted and single-quoted
+string literals follow the exact same escaping rules, allowing
+developers to embed control characters, byte values, and quotation marks
+directly into text. This article provides a comprehensive overview of
+all valid escape sequences recognized by Lua, covering standard C-style
+control characters, decimal and hexadecimal byte definitions, whitespace
+formatters, and modern Unicode code points.</p>
+<h3 id="standard-control-sequences">Standard Control Sequences</h3>
+<p>Lua inherits most of its basic escape sequences from standard C. When
+enclosed in double quotes, these characters perform specific formatting
+actions:</p>
+<ul>
+<li><code>\a</code> — <strong>Bell:</strong> Produces an audible or
+visual alert signal.</li>
+<li><code>\b</code> — <strong>Backspace:</strong> Moves the cursor back
+one space.</li>
+<li><code>\f</code> — <strong>Form Feed:</strong> Moves to the next page
+or logical section.</li>
+<li><code>\n</code> — <strong>Newline:</strong> Moves the cursor to the
+beginning of the next line.</li>
+<li><code>\r</code> — <strong>Carriage Return:</strong> Returns the
+cursor to the beginning of the current line.</li>
+<li><code>\t</code> — <strong>Horizontal Tab:</strong> Advances to the
+next horizontal tab stop.</li>
+<li><code>\v</code> — <strong>Vertical Tab:</strong> Advances to the
+next vertical tab stop.</li>
+</ul>
+<h3 id="literal-and-quotation-escapes">Literal and Quotation
+Escapes</h3>
+<p>Certain characters must be escaped inside double-quoted strings to
+prevent syntax errors or ambiguity:</p>
+<ul>
+<li><code>\"</code> — <strong>Double Quote:</strong> Allows the
+inclusion of a literal double quote inside double-quoted literals (e.g.,
+<code>"He said, \"Hello!\""</code>).</li>
+<li><code>\'</code> — <strong>Single Quote:</strong> Represents a
+literal single quote. While unnecessary inside double-quoted strings, it
+remains syntactically valid.</li>
+<li><code>\\</code> — <strong>Backslash:</strong> Escapes the backslash
+itself to produce a single literal <code>\</code>.</li>
+</ul>
+<h3 id="numeric-byte-escapes">Numeric Byte Escapes</h3>
+<p>Lua allows arbitrary binary bytes to be inserted into strings using
+numerical representations.</p>
+<ul>
+<li><code>\ddd</code> — <strong>Decimal Escape:</strong> Matches up to
+three decimal digits (<code>0</code> to <code>255</code>), representing
+a raw byte value. For example, <code>\0</code> represents the null byte,
+and <code>\065</code> represents the uppercase letter <code>A</code>. If
+followed immediately by other digits, the sequence must contain three
+digits (e.g., <code>\0495</code> creates the character for byte
+<code>49</code> followed by the digit <code>5</code>).</li>
+<li><code>\xhh</code> — <strong>Hexadecimal Escape (Lua 5.2+):</strong>
+Represents a raw byte using exactly two hexadecimal digits (e.g.,
+<code>\x41</code> evaluates to <code>A</code>, and <code>\xFF</code>
+represents byte <code>255</code>).</li>
+</ul>
+<h3 id="unicode-code-points">Unicode Code Points</h3>
+<ul>
+<li><code>\u{XXX}</code> — <strong>UTF-8 Escape (Lua 5.3+):</strong>
+Encodes a Unicode character into its corresponding UTF-8 byte sequence.
+The sequence inside the curly braces consists of one or more hexadecimal
+digits specifying the code point (e.g., <code>\u{20AC}</code> outputs
+the Euro sign <code>€</code>, and <code>\u{1F600}</code> outputs the
+grinning face emoji).</li>
+</ul>
+<h3 id="whitespace-and-line-control">Whitespace and Line Control</h3>
+<p>Lua provides mechanisms to format long multiline strings cleanly
+without introducing unwanted characters:</p>
+<ul>
+<li><code>\z</code> — <strong>Span-Skipping Escape (Lua 5.2+):</strong>
+Skips the following sequence of whitespace characters, including line
+breaks. This allows developers to break a long string literal across
+multiple lines in the source code without introducing newlines or
+indentation into the final string value.</li>
+<li><code>\&lt;newline&gt;</code> — <strong>Escaped Newline:</strong>
+Placing a backslash immediately before a physical line break inserts a
+regular newline character into the string while continuing the literal
+on the next line.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/escape-sequences-in-lua-strings';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

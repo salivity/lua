@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Single-Precision Float on Microcontrollers - lua</title>
+    <meta name="description" content="Running the Lua programming language on resource-constrained microcontrollers often requires tuning its memory footprint and execution speed. By default, Lua uses 64-bit double-precision floats (and 64-bit integers in modern releases), which creates signi">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-single-precision-float-on-microcontrollers">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Single-Precision Float on Microcontrollers - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-single-precision-float-on-microcontrollers" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Running the Lua programming language on resource-constrained microcontrollers often requires tuning its memory footprint and execution speed. By default, Lua uses 64-bit double-precision floats (and 64-bit integers in modern releases), which creates signi" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-single-precision-float-on-microcontrollers">Lua
+Single-Precision Float on Microcontrollers</h1>
+<p>Running the Lua programming language on resource-constrained
+microcontrollers often requires tuning its memory footprint and
+execution speed. By default, Lua uses 64-bit double-precision floats
+(and 64-bit integers in modern releases), which creates significant CPU
+and RAM overhead on 32-bit architectures that lack a 64-bit hardware
+Floating-Point Unit (FPU). This guide explains how to customize the core
+Lua configuration to switch the underlying numeric representation to
+32-bit single-precision floats and 32-bit integers, enabling native
+hardware acceleration on devices such as ARM Cortex-M or ESP32
+microcontrollers.</p>
+<h3 id="modifying-luaconfh">Modifying <code>luaconf.h</code></h3>
+<p>All core numeric definitions in Lua are controlled by macro
+definitions located in <code>src/luaconf.h</code>. To customize Lua for
+microcontrollers, you do not need to rewrite the interpreter; you only
+need to adjust these configuration macros before compiling the source
+code.</p>
+<h4 id="configuration-for-lua-53-and-lua-54">Configuration for Lua 5.3
+and Lua 5.4</h4>
+<p>Modern versions of Lua separate numbers into distinct floating-point
+(<code>LUA_FLOAT_TYPE</code>) and integer (<code>LUA_INT_TYPE</code>)
+representations.</p>
+<p>Open <code>src/luaconf.h</code> and locate the configuration section
+for numeric types. Update the definitions to use 32-bit types:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">/* Set the floating-point type to single-precision float (32-bit) */</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_FLOAT_TYPE </span>LUA_FLOAT_FLOAT</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co">/* Set the integer type to standard 32-bit signed int */</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_INT_TYPE   </span>LUA_INT_INT</span></code></pre></div>
+<p>Setting <code>LUA_FLOAT_TYPE</code> to <code>LUA_FLOAT_FLOAT</code>
+instructs Lua to define <code>lua_Number</code> as <code>float</code>
+and automatically redirects math library functions to their
+single-precision C standard library counterparts (e.g.,
+<code>sinf</code>, <code>cosf</code>, <code>sqrtf</code> instead of
+<code>sin</code>, <code>cos</code>, <code>sqrt</code>). Setting
+<code>LUA_INT_TYPE</code> to <code>LUA_INT_INT</code> changes
+<code>lua_Integer</code> from a 64-bit <code>long long</code> to a
+standard 32-bit <code>int</code>, preventing unnecessary 64-bit math
+emulation on 32-bit CPU registers.</p>
+<h4 id="configuration-for-lua-51-and-lua-52">Configuration for Lua 5.1
+and Lua 5.2</h4>
+<p>In Lua 5.1 and 5.2, all numbers share a single type:
+<code>lua_Number</code>.</p>
+<p>To convert this single type to a 32-bit float, edit
+<code>src/luaconf.h</code> and define:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_NUMBER_DOUBLE</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#undef LUA_NUMBER_DOUBLE</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_NUMBER_FLOAT</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_NUMBER         </span><span class="dt">float</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUAI_UACNUMBER     </span><span class="dt">float</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_NUMBER_SCAN    </span><span class="st">&quot;</span><span class="sc">%f</span><span class="st">&quot;</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_NUMBER_FMT     </span><span class="st">&quot;</span><span class="sc">%.7g</span><span class="st">&quot;</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="pp">#define lua_number2str</span><span class="op">(</span><span class="pp">s</span><span class="op">,</span><span class="pp">sz</span><span class="op">,</span><span class="pp">n</span><span class="op">)</span><span class="pp">  </span><span class="op">\</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="pp">        l_sprintf</span><span class="op">((</span><span class="pp">s</span><span class="op">),</span><span class="pp"> sz</span><span class="op">,</span><span class="pp"> </span>LUA_NUMBER_FMT<span class="op">,</span><span class="pp"> </span><span class="op">(</span>LUAI_UACNUMBER<span class="op">)(</span><span class="pp">n</span><span class="op">))</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co">/* Redirect math library routines to single-precision float variants */</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="pp">#define l_mathop</span><span class="op">(</span><span class="pp">op</span><span class="op">)</span><span class="pp">       op</span><span class="op">##</span><span class="pp">f</span></span></code></pre></div>
+<h3 id="compiler-flags-and-hardware-fpu-support">Compiler Flags and
+Hardware FPU Support</h3>
+<p>Modifying the source code ensures Lua uses the <code>float</code>
+data type, but your toolchain must also be instructed to emit hardware
+floating-point instructions rather than software floating-point
+emulation routines.</p>
+<p>When building Lua with a cross-compiler such as
+<code>arm-none-eabi-gcc</code>, apply the appropriate architecture and
+FPU flags in your <code>Makefile</code>:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode makefile"><code class="sourceCode makefile"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example flags for ARM Cortex-M4 with single-precision FPU</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="dt">CC</span> <span class="ch">=</span><span class="st"> arm-none-eabi-gcc</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="dt">CFLAGS</span> <span class="ch">=</span><span class="st"> -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -O2</span></span></code></pre></div>
+<p>Using <code>-mfloat-abi=hard</code> ensures that function calls pass
+floating-point arguments directly in the microcontroller's hardware FPU
+registers.</p>
+<h3 id="verification">Verification</h3>
+<p>After compiling and flashing the custom Lua binary to your target
+hardware, verify the configuration by checking precision
+limitations:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- In 32-bit single-precision, 1 / 3 displays roughly 7 decimal digits of precision</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="dv">1</span> <span class="op">/</span> <span class="dv">3</span><span class="op">)</span> </span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Expected output: 0.33333334 (instead of 0.3333333333333333)</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- In Lua 5.3+, check integer and float boundaries</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">math.maxinteger</span><span class="op">)</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- Expected output: 2147483647 (32-bit signed max)</span></span></code></pre></div>
+<p>Switching to single-precision floats reduces the size of Lua's tagged
+value structure (<code>TValue</code>) from 16 bytes down to 8 or 12
+bytes depending on alignment, cutting RAM consumption significantly and
+allowing intensive numeric computations to run natively on the
+microcontroller's hardware FPU.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-single-precision-float-on-microcontrollers';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

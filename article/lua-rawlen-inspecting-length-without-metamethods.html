@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua rawlen: Inspecting Length Without Metamethods - lua</title>
+    <meta name="description" content="In Lua, determining the size of an object typically relies on the length operator (#), which can be intercepted and overridden by the len metamethod. The rawlen function, introduced in Lua 5.2, provides a direct alternative that bypasses all metatable mec">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-rawlen-inspecting-length-without-metamethods">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua rawlen: Inspecting Length Without Metamethods - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-rawlen-inspecting-length-without-metamethods" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, determining the size of an object typically relies on the length operator (#), which can be intercepted and overridden by the len metamethod. The rawlen function, introduced in Lua 5.2, provides a direct alternative that bypasses all metatable mec" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-rawlen-inspecting-length-without-metamethods">Lua rawlen:
+Inspecting Length Without Metamethods</h1>
+<p>In Lua, determining the size of an object typically relies on the
+length operator (<code>#</code>), which can be intercepted and
+overridden by the <code>__len</code> metamethod. The <code>rawlen</code>
+function, introduced in Lua 5.2, provides a direct alternative that
+bypasses all metatable mechanisms to inspect the genuine, internal size
+of tables and strings. This article explains how <code>rawlen</code>
+interacts with Lua's internal data structures, why it avoids invoking
+user-defined metamethods, and how it differs in behavior and safety from
+the standard length operator.</p>
+<h2 id="the-standard-length-operator-vs-rawlen">The Standard Length
+Operator vs. rawlen</h2>
+<p>The standard length operator (<code>#</code>) follows a dynamic
+dispatch process. When <code>#v</code> is evaluated, the Lua runtime
+first checks whether the operand <code>v</code> possesses a metatable
+containing a <code>__len</code> field:</p>
+<ol type="1">
+<li>If <code>__len</code> is defined and is a function, Lua halts native
+length calculation and invokes that function with <code>v</code> as the
+argument.</li>
+<li>If <code>__len</code> is not present, Lua falls back to its default
+internal algorithm to compute the length.</li>
+</ol>
+<p>Because of this behavior, <code>#</code> can execute arbitrary Lua
+code, introduce side effects, degrade performance in
+performance-critical loops, or lead to infinite recursion if a
+<code>__len</code> implementation attempts to read
+<code>#self</code>.</p>
+<p>The <code>rawlen(v)</code> function circumvents this lookup entirely.
+It guarantees that no metatable lookup occurs, executing an immediate,
+raw inspection of the underlying data structure.</p>
+<h2 id="how-rawlen-works-internally">How rawlen Works Internally</h2>
+<p>At the C implementation level, <code>rawlen</code> maps directly to
+the Lua C API function <code>lua_rawlen</code>. Instead of executing the
+<code>luaT_gettm</code> routine (which queries metatables for specific
+event keys), the runtime directly reads Lua's internal data
+representations.</p>
+<h3 id="strings">Strings</h3>
+<p>In Lua, strings are immutable and interned (or managed via internal
+string headers). The length of a string is precomputed and stored
+directly in the <code>TString</code> struct:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Simplified representation of Lua&#39;s internal string struct</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">typedef</span> <span class="kw">struct</span> TString <span class="op">{</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    CommonHeader<span class="op">;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    lu_byte extra<span class="op">;</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    lu_byte shrlen<span class="op">;</span> <span class="co">/* length if short string */</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">unsigned</span> <span class="dt">int</span> hash<span class="op">;</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">union</span> <span class="op">{</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>        <span class="dt">size_t</span> lnglen<span class="op">;</span> <span class="co">/* length if long string */</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>        <span class="kw">struct</span> TString <span class="op">*</span>hnext<span class="op">;</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> u<span class="op">;</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> TString<span class="op">;</span></span></code></pre></div>
+<p>When <code>rawlen</code> receives a string, it accesses the stored
+length field directly. This operation is <span
+class="math inline">\(O(1)\)</span> and never triggers any metamethod,
+returning the byte count immediately.</p>
+<h3 id="tables">Tables</h3>
+<p>A Lua table consists of an array slice and a hash map slice. When
+<code>rawlen</code> is called on a table, the engine executes Lua's
+native boundary-checking algorithm directly on the <code>Table</code>
+struct:</p>
+<ol type="1">
+<li>It checks the size of the internal array part.</li>
+<li>If elements extend into the hash part, or if the array contains
+gaps, it performs a binary search to locate a boundary—a key <span
+class="math inline">\(n\)</span> such that <code>t[n] ~= nil</code> and
+<code>t[n+1] == nil</code>.</li>
+</ol>
+<p>Because <code>rawlen</code> invokes the internal boundary search
+without checking for metatables, it guarantees that no user code
+executes during the traversal.</p>
+<h2 id="code-demonstration">Code Demonstration</h2>
+<p>The following example demonstrates the operational difference between
+<code>#</code> and <code>rawlen</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">proxy</span> <span class="op">=</span> <span class="fu">setmetatable</span><span class="op">({</span> <span class="dv">10</span><span class="op">,</span> <span class="dv">20</span><span class="op">,</span> <span class="dv">30</span> <span class="op">},</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">__len</span> <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">t</span><span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="dv">999</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- Using the standard length operator</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(#</span><span class="va">proxy</span><span class="op">)</span>       <span class="co">-- Output: 999 (invokes __len)</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- Using rawlen</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">rawlen</span><span class="op">(</span><span class="va">proxy</span><span class="op">))</span> <span class="co">-- Output: 3 (inspects underlying table directly)</span></span></code></pre></div>
+<p>If an object does not have a <code>__len</code> metamethod,
+<code>#t</code> and <code>rawlen(t)</code> return identical values for
+sequences.</p>
+<h2 id="type-constraints-and-errors">Type Constraints and Errors</h2>
+<p>Unlike the standard <code>#</code> operator, which can be extended to
+arbitrary types (such as userdata) via the <code>__len</code>
+metamethod, <code>rawlen</code> strictly accepts only two data
+types:</p>
+<ul>
+<li><strong>Tables:</strong> Returns the raw sequence boundary.</li>
+<li><strong>Strings:</strong> Returns the byte length.</li>
+</ul>
+<p>Passing any other type (such as <code>nil</code>,
+<code>number</code>, <code>boolean</code>, <code>function</code>,
+<code>thread</code>, or <code>userdata</code>) causes
+<code>rawlen</code> to raise a runtime error:
+<code>bad argument #1 to 'rawlen' (table or string expected)</code>.</p>
+<h2 id="primary-use-cases">Primary Use Cases</h2>
+<ol type="1">
+<li><strong>Preventing Recursion in Metamethods:</strong> Inside a
+custom <code>__len</code> implementation, developers use
+<code>rawlen(self)</code> to inspect the table's actual capacity or size
+without triggering an infinite recursive loop.</li>
+<li><strong>Sandboxing and Defensive Programming:</strong> When dealing
+with untrusted user tables, standard operators can trigger malicious
+code execution via metamethod hooks. <code>rawlen</code> ensures
+deterministic execution and side-effect-free inspection.</li>
+<li><strong>Serialization and Debugging:</strong> Serializers and
+debuggers use <code>rawlen</code> to inspect the literal physical
+elements of a table rather than its virtualized representation.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-rawlen-inspecting-length-without-metamethods';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

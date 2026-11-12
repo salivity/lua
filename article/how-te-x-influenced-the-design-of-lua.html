@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How TeX Influenced the Design of Lua - lua</title>
+    <meta name="description" content="Lua is widely celebrated for its clean syntax, small footprint, and elegant semantics, qualities that emerged in part as a reaction against the pitfalls of macro languages like Donald Knuth’s TeX. When the creators of Lua were developing precursor tools f">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-te-x-influenced-the-design-of-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How TeX Influenced the Design of Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-te-x-influenced-the-design-of-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua is widely celebrated for its clean syntax, small footprint, and elegant semantics, qualities that emerged in part as a reaction against the pitfalls of macro languages like Donald Knuth’s TeX. When the creators of Lua were developing precursor tools f" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-tex-influenced-the-design-of-lua">How TeX Influenced the
+Design of Lua</h1>
+<p>Lua is widely celebrated for its clean syntax, small footprint, and
+elegant semantics, qualities that emerged in part as a reaction against
+the pitfalls of macro languages like Donald Knuth’s TeX. When the
+creators of Lua were developing precursor tools for data entry and
+configuration at PUC-Rio, they directly observed the limitations of
+macro expansion systems. Rather than letting an embedded configuration
+tool mutate into an unwieldy macro processor, Lua’s designers
+consciously built a clean, fully featured procedural language with
+explicit scoping and first-class data structures.</p>
+<p>Before Lua was created in 1993, team member Luiz Henrique de
+Figueiredo was an experienced TeX user and developer. During that era,
+the team designed two domain-specific languages: DEL (Data Entry
+Language) and SOL (Simple Object Language). DEL was particularly
+influenced by TeX and BibTeX, relying heavily on macro expansion to give
+users flexibility in customizing data entry forms.</p>
+<p>However, relying on TeX-style macros exposed significant
+architectural liabilities. TeX's macro language was originally designed
+for typesetting and text substitution, not general-purpose computing.
+When users attempted to express complex logic, validation rules, or
+state transformations in TeX, the language revealed sharp edges: dynamic
+scoping quirks, lack of real data structures, cryptic error reporting,
+and counterintuitive evaluation rules. The team realized that macro
+processors blur the boundary between code and data in ways that make
+programs difficult to parse, optimize, and maintain.</p>
+<p>This experience led to a crucial insight: any sufficiently useful
+configuration language eventually grows until it requires loops,
+conditionals, and variables. If these capabilities are added piecemeal
+through macro expansion, the result is an accidental, convoluted
+programming language.</p>
+<p>When requirements emerged at Petrobras (the Brazilian state oil
+company) for a more powerful, embeddable configuration tool, the
+designers rejected the macro approach entirely. Instead of patching DEL
+or building another macro-based preprocessor, they synthesized DEL and
+SOL into Lua. They committed to classical programming language
+principles: clear grammar, standard control structures, lexical scoping,
+first-class functions, and a single, unified data structuring mechanism
+(the associative table).</p>
+<p>By serving as a cautionary tale of what happens when a macro system
+is stretched beyond its domain, TeX motivated Lua's creators to deliver
+a language that was simple without being simplistic, ensuring that
+extensibility came from clean procedural semantics rather than textual
+substitution.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-te-x-influenced-the-design-of-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

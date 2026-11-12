@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LuaRocks builtin vs make: Cross-Platform Builds - lua</title>
+    <meta name="description" content="When packaging C extensions and libraries for the Lua ecosystem, choosing the right build type in a rockspec file directly dictates how portable and maintainable your package will be. This article breaks down the technical differences between the builtin">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-rocks-builtin-vs-make-cross-platform-builds">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="LuaRocks builtin vs make: Cross-Platform Builds - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-rocks-builtin-vs-make-cross-platform-builds" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="When packaging C extensions and libraries for the Lua ecosystem, choosing the right build type in a rockspec file directly dictates how portable and maintainable your package will be. This article breaks down the technical differences between the builtin" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="luarocks-builtin-vs-make-cross-platform-builds">LuaRocks builtin
+vs make: Cross-Platform Builds</h1>
+<p>When packaging C extensions and libraries for the Lua ecosystem,
+choosing the right build type in a rockspec file directly dictates how
+portable and maintainable your package will be. This article breaks down
+the technical differences between the <code>builtin</code> and
+<code>make</code> build types in LuaRocks, comparing how each manages
+the compilation pipeline, handles platform-specific toolchains, and
+affects cross-platform distribution across Linux, macOS, and
+Windows.</p>
+<h3 id="the-builtin-build-type">The <code>builtin</code> Build Type</h3>
+<p>The <code>builtin</code> build type is the native, Lua-driven
+compiler backend integrated directly into LuaRocks. Instead of relying
+on external build tools, LuaRocks itself parses the build instructions
+in the rockspec and invokes the host system's C compiler and linker
+directly.</p>
+<h4 id="key-characteristics">Key Characteristics</h4>
+<ul>
+<li><strong>Zero External Build Dependencies:</strong> It only requires
+a C compiler (such as GCC, Clang, or MSVC). Users do not need GNU Make,
+CMake, or shell utilities installed.</li>
+<li><strong>Native Cross-Platform Translation:</strong> LuaRocks
+abstracts compiler flags, include paths, library paths, and output file
+extensions (<code>.so</code>, <code>.dylib</code>, <code>.dll</code>). A
+single rockspec definition compiles cleanly on Linux, macOS, and
+Windows.</li>
+<li><strong>Declarative Structure:</strong> Sources, include
+directories, and link libraries are declared directly inside the
+rockspec table using standard Lua syntax:</li>
+</ul>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">build</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>   <span class="fu">type</span> <span class="op">=</span> <span class="st">&quot;builtin&quot;</span><span class="op">,</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>   <span class="va">modules</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>      <span class="va">my_module</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>         <span class="va">sources</span> <span class="op">=</span> <span class="op">{</span> <span class="st">&quot;src/my_module.c&quot;</span><span class="op">,</span> <span class="st">&quot;src/helper.c&quot;</span> <span class="op">},</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>         <span class="va">incdirs</span> <span class="op">=</span> <span class="op">{</span> <span class="st">&quot;include&quot;</span> <span class="op">},</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>         <span class="va">libraries</span> <span class="op">=</span> <span class="op">{</span> <span class="st">&quot;m&quot;</span> <span class="op">}</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>      <span class="op">}</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>   <span class="op">}</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="the-make-build-type">The <code>make</code> Build Type</h3>
+<p>The <code>make</code> build type delegates the entire compilation
+process to an external build automation tool, typically GNU Make.
+LuaRocks invokes the specified <code>makefile</code> and passes relevant
+environment variables (like compiler flags and include paths for Lua
+headers) directly to the sub-process.</p>
+<h4 id="key-characteristics-1">Key Characteristics</h4>
+<ul>
+<li><strong>External Toolchain Reliance:</strong> The target machine
+must have <code>make</code> (or an equivalent like <code>nmake</code> on
+Windows) and a POSIX-compatible shell environment present in the system
+path.</li>
+<li><strong>Full Process Control:</strong> It allows arbitrary shell
+execution, custom pre-compilation steps, file generation, and complex
+dependency graphs that <code>builtin</code> cannot express.</li>
+<li><strong>Manual Cross-Platform Handling:</strong> You must write
+Makefiles that manually detect the target operating system to set
+correct linker flags, library extensions, and Lua header
+directories:</li>
+</ul>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="va">build</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>   <span class="fu">type</span> <span class="op">=</span> <span class="st">&quot;make&quot;</span><span class="op">,</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>   <span class="va">build_variables</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>      <span class="cn">CFLAGS</span> <span class="op">=</span> <span class="st">&quot;$(CFLAGS)&quot;</span><span class="op">,</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>      <span class="cn">LIBFLAG</span> <span class="op">=</span> <span class="st">&quot;$(LIBFLAG)&quot;</span><span class="op">,</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>      <span class="cn">LUA_INCDIR</span> <span class="op">=</span> <span class="st">&quot;$(LUA_INCDIR)&quot;</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>   <span class="op">},</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>   <span class="va">install_variables</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>      <span class="cn">INST_LIBDIR</span> <span class="op">=</span> <span class="st">&quot;$(INST_LIBDIR)&quot;</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>   <span class="op">}</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="direct-comparison-for-cross-platform-compiling">Direct
+Comparison for Cross-Platform Compiling</h3>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;"><code>builtin</code></th>
+<th style="text-align: left;"><code>make</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Windows Support</strong></td>
+<td style="text-align: left;">Works out-of-the-box with MSVC or MinGW
+without extra tools.</td>
+<td style="text-align: left;">Often fails unless MinGW/MSYS, Cygwin, or
+complex <code>nmake</code> files are provided.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Tool Requirements</strong></td>
+<td style="text-align: left;">C/C++ Compiler only.</td>
+<td style="text-align: left;">Make utility + Shell environment +
+Compiler.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Configuration</strong></td>
+<td style="text-align: left;">Pure Lua inside
+<code>.rockspec</code>.</td>
+<td style="text-align: left;">External <code>Makefile</code> + variables
+passed from <code>.rockspec</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Build Complexity</strong></td>
+<td style="text-align: left;">Limited to standard C/C++ compilation and
+linking.</td>
+<td style="text-align: left;">Capable of executing complex, multi-stage
+build systems.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Portability Risk</strong></td>
+<td style="text-align: left;">Low; handled internally by LuaRocks.</td>
+<td style="text-align: left;">High; dependent on system-specific Make
+dialects and commands.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="which-build-type-should-you-choose">Which Build Type Should You
+Choose?</h3>
+<p><strong>Choose <code>builtin</code></strong> if you are writing a
+standard Lua C extension or wrapping a self-contained C library. Because
+Windows environments natively lack <code>make</code> and standard POSIX
+shell utilities, using <code>builtin</code> ensures your package can be
+compiled seamlessly by users on any supported operating system without
+setup friction.</p>
+<p><strong>Choose <code>make</code></strong> primarily when wrapping
+large, existing legacy C libraries that already possess an established,
+non-trivial <code>Makefile</code> that would be impractical to rewrite
+into a rockspec format, or when code generation tools (such as Lex/Yacc
+or custom scripts) must run prior to compilation.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-rocks-builtin-vs-make-cross-platform-builds';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

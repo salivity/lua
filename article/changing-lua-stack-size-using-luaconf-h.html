@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Changing Lua Stack Size Using luaconf.h - lua</title>
+    <meta name="description" content="Configuring luaconf.h allows developers to modify the limits and initial guarantees of Lua&#39;s internal virtual stack for embedded systems. While this header file controls Lua’s virtual data stack—governing how many values and registers a Lua thread can sim">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/changing-lua-stack-size-using-luaconf-h">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Changing Lua Stack Size Using luaconf.h - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/changing-lua-stack-size-using-luaconf-h" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Configuring luaconf.h allows developers to modify the limits and initial guarantees of Lua&#39;s internal virtual stack for embedded systems. While this header file controls Lua’s virtual data stack—governing how many values and registers a Lua thread can sim" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="changing-lua-stack-size-using-luaconfh">Changing Lua Stack Size
+Using luaconf.h</h1>
+<p>Configuring <code>luaconf.h</code> allows developers to modify the
+limits and initial guarantees of Lua's internal virtual stack for
+embedded systems. While this header file controls Lua’s virtual data
+stack—governing how many values and registers a Lua thread can
+simultaneously hold—it does not alter the underlying C execution call
+stack provided by the host operating system or hardware
+architecture.</p>
+<h3 id="lua-virtual-stack-vs-native-c-stack">Lua Virtual Stack vs.
+Native C Stack</h3>
+<p>When embedding Lua in constrained environments, it is crucial to
+distinguish between the two types of stacks:</p>
+<ol type="1">
+<li><strong>Lua's Virtual Stack:</strong> An array of
+<code>TValue</code> structs managed internally by the Lua runtime to
+pass arguments, hold local variables, and return values.</li>
+<li><strong>The C Call Stack:</strong> The native machine stack managed
+by the platform's processor and compiler to track C function calls and
+local C variables.</li>
+</ol>
+<p>Modifying <code>luaconf.h</code> directly controls the Lua virtual
+stack limits. To change the C call stack size, you must adjust your
+compiler settings, linker scripts, or RTOS thread attributes
+instead.</p>
+<h3 id="key-configuration-macros-in-luaconfh">Key Configuration Macros
+in <code>luaconf.h</code></h3>
+<p>To modify the Lua stack for an embedded instance, you can adjust two
+primary macros in <code>luaconf.h</code>:</p>
+<ul>
+<li><strong><code>LUAI_MAXSTACK</code></strong>: Sets the absolute
+maximum number of stack slots a single Lua state or coroutine can
+allocate. By default, this is set to 1,000,000 entries on 64-bit systems
+or 40,000 entries on 32-bit systems. In microcontrollers or
+memory-limited devices, reducing this value (e.g., to 1,000 or 2,000)
+prevents rogue scripts or deep recursion from exhausting available heap
+memory.</li>
+<li><strong><code>LUA_MINSTACK</code></strong>: Defines the minimum
+guaranteed stack space available to a C function called from Lua without
+requiring an explicit call to <code>lua_checkstack</code>. The default
+is typically 20 slots.</li>
+</ul>
+<h3 id="implementation-steps">Implementation Steps</h3>
+<ol type="1">
+<li><p>Locate <code>luaconf.h</code> in the Lua source
+distribution.</p></li>
+<li><p>Define or override <code>LUAI_MAXSTACK</code> to match the
+constraints of your target hardware:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUAI_MAXSTACK   </span><span class="dv">2048</span></span></code></pre></div></li>
+<li><p>If your embedded bindings require larger baseline parameters, you
+can also alter <code>LUA_MINSTACK</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_MINSTACK    </span><span class="dv">30</span></span></code></pre></div></li>
+<li><p>Recompile the Lua core library alongside your embedded
+project.</p></li>
+</ol>
+<h3 id="limitations-and-considerations">Limitations and
+Considerations</h3>
+<p>Lowering <code>LUAI_MAXSTACK</code> conserves memory and bounds
+allocation sizes, but setting it too low can cause runtime errors
+(<code>stack overflow</code>) in scripts with nested function calls,
+heavy table operations, or multiple return values. Furthermore,
+<code>LUAI_MAXSTACK</code> must always remain within the limits of the
+integer type used for stack indices (typically signed integer bounds in
+Lua) and must be greater than <code>LUA_MINSTACK</code>.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/changing-lua-stack-size-using-luaconf-h';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

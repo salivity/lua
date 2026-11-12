@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Constant Folding for String Expressions - lua</title>
+    <meta name="description" content="In the Lua programming language, constant folding cannot optimize complex string expressions at compile time. While the standard Lua compiler evaluates basic numerical arithmetic during the compilation phase, string operations—including simple concatenati">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-constant-folding-for-string-expressions">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Constant Folding for String Expressions - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-constant-folding-for-string-expressions" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, constant folding cannot optimize complex string expressions at compile time. While the standard Lua compiler evaluates basic numerical arithmetic during the compilation phase, string operations—including simple concatenati" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-constant-folding-for-string-expressions">Lua Constant
+Folding for String Expressions</h1>
+<p>In the Lua programming language, constant folding cannot optimize
+complex string expressions at compile time. While the standard Lua
+compiler evaluates basic numerical arithmetic during the compilation
+phase, string operations—including simple concatenation and library
+functions—are deliberately deferred to runtime. This article examines
+how Lua handles compile-time optimizations, why string expressions are
+excluded from constant folding, and how this impacts performance.</p>
+<h3 id="how-lua-implements-constant-folding">How Lua Implements Constant
+Folding</h3>
+<p>Constant folding is a compiler optimization technique that evaluates
+constant expressions at compile time rather than computing them at
+runtime. In the standard PUC-Rio Lua implementation, constant folding is
+handled directly inside the code generator (<code>lcode.c</code>).</p>
+<p>When Lua parses code, it checks whether binary operations involve two
+known numeric constants. For example:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">seconds</span> <span class="op">=</span> <span class="dv">60</span> <span class="op">*</span> <span class="dv">60</span> <span class="op">*</span> <span class="dv">24</span></span></code></pre></div>
+<p>The Lua compiler recognizes that <code>60</code>, <code>60</code>,
+and <code>24</code> are numeric literals. It computes the result
+(<code>86400</code>) during bytecode generation and emits an instruction
+loading that single constant, completely eliminating runtime
+arithmetic.</p>
+<h3 id="string-concatenation-and-compile-time-limitations">String
+Concatenation and Compile-Time Limitations</h3>
+<p>Despite supporting numeric constant folding, Lua does not fold string
+expressions. Even a seemingly trivial concatenation of two string
+literals is not evaluated at compile time:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">message</span> <span class="op">=</span> <span class="st">&quot;Hello, &quot;</span> <span class="op">..</span> <span class="st">&quot;World!&quot;</span></span></code></pre></div>
+<p>Rather than folding this expression into
+<code>"Hello, World!"</code>, the compiler emits an explicit
+<code>CONCAT</code> opcode into the generated bytecode. The actual
+concatenation occurs only when the virtual machine executes that
+bytecode instruction.</p>
+<p>There are key architectural reasons for this behavior:</p>
+<ol type="1">
+<li><strong>Compiler Simplicity and Size:</strong> Lua is designed with
+a lightweight, single-pass compiler intended to be fast and minimal.
+Adding complex compile-time evaluation routines increases binary size
+and parse-time overhead.</li>
+<li><strong>String Interning and Garbage Collection:</strong> In Lua,
+strings are immutable and interned into a global hash table. Creating
+new strings at compile time forces the compiler to allocate memory and
+trigger garbage collector mechanisms within the parser, complicating
+memory management.</li>
+<li><strong>Metamethod Semantics:</strong> Concatenation in Lua relies
+on the <code>..</code> operator, which can be modified or hooked via
+metamethods (<code>__concat</code>) depending on how operands are
+resolved in dynamic contexts.</li>
+</ol>
+<h3 id="complex-string-expressions-and-the-standard-library">Complex
+String Expressions and the Standard Library</h3>
+<p>Complex string expressions typically rely on functions from Lua's
+<code>string</code> table, such as <code>string.format</code>,
+<code>string.rep</code>, or <code>string.sub</code>:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">tag</span> <span class="op">=</span> <span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;[%s]&quot;</span><span class="op">,</span> <span class="st">&quot;DEBUG&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>The Lua compiler cannot fold expressions like this because Lua is an
+entirely dynamic language. At compile time, the compiler has no
+guarantee that the global <code>string</code> table or the
+<code>string.format</code> function has not been shadowed, replaced, or
+modified. Function execution cannot safely happen during parsing,
+meaning any complex expression involving function calls must be
+evaluated at runtime.</p>
+<h3 id="behavior-in-luajit">Behavior in LuaJIT</h3>
+<p>The LuaJIT bytecode compiler shares the same basic compile-time
+restrictions as PUC-Rio Lua and does not fold string concatenations into
+a single literal during the front-end parsing phase.</p>
+<p>However, LuaJIT behaves differently during execution. Its
+Just-In-Time (JIT) tracing compiler monitors code as it runs. If a hot
+loop repeatedly performs string operations or allocations on invariant
+values, the trace optimizer can eliminate redundant allocations and
+hoist operations out of loops. While this achieves an effect similar to
+constant folding, it remains an adaptive runtime optimization rather
+than a compile-time pass.</p>
+<h3 id="conclusion">Conclusion</h3>
+<p>Developers working in Lua should not rely on the compiler to optimize
+string expressions or concatenations ahead of time. To avoid unnecessary
+runtime overhead, especially in performance-critical code paths, string
+literals should be combined manually in the source code or pre-processed
+using external build tools before deployment.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-constant-folding-for-string-expressions';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

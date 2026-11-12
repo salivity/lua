@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Assert: Input Validation and Error Handling - lua</title>
+    <meta name="description" content="Lua&#39;s built-in assert function provides a concise mechanism for checking preconditions, validating inputs, and intercepting runtime anomalies. This article explores how assert evaluates boolean and truthy conditions, how it automatically integrates with L">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-assert-input-validation-and-error-handling">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Assert: Input Validation and Error Handling - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-assert-input-validation-and-error-handling" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua&#39;s built-in assert function provides a concise mechanism for checking preconditions, validating inputs, and intercepting runtime anomalies. This article explores how assert evaluates boolean and truthy conditions, how it automatically integrates with L" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-assert-input-validation-and-error-handling">Lua Assert:
+Input Validation and Error Handling</h1>
+<p>Lua's built-in <code>assert</code> function provides a concise
+mechanism for checking preconditions, validating inputs, and
+intercepting runtime anomalies. This article explores how
+<code>assert</code> evaluates boolean and truthy conditions, how it
+automatically integrates with Lua's standard error-dispatching pipeline,
+and how developers can pass complex data structures instead of simple
+strings to create rich, structured error-handling routines.</p>
+<h2 id="mechanics-of-the-assert-function">Mechanics of the Assert
+Function</h2>
+<p>The <code>assert</code> function operates as a conditional wrapper
+around Lua's standard <code>error</code> function. It accepts a primary
+value to evaluate alongside an optional second argument representing the
+error payload:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">assert</span><span class="op">(</span><span class="va">value</span> <span class="op">[,</span> <span class="va">message</span><span class="op">])</span></span></code></pre></div>
+<p>When evaluated, <code>assert</code> checks whether <code>value</code>
+is truthy (anything other than <code>nil</code> or <code>false</code>).
+If the condition evaluates to true, <code>assert</code> simply returns
+all arguments passed to it unchanged. This pass-through behavior allows
+<code>assert</code> to be chained directly with function calls:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- If io.open fails, it returns nil followed by an error message,</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- which assert directly consumes and raises.</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">file</span> <span class="op">=</span> <span class="fu">assert</span><span class="op">(</span><span class="fu">io.open</span><span class="op">(</span><span class="st">&quot;config.lua&quot;</span><span class="op">,</span> <span class="st">&quot;r&quot;</span><span class="op">))</span></span></code></pre></div>
+<p>If <code>value</code> evaluates to <code>nil</code> or
+<code>false</code>, <code>assert</code> terminates normal execution by
+calling <code>error()</code>, forwarding the error payload. If no
+message is provided, it defaults to the generic string
+<code>"assertion failed!"</code>.</p>
+<h2 id="input-validation">Input Validation</h2>
+<p>In typical application code, <code>assert</code> serves as a guard
+clause at the boundary of functions to enforce contracts, type safety,
+and domain rules.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> calculate_discount<span class="op">(</span><span class="va">price</span><span class="op">,</span> <span class="va">discount_rate</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">assert</span><span class="op">(</span><span class="fu">type</span><span class="op">(</span><span class="va">price</span><span class="op">)</span> <span class="op">==</span> <span class="st">&quot;number&quot;</span> <span class="kw">and</span> <span class="va">price</span> <span class="op">&gt;=</span> <span class="dv">0</span><span class="op">,</span> <span class="st">&quot;Invalid price: must be a non-negative number&quot;</span><span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">assert</span><span class="op">(</span><span class="fu">type</span><span class="op">(</span><span class="va">discount_rate</span><span class="op">)</span> <span class="op">==</span> <span class="st">&quot;number&quot;</span><span class="op">,</span> <span class="st">&quot;Invalid discount_rate: must be a number&quot;</span><span class="op">)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">assert</span><span class="op">(</span><span class="va">discount_rate</span> <span class="op">&gt;=</span> <span class="dv">0</span> <span class="kw">and</span> <span class="va">discount_rate</span> <span class="op">&lt;=</span> <span class="dv">1</span><span class="op">,</span> <span class="st">&quot;discount_rate must be between 0.0 and 1.0&quot;</span><span class="op">)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">price</span> <span class="op">*</span> <span class="op">(</span><span class="dv">1</span> <span class="op">-</span> <span class="va">discount_rate</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>By placing validation checks at the beginning of routines, invalid
+parameters cause immediate execution halts before corrupted state or
+difficult-to-trace bugs propagate deeper into the system.</p>
+<h2 id="raising-structured-errors">Raising Structured Errors</h2>
+<p>While developers commonly pass plain strings as the second argument
+to <code>assert</code>, Lua allows any data type—including tables—to
+serve as an error object. This capability transforms <code>assert</code>
+from a rudimentary debugging utility into a structured error
+emitter.</p>
+<p>By passing a table as the message parameter, developers can supply
+contextual metadata such as error codes, stack context, and parameter
+identifiers:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> transfer_funds<span class="op">(</span><span class="va">account</span><span class="op">,</span> <span class="va">amount</span><span class="op">)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">assert</span><span class="op">(</span><span class="va">account</span><span class="op">.</span><span class="va">balance</span> <span class="op">&gt;=</span> <span class="va">amount</span><span class="op">,</span> <span class="op">{</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>        <span class="va">code</span> <span class="op">=</span> <span class="st">&quot;INSUFFICIENT_FUNDS&quot;</span><span class="op">,</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">requested</span> <span class="op">=</span> <span class="va">amount</span><span class="op">,</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">available</span> <span class="op">=</span> <span class="va">account</span><span class="op">.</span><span class="va">balance</span><span class="op">,</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">account_id</span> <span class="op">=</span> <span class="va">account</span><span class="op">.</span><span class="va">id</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">})</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">account</span><span class="op">.</span><span class="va">balance</span> <span class="op">=</span> <span class="va">account</span><span class="op">.</span><span class="va">balance</span> <span class="op">-</span> <span class="va">amount</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">account</span><span class="op">.</span><span class="va">balance</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h2 id="intercepting-structured-errors">Intercepting Structured
+Errors</h2>
+<p>When structured errors are raised by <code>assert</code>, they bypass
+standard execution and bubble up to the nearest protected call
+(<code>pcall</code> or <code>xpcall</code>). The receiving scope
+receives the exact table passed into <code>assert</code>, allowing
+downstream error handlers to inspect and branch based on
+machine-readable error properties rather than relying on brittle string
+parsing:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">result</span> <span class="op">=</span> <span class="fu">pcall</span><span class="op">(</span><span class="va">transfer_funds</span><span class="op">,</span> <span class="va">user_account</span><span class="op">,</span> <span class="dv">150</span><span class="op">)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">success</span> <span class="cf">then</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="fu">type</span><span class="op">(</span><span class="va">result</span><span class="op">)</span> <span class="op">==</span> <span class="st">&quot;table&quot;</span> <span class="kw">and</span> <span class="va">result</span><span class="op">.</span><span class="va">code</span> <span class="op">==</span> <span class="st">&quot;INSUFFICIENT_FUNDS&quot;</span> <span class="cf">then</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>        notify_user<span class="op">(</span><span class="st">&quot;Shortage of &quot;</span> <span class="op">..</span> <span class="op">(</span><span class="va">result</span><span class="op">.</span><span class="va">requested</span> <span class="op">-</span> <span class="va">result</span><span class="op">.</span><span class="va">available</span><span class="op">)</span> <span class="op">..</span> <span class="st">&quot; credits.&quot;</span><span class="op">)</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>        <span class="co">-- Fallback for unhandled, string, or runtime errors</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>        <span class="fu">error</span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>Using tables within <code>assert</code> enables clean separation
+between business rule failures and unexpected low-level runtime errors,
+maintaining high code readability without sacrificing robust error
+architecture.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-assert-input-validation-and-error-handling';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Byte Arrays with string.pack and string.unpack - lua</title>
+    <meta name="description" content="This article provides an overview of how the Lua programming language handles binary data using its native string library. Lua represents raw byte sequences using standard, 8-bit clean strings, eliminating the need for a dedicated byte array data type. By">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-byte-arrays-with-string-pack-and-string-unpack">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Byte Arrays with string.pack and string.unpack - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-byte-arrays-with-string-pack-and-string-unpack" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article provides an overview of how the Lua programming language handles binary data using its native string library. Lua represents raw byte sequences using standard, 8-bit clean strings, eliminating the need for a dedicated byte array data type. By" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-byte-arrays-with-stringpack-and-stringunpack">Lua Byte
+Arrays with string.pack and string.unpack</h1>
+<p>This article provides an overview of how the Lua programming language
+handles binary data using its native string library. Lua represents raw
+byte sequences using standard, 8-bit clean strings, eliminating the need
+for a dedicated byte array data type. By utilizing the
+<code>string.pack</code> and <code>string.unpack</code> functions
+introduced in Lua 5.3, developers can efficiently serialize Lua values
+into binary layouts and deserialize structured binary buffers back into
+native variables.</p>
+<h2 id="binary-data-representation-in-lua">Binary Data Representation in
+Lua</h2>
+<p>In Lua, strings are arbitrary sequences of bytes. Unlike languages
+where strings are strictly null-terminated or restricted to specific
+text encodings (like UTF-8 or ASCII), Lua strings are 8-bit clean and
+length-aware. A Lua string can hold any byte value from
+<code>0x00</code> to <code>0xFF</code>.</p>
+<p>Because of this design, a raw byte array is simply represented as a
+standard Lua string. However, because Lua strings are immutable,
+modifying a byte sequence requires creating a new string or operating on
+intermediate structures such as tables of integer byte values.</p>
+<h2 id="serializing-data-with-stringpack">Serializing Data with
+<code>string.pack</code></h2>
+<p>The <code>string.pack</code> function serializes primitive
+values—such as numbers, booleans, and other strings—into a binary string
+according to a specified format string.</p>
+<h3 id="syntax">Syntax</h3>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">packed_bytes</span> <span class="op">=</span> <span class="fu">string.pack</span><span class="op">(</span><span class="va">fmt</span><span class="op">,</span> <span class="va">v1</span><span class="op">,</span> <span class="va">v2</span><span class="op">,</span> <span class="op">...)</span></span></code></pre></div>
+<ul>
+<li><code>fmt</code>: A string defining the layout and types of the
+values.</li>
+<li><code>v1, v2, ...</code>: The values to pack into the binary
+sequence.</li>
+</ul>
+<h3 id="format-specifiers">Format Specifiers</h3>
+<p>The format string uses specific characters to control alignment,
+endianness, and data types:</p>
+<ul>
+<li><strong>Endianness:</strong>
+<ul>
+<li><code>&lt;</code>: Little-endian.</li>
+<li><code>&gt;</code>: Big-endian.</li>
+<li><code>=</code>: Native endianness (default).</li>
+</ul></li>
+<li><strong>Integer Types:</strong>
+<ul>
+<li><code>b</code> / <code>B</code>: Signed / unsigned 1-byte integer
+(<code>char</code>).</li>
+<li><code>h</code> / <code>H</code>: Signed / unsigned 2-byte integer
+(<code>short</code>).</li>
+<li><code>l</code> / <code>L</code>: Signed / unsigned native
+<code>long</code>.</li>
+<li><code>j</code> / <code>J</code>: Signed / unsigned Lua integer
+(<code>lua_Integer</code>).</li>
+<li><code>i[n]</code> / <code>I[n]</code>: Signed / unsigned integer of
+<code>n</code> bytes (e.g., <code>I4</code> for a 32-bit unsigned
+integer).</li>
+</ul></li>
+<li><strong>Floating-Point Types:</strong>
+<ul>
+<li><code>f</code>: Single-precision float (4 bytes).</li>
+<li><code>d</code>: Double-precision float (8 bytes).</li>
+<li><code>n</code>: Lua number (<code>lua_Number</code>).</li>
+</ul></li>
+<li><strong>Strings and Bytes:</strong>
+<ul>
+<li><code>c[n]</code>: Fixed-length string of <code>n</code> bytes.</li>
+<li><code>z</code>: Zero-terminated string.</li>
+<li><code>s[n]</code>: String preceded by an unsigned integer length of
+<code>n</code> bytes.</li>
+</ul></li>
+<li><strong>Padding and Alignment:</strong>
+<ul>
+<li><code>x</code>: One byte of padding (zero-filled).</li>
+<li><code>X[n]</code>: Aligns according to an <code>n</code>-byte
+boundary.</li>
+</ul></li>
+</ul>
+<h3 id="example-packing-a-binary-header">Example: Packing a Binary
+Header</h3>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Pack a 16-bit identifier, an 8-bit flags field, and a 32-bit float in big-endian format</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">id</span> <span class="op">=</span> <span class="dv">0x1020</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">flags</span> <span class="op">=</span> <span class="dv">0x05</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">value</span> <span class="op">=</span> <span class="dv">42.5</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">binary_packet</span> <span class="op">=</span> <span class="fu">string.pack</span><span class="op">(</span><span class="st">&quot;&gt;I2 B f&quot;</span><span class="op">,</span> <span class="va">id</span><span class="op">,</span> <span class="va">flags</span><span class="op">,</span> <span class="va">value</span><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(#</span><span class="va">binary_packet</span><span class="op">)</span> <span class="co">-- Outputs: 7 (2 + 1 + 4 bytes)</span></span></code></pre></div>
+<h2 id="deserializing-data-with-stringunpack">Deserializing Data with
+<code>string.unpack</code></h2>
+<p>The <code>string.unpack</code> function reverses the packing process
+by reading values out of a binary string according to a format
+string.</p>
+<h3 id="syntax-1">Syntax</h3>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">v1</span><span class="op">,</span> <span class="va">v2</span><span class="op">,</span> <span class="op">...,</span> <span class="va">next_pos</span> <span class="op">=</span> <span class="fu">string.unpack</span><span class="op">(</span><span class="va">fmt</span><span class="op">,</span> <span class="va">s</span> <span class="op">[,</span> <span class="va">init</span><span class="op">])</span></span></code></pre></div>
+<ul>
+<li><code>fmt</code>: The format string matching the layout of the
+data.</li>
+<li><code>s</code>: The binary string to read from.</li>
+<li><code>init</code>: An optional 1-based index indicating where to
+begin reading (defaults to 1).</li>
+</ul>
+<p>In addition to returning the unpacked values,
+<code>string.unpack</code> returns a final value representing the
+1-based index in the string where the next unread byte begins. This is
+useful for processing streams or sequential packets.</p>
+<h3 id="example-unpacking-binary-data">Example: Unpacking Binary
+Data</h3>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">binary_packet</span> <span class="op">=</span> <span class="fu">string.pack</span><span class="op">(</span><span class="st">&quot;&gt;I2 B f&quot;</span><span class="op">,</span> <span class="dv">0x1020</span><span class="op">,</span> <span class="dv">0x05</span><span class="op">,</span> <span class="dv">42.5</span><span class="op">)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Unpack the binary packet</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">id</span><span class="op">,</span> <span class="va">flags</span><span class="op">,</span> <span class="va">value</span><span class="op">,</span> <span class="va">next_offset</span> <span class="op">=</span> <span class="fu">string.unpack</span><span class="op">(</span><span class="st">&quot;&gt;I2 B f&quot;</span><span class="op">,</span> <span class="va">binary_packet</span><span class="op">)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;ID: 0x%X&quot;</span><span class="op">,</span> <span class="va">id</span><span class="op">))</span>      <span class="co">-- ID: 0x1020</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;Flags: %d&quot;</span><span class="op">,</span> <span class="va">flags</span><span class="op">))</span>  <span class="co">-- Flags: 5</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;Value: %.1f&quot;</span><span class="op">,</span> <span class="va">value</span><span class="op">))</span><span class="co">-- Value: 42.5</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="st">&quot;Next byte position:&quot;</span><span class="op">,</span> <span class="va">next_offset</span><span class="op">)</span> <span class="co">-- Next byte position: 8</span></span></code></pre></div>
+<h2 id="manipulating-byte-arrays">Manipulating Byte Arrays</h2>
+<p>Because Lua strings cannot be modified in place, updating a single
+byte or value within a packed binary structure requires extracting,
+altering, and repacking the components, or slicing the string with
+<code>string.sub</code>.</p>
+<h3 id="modifying-specific-bytes-via-unpack-and-repack">Modifying
+Specific Bytes via Unpack and Repack</h3>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">packet</span> <span class="op">=</span> <span class="fu">string.pack</span><span class="op">(</span><span class="st">&quot;&lt;I4 I4&quot;</span><span class="op">,</span> <span class="dv">100</span><span class="op">,</span> <span class="dv">200</span><span class="op">)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Unpack the two values</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">val1</span><span class="op">,</span> <span class="va">val2</span> <span class="op">=</span> <span class="fu">string.unpack</span><span class="op">(</span><span class="st">&quot;&lt;I4 I4&quot;</span><span class="op">,</span> <span class="va">packet</span><span class="op">)</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- Modify the second value and repack</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="va">val2</span> <span class="op">=</span> <span class="va">val2</span> <span class="op">+</span> <span class="dv">50</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">modified_packet</span> <span class="op">=</span> <span class="fu">string.pack</span><span class="op">(</span><span class="st">&quot;&lt;I4 I4&quot;</span><span class="op">,</span> <span class="va">val1</span><span class="op">,</span> <span class="va">val2</span><span class="op">)</span></span></code></pre></div>
+<h3 id="direct-byte-level-updates-via-tables">Direct Byte-Level Updates
+via Tables</h3>
+<p>When performing frequent, arbitrary byte modifications, it is more
+efficient to convert the binary string into a table of integers,
+manipulate the elements directly, and reconstruct the binary string:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">data</span> <span class="op">=</span> <span class="fu">string.pack</span><span class="op">(</span><span class="st">&quot;c4&quot;</span><span class="op">,</span> <span class="st">&quot;test&quot;</span><span class="op">)</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Convert byte string into a mutable table of byte values</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">bytes</span> <span class="op">=</span> <span class="op">{</span> <span class="fu">string.byte</span><span class="op">(</span><span class="va">data</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="op">#</span><span class="va">data</span><span class="op">)</span> <span class="op">}</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- Modify the first byte (change &#39;t&#39; to &#39;b&#39;)</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="va">bytes</span><span class="op">[</span><span class="dv">1</span><span class="op">]</span> <span class="op">=</span> <span class="fu">string.byte</span><span class="op">(</span><span class="st">&quot;b&quot;</span><span class="op">)</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- Reconstruct the raw binary string</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">updated_data</span> <span class="op">=</span> <span class="fu">string.char</span><span class="op">(</span><span class="fu">table.unpack</span><span class="op">(</span><span class="va">bytes</span><span class="op">))</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">updated_data</span><span class="op">)</span> <span class="co">-- Outputs: best</span></span></code></pre></div></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-byte-arrays-with-string-pack-and-string-unpack';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

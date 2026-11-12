@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Pattern Matching Magic Characters - lua</title>
+    <meta name="description" content="Lua does not use traditional regular expressions for text processing; instead, it provides a lightweight pattern-matching engine built directly into its standard string library. This article provides a comprehensive reference of all twelve default &quot;magic">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-pattern-matching-magic-characters">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Pattern Matching Magic Characters - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-pattern-matching-magic-characters" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua does not use traditional regular expressions for text processing; instead, it provides a lightweight pattern-matching engine built directly into its standard string library. This article provides a comprehensive reference of all twelve default &quot;magic" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-pattern-matching-magic-characters">Lua Pattern Matching
+Magic Characters</h1>
+<p>Lua does not use traditional regular expressions for text processing;
+instead, it provides a lightweight pattern-matching engine built
+directly into its standard <code>string</code> library. This article
+provides a comprehensive reference of all twelve default "magic
+characters" used in Lua patterns—<code>^</code>, <code>$</code>,
+<code>(</code>, <code>)</code>, <code>%</code>, <code>.</code>,
+<code>[</code>, <code>]</code>, <code>*</code>, <code>+</code>,
+<code>-</code>, and <code>?</code>—and explains how each character
+functions when searching, capturing, and replacing text in functions
+such as <code>string.find</code>, <code>string.match</code>,
+<code>string.gmatch</code>, and <code>string.gsub</code>.</p>
+<h3 id="anchors">Anchors</h3>
+<ul>
+<li><code>^</code> (Caret): Anchors the match to the beginning of the
+subject string. When placed at the start of a pattern, the match
+succeeds only if the target string begins with the specified
+pattern.</li>
+<li><code>$</code> (Dollar sign): Anchors the match to the end of the
+subject string. When placed at the end of a pattern, the match succeeds
+only if the target string concludes with the specified pattern.</li>
+</ul>
+<h3 id="the-wildcard-and-the-escape-character">The Wildcard and the
+Escape Character</h3>
+<ul>
+<li><code>.</code> (Period): Matches any single character, including
+newline characters.</li>
+<li><code>%</code> (Percent sign): Acts as the universal escape
+character in Lua patterns.
+<ul>
+<li>Prefixing any magic character with <code>%</code> (e.g.,
+<code>%%</code>, <code>%.</code>, <code>%?</code>) treats it as a
+literal character rather than an operator.</li>
+<li>Prefixing alphanumeric characters defines built-in character classes
+(such as <code>%a</code> for letters, <code>%d</code> for digits, and
+<code>%s</code> for whitespace). Uppercase variants represent the
+complement of the class (such as <code>%D</code> for non-digits).</li>
+<li>Prefixing a digit <code>1</code> through <code>9</code> creates a
+backreference to a previous capture.</li>
+<li><code>%bxy</code> matches a balanced string starting with character
+<code>x</code> and ending with character <code>y</code> (e.g.,
+<code>%b()</code>).</li>
+</ul></li>
+</ul>
+<h3 id="repetition-modifiers-quantifiers">Repetition Modifiers
+(Quantifiers)</h3>
+<p>Pattern repetition characters in Lua are always applied to the
+preceding character, character class, or set:</p>
+<ul>
+<li><code>*</code> (Asterisk): Matches zero or more repetitions of the
+preceding item. It is greedy and matches the longest possible
+sequence.</li>
+<li><code>+</code> (Plus): Matches one or more repetitions of the
+preceding item. It is greedy and matches the longest possible
+sequence.</li>
+<li><code>-</code> (Hyphen/Minus): Matches zero or more repetitions of
+the preceding item. Unlike <code>*</code>, it is non-greedy (lazy) and
+matches the shortest possible sequence.</li>
+<li><code>?</code> (Question mark): Matches zero or one repetition of
+the preceding item, effectively making it optional.</li>
+</ul>
+<h3 id="sets-and-captures">Sets and Captures</h3>
+<ul>
+<li><code>[</code> and <code>]</code> (Square brackets): Define a custom
+character class (set). For example, <code>[aeiou]</code> matches any
+vowel.
+<ul>
+<li>A range of characters can be defined using a hyphen, such as
+<code>[0-9]</code> or <code>[a-z]</code>.</li>
+<li>Placing a <code>^</code> as the very first character inside the
+brackets negates the set, matching any character not enclosed (e.g.,
+<code>[^0-9]</code> matches any non-digit).</li>
+</ul></li>
+<li><code>(</code> and <code>)</code> (Parentheses): Define sub-pattern
+captures. When a match is found, the substrings matching the enclosed
+patterns are stored and can be retrieved as multiple return values or
+referenced in substitutions. If parentheses are empty (<code>()</code>),
+Lua captures the current string position as a number.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-pattern-matching-magic-characters';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

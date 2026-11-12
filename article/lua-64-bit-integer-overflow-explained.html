@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua 64-Bit Integer Overflow Explained - lua</title>
+    <meta name="description" content="Modern versions of Lua, beginning with Lua 5.3, handle integers using 64-bit signed representation and implement standard two&#39;s-complement wrap-around arithmetic when operations exceed maximum limits. Rather than throwing an error or automatically promoti">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-64-bit-integer-overflow-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua 64-Bit Integer Overflow Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-64-bit-integer-overflow-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Modern versions of Lua, beginning with Lua 5.3, handle integers using 64-bit signed representation and implement standard two&#39;s-complement wrap-around arithmetic when operations exceed maximum limits. Rather than throwing an error or automatically promoti" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-64-bit-integer-overflow-explained">Lua 64-Bit Integer
+Overflow Explained</h1>
+<p>Modern versions of Lua, beginning with Lua 5.3, handle integers using
+64-bit signed representation and implement standard two's-complement
+wrap-around arithmetic when operations exceed maximum limits. Rather
+than throwing an error or automatically promoting the result to a
+floating-point number, arithmetic operations that surpass the boundary
+wrap around cyclically to negative values. This article covers the
+internal mechanics of Lua's integer subtype, how overflow affects
+calculations and literals, and the rules governing integer limits.</p>
+<h2 id="the-64-bit-integer-range-in-modern-lua">The 64-Bit Integer Range
+in Modern Lua</h2>
+<p>In Lua 5.3 and subsequent releases (including Lua 5.4), the
+<code>number</code> type is split into two internal representations:
+integers and floats. By default, Lua uses standard signed 64-bit
+integers for the integer subtype.</p>
+<p>The boundaries of this range are exposed through the standard math
+library:</p>
+<ul>
+<li><strong>Maximum value (<code>math.maxinteger</code>):</strong> <span
+class="math inline">\(2^{63} - 1\)</span>, or
+<code>9,223,372,036,854,775,807</code></li>
+<li><strong>Minimum value (<code>math.mininteger</code>):</strong> <span
+class="math inline">\(-2^{63}\)</span>, or
+<code>-9,223,372,036,854,775,808</code></li>
+</ul>
+<h2 id="arithmetic-wrap-around-behavior">Arithmetic Wrap-Around
+Behavior</h2>
+<p>When standard integer arithmetic (such as addition, subtraction, or
+multiplication) produces a value greater than
+<code>math.maxinteger</code>, the calculation wraps around to the
+negative end of the spectrum using two's-complement rules (modulo <span
+class="math inline">\(2^{64}\)</span>).</p>
+<p>For example:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">max</span> <span class="op">=</span> <span class="va">math.maxinteger</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">max</span> <span class="op">+</span> <span class="dv">1</span> <span class="op">==</span> <span class="va">math.mininteger</span><span class="op">)</span> <span class="co">-- Outputs: true</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">max</span> <span class="op">+</span> <span class="dv">2</span> <span class="op">==</span> <span class="va">math.mininteger</span> <span class="op">+</span> <span class="dv">1</span><span class="op">)</span> <span class="co">-- Outputs: true</span></span></code></pre></div>
+<p>The reverse is also true for underflow. Subtracting from
+<code>math.mininteger</code> wraps back to the positive side:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">min</span> <span class="op">=</span> <span class="va">math.mininteger</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">min</span> <span class="op">-</span> <span class="dv">1</span> <span class="op">==</span> <span class="va">math.maxinteger</span><span class="op">)</span> <span class="co">-- Outputs: true</span></span></code></pre></div>
+<p>This behavior is deterministic and mirrors the low-level behavior of
+signed 64-bit integers in C. It does not generate runtime warnings or
+trigger execution errors.</p>
+<h2 id="numeric-literals-vs-runtime-calculations">Numeric Literals vs.
+Runtime Calculations</h2>
+<p>A distinction exists between arithmetic overflow during runtime and
+writing oversized numeric literals directly in Lua code.</p>
+<p>When you write a numeric literal directly into a script that exceeds
+the 64-bit signed integer boundary, Lua attempts to parse it as a
+floating-point number (an IEEE 754 double-precision float) instead of an
+integer.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">literal</span> <span class="op">=</span> <span class="dv">9223372036854775808</span> <span class="co">-- One greater than math.maxinteger</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">math.type</span><span class="op">(</span><span class="va">literal</span><span class="op">))</span> <span class="co">-- Outputs: &quot;float&quot;</span></span></code></pre></div>
+<p>While this preserves the approximate magnitude, double-precision
+floats only have 53 bits of precision, resulting in a loss of precision
+for the least significant digits.</p>
+<h2 id="division-and-type-promotion">Division and Type Promotion</h2>
+<p>Different arithmetic operators affect how Lua handles types and
+limits:</p>
+<ul>
+<li><strong>Standard Division (<code>/</code>):</strong> Always returns
+a float, even if both operands are integers. Because it operates on
+floats, it does not wrap around as an integer; instead, exceeding float
+limits results in <code>inf</code> (infinity).</li>
+<li><strong>Floor Division (<code>//</code>):</strong> If both operands
+are integers, the operation remains an integer. If the result cannot be
+represented as an integer (for instance,
+<code>math.mininteger // -1</code>), Lua triggers an overflow
+wrap-around, returning <code>math.mininteger</code>.</li>
+<li><strong>Mixed Operations:</strong> If an integer operation includes
+a float, the integer is promoted to a float before the operation takes
+place, bypassing integer wrap-around rules entirely.</li>
+</ul>
+<h2 id="bitwise-operators">Bitwise Operators</h2>
+<p>Bitwise operators (<code>&amp;</code>, <code>|</code>,
+<code>~</code>, <code>&lt;&lt;</code>, <code>&gt;&gt;</code>) operate
+strictly on integers. Any float operands with integral values are
+converted to integers before evaluation. If a shift operation causes
+bits to push beyond the 64-bit boundary, the excess bits are discarded,
+maintaining the wrap-around characteristics of 64-bit two's-complement
+arithmetic.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-64-bit-integer-overflow-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

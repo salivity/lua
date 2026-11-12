@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why Blocking I/O Breaks Async Execution in OpenResty Lua - lua</title>
+    <meta name="description" content="OpenResty achieves high-performance, non-blocking network applications by integrating the Lua programming language with Nginx&#39;s event-driven core via Lua coroutines. Using standard blocking I/O—such as native Lua file operations, blocking system calls, or">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-blocking-i-o-breaks-async-execution-in-open-resty-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why Blocking I/O Breaks Async Execution in OpenResty Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-blocking-i-o-breaks-async-execution-in-open-resty-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="OpenResty achieves high-performance, non-blocking network applications by integrating the Lua programming language with Nginx&#39;s event-driven core via Lua coroutines. Using standard blocking I/O—such as native Lua file operations, blocking system calls, or" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-blocking-io-breaks-async-execution-in-openresty-lua">Why
+Blocking I/O Breaks Async Execution in OpenResty Lua</h1>
+<p>OpenResty achieves high-performance, non-blocking network
+applications by integrating the Lua programming language with Nginx's
+event-driven core via Lua coroutines. Using standard blocking I/O—such
+as native Lua file operations, blocking system calls, or third-party C
+libraries that perform synchronous network requests—violates this model
+by freezing the single-threaded OS worker process running the Lua VM.
+This article explains the underlying architecture of OpenResty, how
+synchronous operations disrupt the event loop, and why non-blocking
+equivalents (cosockets) are mandatory for maintaining scalability.</p>
+<h3 id="the-openresty-concurrency-model">The OpenResty Concurrency
+Model</h3>
+<p>Nginx operates using a multi-process, single-threaded event loop
+model. Each worker process is assigned a single operating system thread
+driven by non-blocking event notification mechanisms such as Linux’s
+<code>epoll</code> or BSD’s <code>kqueue</code>.</p>
+<p>OpenResty embeds LuaJIT into each Nginx worker. To handle thousands
+of concurrent requests inside a single OS thread without standard
+multithreading overhead, OpenResty leverages <strong>Lua
+coroutines</strong>. When an incoming request arrives, a lightweight Lua
+coroutine is spawned to execute the request's logic.</p>
+<p>In this cooperative multitasking environment:</p>
+<ol type="1">
+<li>A coroutine runs until it encounters an I/O operation (e.g.,
+querying a database, calling an upstream HTTP API, or reading a
+socket).</li>
+<li>The coroutine calls an asynchronous OpenResty API (a
+<strong>cosocket</strong>).</li>
+<li>The cosocket registers the network descriptor with the Nginx event
+loop and yields execution back to Nginx.</li>
+<li>The single worker thread immediately switches to processing other
+incoming connections or resuming other coroutines.</li>
+<li>Once the OS signals that data is ready on the socket, Nginx wakes
+the corresponding Lua coroutine, resuming it seamlessly at the point it
+yielded.</li>
+</ol>
+<h3 id="how-standard-blocking-io-violates-the-model">How Standard
+Blocking I/O Violates the Model</h3>
+<p>Standard blocking I/O operations—such as Lua’s built-in
+<code>io.*</code> modules, standard POSIX system calls, or blocking
+database drivers (like standard <code>luasql</code> or
+<code>luasocket</code>)—operate at the operating system level, bypassing
+the Nginx event loop entirely.</p>
+<p>When standard blocking I/O is invoked:</p>
+<ul>
+<li><strong>Kernel-Level Thread Sleep:</strong> The OS suspends the
+underlying worker thread while waiting for the disk read/write or
+network packet to complete.</li>
+<li><strong>Event Loop Halting:</strong> Because the entire OS thread is
+put into a wait state, Nginx’s event loop completely stops
+spinning.</li>
+<li><strong>Worker Paralysis:</strong> While that thread is blocked, the
+worker process cannot accept new TCP connections, process existing SSL
+handshakes, execute timers, or run any other pending Lua coroutines
+allocated to that worker.</li>
+<li><strong>Latency Spikes and Starvation:</strong> Concurrency
+collapses from tens of thousands of simultaneous connections down to one
+request per worker process. If a downstream service or disk operation
+takes 200ms to respond, that entire worker process is frozen for 200ms,
+queuing up all other requests assigned to it.</li>
+</ul>
+<h3 id="cosockets-vs-blocking-sockets">Cosockets vs. Blocking
+Sockets</h3>
+<p>The fundamental mechanism that makes Lua fast inside OpenResty is the
+<strong>cosocket</strong> (<code>ngx.socket.tcp</code> and
+<code>ngx.socket.udp</code>). Cosockets mimic traditional synchronous
+APIs syntactically (allowing developers to write sequential code without
+callback hell), but under the hood, they are completely
+non-blocking:</p>
+<ul>
+<li><p><strong>Blocking Socket (<code>luasocket</code>):</strong></p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">socket</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;socket&quot;</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">client</span> <span class="op">=</span> <span class="va">socket</span><span class="op">.</span>connect<span class="op">(</span><span class="st">&quot;127.0.0.1&quot;</span><span class="op">,</span> <span class="dv">6379</span><span class="op">)</span> <span class="co">-- Blocks the entire OS thread until connected</span></span></code></pre></div></li>
+<li><p><strong>OpenResty Cosocket
+(<code>ngx.socket.tcp</code>):</strong></p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">sock</span> <span class="op">=</span> <span class="va">ngx</span><span class="op">.</span><span class="va">socket</span><span class="op">.</span>tcp<span class="op">()</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ok</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">sock</span><span class="op">:</span><span class="fu">connect</span><span class="op">(</span><span class="st">&quot;127.0.0.1&quot;</span><span class="op">,</span> <span class="dv">6379</span><span class="op">)</span> <span class="co">-- Yields Lua coroutine; event loop remains active</span></span></code></pre></div></li>
+</ul>
+<p>In the cosocket example, while the TCP handshake takes place, Nginx
+continues to handle thousands of other active HTTP requests. With the
+blocking socket, all thousands of other requests assigned to that worker
+stall until the handshake resolves.</p>
+<h3 id="ensuring-non-blocking-operations-in-openresty">Ensuring
+Non-Blocking Operations in OpenResty</h3>
+<p>To prevent breaking the asynchronous model, all external
+communication inside OpenResty code must rely on non-blocking
+equivalents:</p>
+<ol type="1">
+<li><strong>Network I/O:</strong> Always use libraries designed
+specifically for OpenResty (commonly under the <code>lua-resty-*</code>
+ecosystem, such as <code>lua-resty-redis</code>,
+<code>lua-resty-mysql</code>, or <code>lua-resty-http</code>), which
+wrap Nginx cosockets.</li>
+<li><strong>File System I/O:</strong> Standard POSIX file system reads
+(e.g., <code>io.open</code>) block the OS thread because Linux lacks a
+unified, fully non-blocking asynchronous file I/O interface suited for
+Nginx's event loop. For disk operations, use cached in-memory structures
+(like <code>lua_shared_dict</code>), offload file tasks to Nginx's
+native thread pools via <code>ngx.thread</code>, or read static files
+via standard Nginx upstream directives rather than Lua scripts.</li>
+<li><strong>CPU-Intensive Tasks:</strong> Excessive computation inside
+Lua scripts also blocks the event loop, as coroutines yield
+cooperatively on I/O, not preemptively on CPU instruction counts. Heavy
+compute workloads should be separated into external services or
+microservices queried over non-blocking network calls.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/why-blocking-i-o-breaks-async-execution-in-open-resty-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

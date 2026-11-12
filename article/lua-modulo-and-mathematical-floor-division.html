@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Modulo and Mathematical Floor Division - lua</title>
+    <meta name="description" content="In the Lua programming language, the modulo operator (%) is defined using mathematical floor division rather than truncation towards zero. While languages like C99, C++, and Java round integer division toward zero, Lua aligns with Python and number theory">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-modulo-and-mathematical-floor-division">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Modulo and Mathematical Floor Division - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-modulo-and-mathematical-floor-division" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the modulo operator (%) is defined using mathematical floor division rather than truncation towards zero. While languages like C99, C++, and Java round integer division toward zero, Lua aligns with Python and number theory" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-modulo-and-mathematical-floor-division">Lua Modulo and
+Mathematical Floor Division</h1>
+<p>In the Lua programming language, the modulo operator (<code>%</code>)
+is defined using mathematical floor division rather than truncation
+towards zero. While languages like C99, C++, and Java round integer
+division toward zero, Lua aligns with Python and number theory by
+rounding the division quotient toward negative infinity. As a result,
+the remainder produced by Lua's modulo operation always takes the sign
+of the divisor, ensuring predictable mathematical continuity when
+working with negative values.</p>
+<h3 id="the-division-identity-and-remainder">The Division Identity and
+Remainder</h3>
+<p>In computer science and mathematics, the relationship between a
+dividend <span class="math inline">\(a\)</span>, a divisor <span
+class="math inline">\(b\)</span>, a quotient <span
+class="math inline">\(q\)</span>, and a remainder <span
+class="math inline">\(r\)</span> is governed by the division
+algorithm:</p>
+<p><span class="math display">\[a = q \times b + r\]</span></p>
+<p>The definition of the modulo operator depends entirely on how the
+quotient <span class="math inline">\(q\)</span> is rounded:</p>
+<ul>
+<li><strong>Truncated Division (Rounding toward zero):</strong> The
+fractional part of <span class="math inline">\(a / b\)</span> is simply
+dropped. For negative results, numbers round upward toward zero (e.g.,
+<span class="math inline">\(-2.33\)</span> becomes <span
+class="math inline">\(-2\)</span>). Consequently, the remainder <span
+class="math inline">\(r\)</span> retains the sign of the dividend <span
+class="math inline">\(a\)</span>.</li>
+<li><strong>Floored Division (Rounding toward negative
+infinity):</strong> The quotient is defined as <span
+class="math inline">\(q = \lfloor a / b \rfloor\)</span>. For negative
+results, numbers round downward away from zero (e.g., <span
+class="math inline">\(-2.33\)</span> becomes <span
+class="math inline">\(-3\)</span>). Consequently, the remainder <span
+class="math inline">\(r\)</span> retains the sign of the divisor <span
+class="math inline">\(b\)</span>.</li>
+</ul>
+<h3 id="luas-formal-definition">Lua's Formal Definition</h3>
+<p>The Lua reference manual explicitly defines the modulo operator
+as:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="va">a</span> <span class="op">%</span> <span class="va">b</span> <span class="op">==</span> <span class="va">a</span> <span class="op">-</span> <span class="fu">math.floor</span><span class="op">(</span><span class="va">a</span> <span class="op">/</span> <span class="va">b</span><span class="op">)</span> <span class="op">*</span> <span class="va">b</span></span></code></pre></div>
+<p>Because <code>math.floor</code> rounds to the largest integer less
+than or equal to the argument, Lua strictly implements Donald Knuth’s
+floored division.</p>
+<h3 id="truncation-vs-floor-division-by-example">Truncation vs. Floor
+Division by Example</h3>
+<p>Consider the operation <code>-7 % 3</code>:</p>
+<ul>
+<li><strong>In Truncated Division (e.g., C, Java):</strong>
+<ul>
+<li><span class="math inline">\(q = \text{trunc}(-7 / 3) =
+\text{trunc}(-2.333...) = -2\)</span></li>
+<li><span class="math inline">\(r = -7 - (-2 \times 3) = -7 - (-6) =
+-1\)</span></li>
+</ul></li>
+<li><strong>In Lua's Floored Division:</strong>
+<ul>
+<li><span class="math inline">\(q = \text{floor}(-7 / 3) =
+\text{floor}(-2.333...) = -3\)</span></li>
+<li><span class="math inline">\(r = -7 - (-3 \times 3) = -7 - (-9) =
+2\)</span></li>
+</ul></li>
+</ul>
+<p>Because <span class="math inline">\(b = 3\)</span> is positive, the
+remainder in Lua is guaranteed to fall in the range <span
+class="math inline">\([0, 2]\)</span>.</p>
+<p>Conversely, if the divisor is negative, such as
+<code>7 % -3</code>:</p>
+<ul>
+<li><span class="math inline">\(q = \text{floor}(7 / -3) =
+\text{floor}(-2.333...) = -3\)</span></li>
+<li><span class="math inline">\(r = 7 - (-3 \times -3) = 7 - 9 =
+-2\)</span></li>
+</ul>
+<p>The remainder shares the negative sign of the divisor, lying within
+the range <span class="math inline">\((-3, 0]\)</span>.</p>
+<h3 id="advantages-of-floor-based-modulo">Advantages of Floor-Based
+Modulo</h3>
+<p>Lua’s decision to follow floored division provides notable
+mathematical and practical advantages:</p>
+<ol type="1">
+<li><strong>True Periodic Wrapping:</strong> When modeling cyclic
+systems—such as circular buffers, clock arithmetic, or wrapping
+coordinates in game development—a negative index naturally wraps around
+to the end of the range. In Lua, <code>-1 % 10</code> evaluates directly
+to <code>9</code>, whereas truncated division produces <code>-1</code>,
+which often requires an extra conditional check.</li>
+<li><strong>Euclidean Invariance:</strong> In modular arithmetic, the
+identity <span class="math inline">\((a + k \times b) \pmod b = a \pmod
+b\)</span> holds true for any integer <span
+class="math inline">\(k\)</span>. Floored division preserves this
+identity across the zero boundary, whereas truncated division breaks it
+when crossing from positive to negative dividends.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-modulo-and-mathematical-floor-division';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

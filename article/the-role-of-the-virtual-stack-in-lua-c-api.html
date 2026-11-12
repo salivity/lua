@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Role of the Virtual Stack in Lua C API - lua</title>
+    <meta name="description" content="The Lua C API relies on a virtual stack as its primary mechanism for exchanging data, managing memory, and coordinating function calls between C and Lua. Because C features static typing and manual memory management while Lua is dynamically typed and garb">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/the-role-of-the-virtual-stack-in-lua-c-api">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Role of the Virtual Stack in Lua C API - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/the-role-of-the-virtual-stack-in-lua-c-api" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The Lua C API relies on a virtual stack as its primary mechanism for exchanging data, managing memory, and coordinating function calls between C and Lua. Because C features static typing and manual memory management while Lua is dynamically typed and garb" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="the-role-of-the-virtual-stack-in-lua-c-api">The Role of the
+Virtual Stack in Lua C API</h1>
+<p>The Lua C API relies on a virtual stack as its primary mechanism for
+exchanging data, managing memory, and coordinating function calls
+between C and Lua. Because C features static typing and manual memory
+management while Lua is dynamically typed and garbage-collected, direct
+communication between the two runtimes presents significant
+architectural challenges. This article explains the fundamental purpose
+of the virtual stack, how it bridges the gap between these distinct
+programming paradigms, and the operational mechanics of data exchange,
+stack indexing, and execution flow.</p>
+<h3 id="bridging-static-and-dynamic-type-systems">Bridging Static and
+Dynamic Type Systems</h3>
+<p>The fundamental role of the virtual stack is to act as an abstraction
+layer between C and Lua. In pure C, variables have fixed types
+determined at compile time, whereas Lua variables can hold any value
+dynamically at runtime.</p>
+<p>Instead of requiring complex C structures or direct pointer
+manipulation into Lua's internal data structures, the virtual stack
+serves as a standardized intermediary:</p>
+<ul>
+<li><strong>Type Conversion:</strong> C code converts internal Lua
+values to native C types using functions like <code>lua_tointeger</code>
+or <code>lua_tostring</code>, and pushes C data into Lua using functions
+like <code>lua_pushinteger</code> or <code>lua_pushstring</code>.</li>
+<li><strong>Decoupling Implementations:</strong> The host application
+never accesses Lua objects directly. This encapsulation ensures that
+internal changes to the Lua runtime or memory structures do not break
+host C code.</li>
+</ul>
+<h3 id="managing-garbage-collection-and-object-lifecycles">Managing
+Garbage Collection and Object Lifecycles</h3>
+<p>In a mixed environment, Lua's garbage collector needs to know which
+objects are actively in use by C to prevent premature memory
+deallocation.</p>
+<p>The virtual stack solves this problem by rooting Lua objects:</p>
+<ul>
+<li>Any object placed on the stack is considered reachable by the
+garbage collector.</li>
+<li>As long as a value remains on the stack, it cannot be
+collected.</li>
+<li>Once removed or popped from the stack, the object becomes eligible
+for garbage collection unless referenced elsewhere in Lua.</li>
+</ul>
+<p>This design eliminates the need for manual reference counting in the
+host language for temporary values, drastically reducing memory leaks
+and dangling pointer errors.</p>
+<h3 id="indexing-and-stack-navigation">Indexing and Stack
+Navigation</h3>
+<p>The Lua virtual stack provides flexible indexing to make reading and
+manipulating values straightforward:</p>
+<ul>
+<li><strong>Positive Indexing (Absolute):</strong> Indices start at
+<code>1</code>, representing the bottom of the stack (the oldest pushed
+element). An index of <code>2</code> represents the second element
+pushed, and so on.</li>
+<li><strong>Negative Indexing (Relative):</strong> Indices start at
+<code>-1</code>, representing the top of the stack (the most recently
+pushed element). An index of <code>-2</code> targets the element just
+below the top.</li>
+</ul>
+<p>This dual-indexing model allows developers to access function
+arguments predictably using positive indices, while easily inspecting
+recent return values or working buffers using negative indices.</p>
+<h3 id="facilitating-function-calls">Facilitating Function Calls</h3>
+<p>All interactions involving function execution—whether C calling a Lua
+script or Lua invoking an exported C function—are mediated through the
+stack.</p>
+<h4 id="calling-lua-from-c">Calling Lua from C</h4>
+<ol type="1">
+<li>The C host pushes the target Lua function onto the stack.</li>
+<li>The host pushes the arguments in sequential order.</li>
+<li>The host invokes <code>lua_pcall</code> (protected call) or
+<code>lua_call</code>.</li>
+<li>Lua removes the function and arguments, runs the bytecode, and
+pushes the return values onto the stack.</li>
+<li>The C host reads the return values from the top of the stack and
+clears them as needed.</li>
+</ol>
+<h4 id="calling-c-from-lua">Calling C from Lua</h4>
+<p>When Lua invokes a registered C function, the function receives a
+private stack:</p>
+<ul>
+<li>Arguments passed by Lua appear at stack indices <code>1</code>
+through <code>n</code>.</li>
+<li>The C function executes its logic and pushes its return values onto
+the stack.</li>
+<li>The C function terminates by returning an integer indicating the
+exact number of return values it pushed onto the stack. Lua takes
+ownership of these results and cleans up the remaining stack frame.</li>
+</ul>
+<h3 id="summary-of-stack-responsibilities">Summary of Stack
+Responsibilities</h3>
+<p>The virtual stack is not merely a data structure; it is the entire
+operational protocol of the Lua C API. It provides safe bidirectional
+type conversion, acts as an anchor for the garbage collector, manages
+the boundary between different execution contexts, and standardizes
+parameter passing and return handling across language boundaries.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/the-role-of-the-virtual-stack-in-lua-c-api';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

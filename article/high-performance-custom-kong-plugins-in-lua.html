@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Performance Custom Kong Plugins in Lua - lua</title>
+    <meta name="description" content="This guide examines the core architectural patterns for developing high-performance custom plugins for the Kong Gateway using the Lua programming language. It details strategies for leveraging OpenResty&#39;s non-blocking I/O model, reducing LuaJIT garbage co">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/high-performance-custom-kong-plugins-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="High-Performance Custom Kong Plugins in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/high-performance-custom-kong-plugins-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This guide examines the core architectural patterns for developing high-performance custom plugins for the Kong Gateway using the Lua programming language. It details strategies for leveraging OpenResty&#39;s non-blocking I/O model, reducing LuaJIT garbage co" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="high-performance-custom-kong-plugins-in-lua">High-Performance
+Custom Kong Plugins in Lua</h1>
+<p>This guide examines the core architectural patterns for developing
+high-performance custom plugins for the Kong Gateway using the Lua
+programming language. It details strategies for leveraging OpenResty's
+non-blocking I/O model, reducing LuaJIT garbage collection pressure,
+implementing multi-tiered caching strategies, and properly delegating
+tasks across Kong’s request lifecycle phases to achieve sub-millisecond
+overhead.</p>
+<h3 id="strategic-phase-delegation">Strategic Phase Delegation</h3>
+<p>Kong's execution lifecycle maps directly to OpenResty phases
+(<code>rewrite</code>, <code>access</code>, <code>response</code>,
+<code>header_filter</code>, <code>body_filter</code>, and
+<code>log</code>). High-performance plugins limit CPU-bound work
+strictly to phases that require it.</p>
+<ul>
+<li><strong>Move non-critical operations to <code>log</code>:</strong>
+External telemetry, metrics dispatch, and deep audit logging must be
+deferred to the <code>log</code> phase. This phase executes after the
+response has been sent to the client, preventing non-essential
+processing from increasing overall request latency.</li>
+<li><strong>Fail fast in <code>access</code>:</strong> Any access
+control, rate limiting, or input validation logic should execute as
+early as possible in the <code>access</code> phase. If a request is
+malformed or unauthorized, terminate it immediately via
+<code>kong.response.exit()</code> to avoid downstream connection
+overhead and upstream execution.</li>
+<li><strong>Avoid buffering in <code>body_filter</code>:</strong>
+Manipulating request or response bodies requires chunked streaming.
+Accumulating whole payloads in memory to parse JSON or XML introduces
+high latency and memory spikes; process streams incrementally or offload
+inspection downstream.</li>
+</ul>
+<h3 id="multi-tiered-in-memory-caching">Multi-Tiered In-Memory
+Caching</h3>
+<p>Inter-process communication and remote lookups degrade throughput.
+High-performance plugins use a two-level (L1/L2) caching pattern to
+maximize hit rates and minimize locking.</p>
+<ol type="1">
+<li><strong>Level 1: Worker-Local Memory
+(<code>lua-resty-lrucache</code>):</strong> Store hot objects inside
+worker-specific memory. This eliminates cross-worker mutex contention
+entirely. L1 hits return raw Lua objects without deserialization
+overhead.</li>
+<li><strong>Level 2: Shared Dictionary (<code>ngx.shared.DICT</code> via
+<code>kong.cache</code>):</strong> If an item misses L1, query the
+shared memory zone available across all Nginx workers.
+<code>kong.cache</code> provides built-in mechanisms to prevent
+cache-stampedes (dog-piling) by ensuring only one worker updates an
+expired key while other workers receive stale or wait-state data.</li>
+</ol>
+<p>Stale-while-revalidate patterns should be implemented via
+<code>ngx.timer.at</code>, allowing stale data to be returned
+immediately while a background task refreshes the shared dictionary.</p>
+<h3 id="non-blocking-asynchronous-io-via-cosockets">Non-Blocking
+Asynchronous I/O via Cosockets</h3>
+<p>Standard Lua libraries often execute synchronous, blocking I/O calls
+that stall the entire Nginx worker thread.</p>
+<ul>
+<li><strong>Use the Kong PDK and OpenResty Cosockets:</strong> All
+network communication (HTTP, Redis, database connections) must use the
+Kong Plugin Development Kit (PDK) or OpenResty-compatible cosocket
+libraries (e.g., <code>lua-resty-http</code>,
+<code>lua-resty-redis</code>).</li>
+<li><strong>Connection Pooling:</strong> Never establish a new TCP or
+TLS connection per request. Configure proper connection pooling with
+<code>set_keepalive(timeout, pool_size)</code> to reuse sockets across
+the worker lifecycle.</li>
+<li><strong>Background Offloading:</strong> Fire-and-forget background
+tasks should utilize <code>ngx.timer.at</code> or
+<code>ngx.timer.every</code>. Note that timers run outside the request
+context, so request data must be explicitly serialized and passed to the
+timer callback.</li>
+</ul>
+<h3 id="minimizing-luajit-allocations-and-garbage-collection">Minimizing
+LuaJIT Allocations and Garbage Collection</h3>
+<p>The LuaJIT Garbage Collector (GC) runs concurrently with execution;
+high allocation rates trigger frequent GC sweeps that induce
+tail-latency spikes.</p>
+<ul>
+<li><strong>Preallocate and Reuse Tables:</strong> Dynamic table
+creation (<code>{}</code>) in high-throughput hot paths forces
+continuous memory allocation. Preallocate array and hash sizes using
+<code>table.new(narray, nhash)</code> when using the
+<code>table.new</code> module, or clear and reuse static worker tables
+using <code>table.clear</code>.</li>
+<li><strong>Avoid String Concatenation in Loops:</strong> Lua strings
+are immutable; concatenation via the <code>..</code> operator allocates
+new strings in memory. Buffer intermediate strings inside an array table
+and join them once with <code>table.concat()</code>.</li>
+<li><strong>Compile Regular Expressions Ahead of Time:</strong> When
+using pattern matching, utilize <code>ngx.re</code> functions with the
+<code>'o'</code> (compile once) flag, or precompile expressions at
+module initialization. Avoid the native Lua <code>string.match</code>
+for complex parsing as it bypasses the PCRE JIT engine.</li>
+</ul>
+<h3 id="safe-initialization-and-configuration-hydration">Safe
+Initialization and Configuration Hydration</h3>
+<p>The <code>init</code> and <code>configure</code> phases occur when
+the Kong worker starts or reloads its declarative schema.</p>
+<ul>
+<li><strong>Pre-process Schema Values:</strong> Transform and index
+plugin configurations during the <code>configure</code> handler rather
+than parsing configurations on every request. Pre-calculate lookup maps,
+hash sets, and normalized headers so that request-time retrieval is
+<span class="math inline">\(O(1)\)</span>.</li>
+<li><strong>Avoid Global Variable Leaks:</strong> Always run with strict
+variable checking. Global variables (<code>my_var = 1</code>) bypass
+module isolation, are shared unpredictably across requests, and
+invalidate LuaJIT optimization heuristics. Use <code>local</code>
+definitions for all references, including PDK shortcuts.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/high-performance-custom-kong-plugins-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

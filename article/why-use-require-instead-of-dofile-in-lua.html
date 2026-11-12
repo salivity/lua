@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why Use require Instead of dofile in Lua - lua</title>
+    <meta name="description" content="In Lua development, structuring an application into maintainable modules requires a reliable way to import external files. While both dofile and require can run external scripts, require is the industry standard for modular architecture, whereas dofile is">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-use-require-instead-of-dofile-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why Use require Instead of dofile in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-use-require-instead-of-dofile-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua development, structuring an application into maintainable modules requires a reliable way to import external files. While both dofile and require can run external scripts, require is the industry standard for modular architecture, whereas dofile is" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-use-require-instead-of-dofile-in-lua">Why Use require
+Instead of dofile in Lua</h1>
+<p>In Lua development, structuring an application into maintainable
+modules requires a reliable way to import external files. While both
+<code>dofile</code> and <code>require</code> can run external scripts,
+<code>require</code> is the industry standard for modular architecture,
+whereas <code>dofile</code> is largely avoided. This distinction exists
+because <code>require</code> provides built-in module caching,
+intelligent path resolution, support for shared state, and C library
+compatibility, whereas <code>dofile</code> indiscriminately reloads and
+executes scripts every time it is invoked.</p>
+<h3 id="automatic-caching-via-packageloaded">Automatic Caching via
+package.loaded</h3>
+<p>The most significant difference lies in how dependencies are cached.
+When <code>require("module_name")</code> runs, it first inspects the
+<code>package.loaded</code> table. If the module has already been
+loaded, <code>require</code> immediately returns the cached value
+instead of reading from the disk again.</p>
+<p>Conversely, <code>dofile("path/to/file.lua")</code> executes the
+target file unconditionally every time it is called. In a modular system
+where dozens of files might depend on a single shared utility or
+configuration module, <code>dofile</code> repeatedly parses and executes
+the same chunk, causing severe performance degradation and unnecessary
+I/O overhead.</p>
+<h3 id="state-consistency-and-singletons">State Consistency and
+Singletons</h3>
+<p>Because <code>require</code> caches return values, it guarantees that
+every script importing a module receives a reference to the exact same
+table. This behavior is essential for modular architectures that rely on
+singletons, shared caches, or internal state machines.</p>
+<p>When using <code>dofile</code>, each invocation creates a brand-new
+instance of the module's local variables and returned tables. If modules
+attempt to share state through instances created by <code>dofile</code>,
+that state will remain isolated to individual files unless explicitly
+bound to the global environment (<code>_G</code>), which defeats the
+purpose of clean modular design.</p>
+<h3 id="path-resolution-and-portability">Path Resolution and
+Portability</h3>
+<p><code>require</code> decouples module loading from the underlying
+filesystem structure. It searches for modules using templates defined in
+<code>package.path</code> and <code>package.cpath</code>. This
+abstraction allows a developer to reference a module by logical name
+(such as <code>require("engine.physics")</code>) without hardcoding
+relative or absolute file paths. Moving project directories or deploying
+the codebase across different platforms does not break module
+imports.</p>
+<p>In contrast, <code>dofile</code> requires an exact filesystem path.
+Relying on relative paths with <code>dofile</code> frequently fails when
+the application's working directory changes at runtime, leading to
+fragile architectures that break depending on how the interpreter was
+launched.</p>
+<h3 id="prevention-of-infinite-recursion">Prevention of Infinite
+Recursion</h3>
+<p>Circular dependencies, while generally discouraged, occasionally
+occur in complex systems. If Module A calls <code>dofile</code> on
+Module B, and Module B calls <code>dofile</code> on Module A, the
+program enters an infinite recursive loop that inevitably crashes the
+Lua runtime with a stack overflow.</p>
+<p><code>require</code> guards against this failure mode. When a module
+execution begins, <code>require</code> marks the module in
+<code>package.loaded</code> before execution finishes. If a circular
+reference calls <code>require</code> on that same module, it returns the
+partially initialized module rather than triggering an infinite
+execution loop.</p>
+<h3 id="support-for-c-libraries">Support for C Libraries</h3>
+<p>Modern Lua architectures often incorporate compiled C libraries for
+performance-critical tasks. The <code>require</code> function seamlessly
+handles compiled shared libraries (<code>.so</code>, <code>.dll</code>)
+by searching <code>package.cpath</code> and utilizing
+<code>loadlib</code> behind the scenes. <code>dofile</code> is strictly
+limited to loading and executing text-based Lua code, making it
+incapable of serving as a universal module loader.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/why-use-require-instead-of-dofile-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

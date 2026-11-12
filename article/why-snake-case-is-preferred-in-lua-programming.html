@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Why snake_case Is Preferred in Lua Programming - lua</title>
+    <meta name="description" content="In the Lua programming language, naming conventions predominantly favor snakecase for variables and functions over camelCase. While Lua itself is unopinionated and syntactically permits any naming scheme, the ecosystem overwhelmingly adopts snakecase due">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/why-snake-case-is-preferred-in-lua-programming">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Why snake_case Is Preferred in Lua Programming - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/why-snake-case-is-preferred-in-lua-programming" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, naming conventions predominantly favor snakecase for variables and functions over camelCase. While Lua itself is unopinionated and syntactically permits any naming scheme, the ecosystem overwhelmingly adopts snakecase due" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="why-snake_case-is-preferred-in-lua-programming">Why snake_case
+Is Preferred in Lua Programming</h1>
+<p>In the Lua programming language, naming conventions predominantly
+favor <code>snake_case</code> for variables and functions over
+<code>camelCase</code>. While Lua itself is unopinionated and
+syntactically permits any naming scheme, the ecosystem overwhelmingly
+adopts <code>snake_case</code> due to Lua’s deep historical integration
+with C, consistency with the official standard library, and prevailing
+community-driven style guides. Understanding these foundational
+influences clarifies why <code>snake_case</code> remains the idiomatic
+choice for modern Lua development.</p>
+<h3 id="alignment-with-c-and-low-level-heritage">Alignment with C and
+Low-Level Heritage</h3>
+<p>Lua was developed from its inception as an embeddable extension
+language written in ANSI C. Because one of Lua's primary design goals
+was seamless interoperability with C host applications, the creators
+naturally aligned Lua's design philosophy with standard C idioms. In the
+C programming world, lowercase identifiers and <code>snake_case</code>
+have long been the established standard. Developers working between the
+C API and Lua scripts benefit from a unified visual syntax, minimizing
+cognitive friction when passing functions, variables, and data
+structures across the language boundary.</p>
+<h3 id="standard-library-consistency">Standard Library Consistency</h3>
+<p>The Lua standard library sets the canonical precedent for code style
+within the ecosystem. Standard modules and global functions rely
+entirely on all-lowercase identifiers (such as <code>tostring</code>,
+<code>tonumber</code>, <code>setmetatable</code>, and
+<code>rawget</code>) or implicit lowercase separation within namespaces
+(such as <code>table.insert</code>, <code>string.format</code>, and
+<code>math.random_seed</code>).</p>
+<p>When multi-word functions occur, <code>snake_case</code> naturally
+extends the all-lowercase aesthetic without introducing the abrupt
+casing shifts seen in <code>camelCase</code>. Adopting
+<code>snake_case</code> in user code ensures visual harmony with Lua’s
+built-in environment, making third-party scripts feel native rather than
+foreign.</p>
+<h3 id="community-style-standards">Community Style Standards</h3>
+<p>Prominent community style conventions, such as the widely referenced
+Lua Style Guide, formally codify these preferences to ensure consistency
+across the ecosystem:</p>
+<ul>
+<li><strong>Variables and Functions:</strong> Standard variables and
+functions use <code>snake_case</code> (e.g.,
+<code>local player_count</code>,
+<code>function calculate_total()</code>).</li>
+<li><strong>Constants:</strong> Defined in
+<code>ALL_CAPS_SNAKE_CASE</code> (e.g.,
+<code>MAX_RETRY_COUNT</code>).</li>
+<li><strong>Objects and Classes:</strong> Metatable-based classes or
+simulated object definitions typically use <code>PascalCase</code>
+(e.g., <code>Vector3</code>, <code>PlayerManager</code>).</li>
+</ul>
+<p>Using <code>snake_case</code> for functions and variables creates an
+immediate visual distinction between class constructors or modules
+(<code>PascalCase</code>) and local instances or procedural methods
+(<code>snake_case</code>).</p>
+<h3 id="minimalist-philosophy-and-readability">Minimalist Philosophy and
+Readability</h3>
+<p>Lua emphasizes minimalism and simplicity. In typography and code
+analysis, underscores provide explicit visual delimiters that enhance
+readability in dynamic, loosely typed environments. Because Lua does not
+feature complex keyword structures, static type annotations, or access
+modifiers out of the box, clear word separation allows developers to
+parse variable roles and scopes quickly. By mirroring the lowercase
+simplicity of Lua's own keywords—such as <code>then</code>,
+<code>elseif</code>, <code>function</code>, and
+<code>until</code>—<code>snake_case</code> reinforces the clean,
+unobtrusive nature of the language.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/why-snake-case-is-preferred-in-lua-programming';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

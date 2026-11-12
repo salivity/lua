@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua string.reverse Inverts Byte Sequences - lua</title>
+    <meta name="description" content="The string.reverse function in Lua inverts a string by treating it as a raw, contiguous array of 8-bit bytes and copying those bytes from back to front into a newly allocated string. Because Lua is fundamentally byte-oriented and encoding-agnostic at its">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-string-reverse-inverts-byte-sequences">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua string.reverse Inverts Byte Sequences - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-string-reverse-inverts-byte-sequences" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The string.reverse function in Lua inverts a string by treating it as a raw, contiguous array of 8-bit bytes and copying those bytes from back to front into a newly allocated string. Because Lua is fundamentally byte-oriented and encoding-agnostic at its" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-stringreverse-inverts-byte-sequences">How Lua
+string.reverse Inverts Byte Sequences</h1>
+<p>The <code>string.reverse</code> function in Lua inverts a string by
+treating it as a raw, contiguous array of 8-bit bytes and copying those
+bytes from back to front into a newly allocated string. Because Lua is
+fundamentally byte-oriented and encoding-agnostic at its core, this
+operation does not parse multi-byte characters like UTF-8, resulting in
+a strictly mechanical reversal of raw memory.</p>
+<h3 id="internal-string-representation-in-lua">Internal String
+Representation in Lua</h3>
+<p>In Lua, strings are immutable, length-prefixed byte arrays managed by
+the Lua C API. A string can contain any arbitrary 8-bit values,
+including embedded zero bytes (<code>\0</code>). Because the Lua runtime
+does not enforce or track specific character encodings such as ASCII or
+UTF-8, string operations work directly on sequences of <code>char</code>
+values defined by a pointer and a fixed length.</p>
+<h3 id="the-c-implementation-of-stringreverse">The C Implementation of
+<code>string.reverse</code></h3>
+<p>Under the hood, <code>string.reverse</code> is implemented in Lua's
+standard library file <code>lstrlib.c</code> by the C function
+<code>str_reverse</code>. The inversion process follows these steps:</p>
+<ol type="1">
+<li><strong>Length Retrieval:</strong> The function extracts the source
+string's pointer and its exact byte length using
+<code>luaL_checklstring</code>.</li>
+<li><strong>Buffer Preparation:</strong> A buffer
+(<code>luaL_Buffer</code>) is initialized to hold the resulting string,
+reserving the same number of bytes as the source string.</li>
+<li><strong>Byte-by-Byte Copying:</strong> The function runs a loop that
+reads bytes starting from the last index (<code>length - 1</code>) down
+to the first index (<code>0</code>) of the source pointer, writing each
+byte sequentially from the beginning to the end of the destination
+buffer:</li>
+</ol>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">static</span> <span class="dt">int</span> str_reverse <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">size_t</span> l<span class="op">,</span> i<span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  luaL_Buffer b<span class="op">;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>s <span class="op">=</span> luaL_checklstring<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="op">&amp;</span>l<span class="op">);</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">char</span> <span class="op">*</span>p <span class="op">=</span> luaL_buffinitsize<span class="op">(</span>L<span class="op">,</span> <span class="op">&amp;</span>b<span class="op">,</span> l<span class="op">);</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> <span class="op">(</span>i <span class="op">=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> l<span class="op">;</span> i<span class="op">++)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    p<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> s<span class="op">[</span>l <span class="op">-</span> <span class="dv">1</span> <span class="op">-</span> i<span class="op">];</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  luaL_pushresultsize<span class="op">(&amp;</span>b<span class="op">,</span> l<span class="op">);</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="cf">return</span> <span class="dv">1</span><span class="op">;</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<ol start="4" type="1">
+<li><strong>String Interning:</strong> Once the buffer is populated,
+<code>luaL_pushresultsize</code> finalizes the buffer, creates an
+interned string object in Lua's internal hash table, and pushes it onto
+the Lua stack.</li>
+</ol>
+<h3 id="performance-characteristics">Performance Characteristics</h3>
+<p>The reversal operation has a time complexity of <span
+class="math inline">\(O(n)\)</span>, where <span
+class="math inline">\(n\)</span> is the number of bytes in the string.
+Space complexity is also <span class="math inline">\(O(n)\)</span>
+because Lua strings are immutable; the operation cannot occur in place
+and must allocate memory for the reversed result.</p>
+<h3 id="implications-for-multi-byte-encodings">Implications for
+Multi-Byte Encodings</h3>
+<p>Because <code>string.reverse</code> copies individual bytes rather
+than Unicode code points or grapheme clusters, multi-byte encodings like
+UTF-8 will be corrupted if reversed with this function. A two-byte UTF-8
+sequence <code>[0xC3, 0xA9]</code> (representing <code>é</code>) becomes
+<code>[0xA9, 0xC3]</code>, which is invalid UTF-8. Handling multi-byte
+text requires specialized libraries like <code>utf8</code> (included in
+Lua 5.3+) or custom algorithms that traverse and reverse code point
+boundaries rather than raw bytes.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-string-reverse-inverts-byte-sequences';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Validate JWTs in Nginx Using Lua - lua</title>
+    <meta name="description" content="Validating JSON Web Tokens (JWTs) directly within Nginx offloads authentication from upstream services, reducing backend load and centralizing security policies. This guide explains how to inspect incoming HTTP requests, extract Bearer tokens, and verify">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-validate-jw-ts-in-nginx-using-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Validate JWTs in Nginx Using Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-validate-jw-ts-in-nginx-using-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Validating JSON Web Tokens (JWTs) directly within Nginx offloads authentication from upstream services, reducing backend load and centralizing security policies. This guide explains how to inspect incoming HTTP requests, extract Bearer tokens, and verify" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-validate-jwts-in-nginx-using-lua">How to Validate JWTs in
+Nginx Using Lua</h1>
+<p>Validating JSON Web Tokens (JWTs) directly within Nginx offloads
+authentication from upstream services, reducing backend load and
+centralizing security policies. This guide explains how to inspect
+incoming HTTP requests, extract Bearer tokens, and verify cryptographic
+signatures and expiration claims using Nginx combined with the OpenResty
+Lua engine and the <code>lua-resty-jwt</code> library.</p>
+<h3 id="prerequisites">Prerequisites</h3>
+<p>To execute Lua scripts within Nginx, you must use
+<strong>OpenResty</strong> or a custom Nginx build compiled with
+<code>ngx_http_lua_module</code> and <code>LuaJIT</code>. You also need
+the <code>lua-resty-jwt</code> library, which handles parsing and
+cryptographic operations.</p>
+<p>Install the library using OpenResty’s package manager (OPM):</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">opm</span> get SkyLothar/lua-resty-jwt</span></code></pre></div>
+<p>Alternatively, you can install it via Luarocks:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luarocks</span> install lua-resty-jwt</span></code></pre></div>
+<h3 id="implementing-token-validation-in-nginx">Implementing Token
+Validation in Nginx</h3>
+<p>Authentication logic in Nginx with Lua is commonly placed within the
+<code>access_by_lua_block</code> directive. This phase runs before the
+request reaches the upstream proxy handlers, allowing Nginx to reject
+unauthorized requests immediately with an
+<code>HTTP 401 Unauthorized</code> status.</p>
+<p>Below is a complete <code>nginx.conf</code> configuration
+demonstrating extraction, signature validation, and payload
+processing:</p>
+<pre class="nginx"><code>http {
+    # Define Lua package paths if installed outside the standard directory
+    lua_package_path &quot;/usr/local/openresty/lualib/?.lua;;&quot;;
+
+    server {
+        listen 80;
+        server_name api.example.com;
+
+        location /secure-endpoint {
+            access_by_lua_block {
+                local jwt = require(&quot;resty.jwt&quot;)
+                local auth_header = ngx.var.http_Authorization
+
+                -- 1. Check for the presence of the Authorization header
+                if not auth_header then
+                    ngx.status = ngx.HTTP_UNAUTHORIZED
+                    ngx.say(&#39;{&quot;error&quot;: &quot;Missing authorization header&quot;}&#39;)
+                    return ngx.exit(ngx.HTTP_UNAUTHORIZED)
+                end
+
+                -- 2. Extract the token from the Bearer format
+                local _, _, token = string.find(auth_header, &quot;Bearer%s+(.+)&quot;)
+                if not token then
+                    ngx.status = ngx.HTTP_UNAUTHORIZED
+                    ngx.say(&#39;{&quot;error&quot;: &quot;Malformed authorization header&quot;}&#39;)
+                    return ngx.exit(ngx.HTTP_UNAUTHORIZED)
+                end
+
+                -- 3. Define secret key and verify signature
+                local secret = &quot;your-256-bit-secret-key&quot;
+                local jwt_obj = jwt:verify(secret, token)
+
+                -- 4. Check cryptographic validity
+                if not jwt_obj.verified then
+                    ngx.status = ngx.HTTP_UNAUTHORIZED
+                    ngx.header.content_type = &quot;application/json&quot;
+                    ngx.say(&#39;{&quot;error&quot;: &quot;&#39; .. (jwt_obj.reason or &quot;Invalid token&quot;) .. &#39;&quot;}&#39;)
+                    return ngx.exit(ngx.HTTP_UNAUTHORIZED)
+                end
+
+                -- 5. Validate standard claims (e.g., expiration)
+                local current_time = ngx.time()
+                if jwt_obj.payload.exp and jwt_obj.payload.exp &lt; current_time then
+                    ngx.status = ngx.HTTP_UNAUTHORIZED
+                    ngx.header.content_type = &quot;application/json&quot;
+                    ngx.say(&#39;{&quot;error&quot;: &quot;Token has expired&quot;}&#39;)
+                    return ngx.exit(ngx.HTTP_UNAUTHORIZED)
+                end
+
+                -- 6. Pass payload claims to upstream servers via headers
+                ngx.req.set_header(&quot;X-User-ID&quot;, jwt_obj.payload.sub)
+            }
+
+            proxy_pass http://backend_upstream;
+        }
+    }
+}</code></pre>
+<h3 id="key-execution-steps">Key Execution Steps</h3>
+<ol type="1">
+<li><strong>Extracting the Header:</strong> The
+<code>ngx.var.http_Authorization</code> variable reads the standard HTTP
+request header. Lua pattern matching strips the <code>Bearer</code>
+prefix to isolate the raw JWT string.</li>
+<li><strong>Signature Verification:</strong> The
+<code>jwt:verify()</code> method automatically parses the three-part
+Base64URL-encoded token (header, payload, signature), identifies the
+algorithm (such as HS256), and validates the integrity using the shared
+secret.</li>
+<li><strong>Claim Validation:</strong> While <code>jwt:verify()</code>
+ensures the signature is genuine, your script must explicitly inspect
+payload attributes—such as <code>exp</code> (expiration timestamp) or
+custom claims (such as roles or tenant IDs)—using Nginx's system time
+provider <code>ngx.time()</code>.</li>
+<li><strong>Context Propagation:</strong> Once verified, you can attach
+decoded values directly to upstream request headers using
+<code>ngx.req.set_header()</code>, allowing internal microservices to
+consume trusted user identifiers without needing to re-verify the
+signature.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-to-validate-jw-ts-in-nginx-using-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

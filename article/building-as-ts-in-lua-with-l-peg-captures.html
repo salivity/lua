@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building ASTs in Lua with LPeg Captures - lua</title>
+    <meta name="description" content="LPeg (Parsing Expression Grammars for Lua) provides an expressive framework that matches patterns and transforms raw text into structured data. By using LPeg captures, developers can extract tokens, attach structural metadata, group values, and construct">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/building-as-ts-in-lua-with-l-peg-captures">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Building ASTs in Lua with LPeg Captures - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/building-as-ts-in-lua-with-l-peg-captures" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="LPeg (Parsing Expression Grammars for Lua) provides an expressive framework that matches patterns and transforms raw text into structured data. By using LPeg captures, developers can extract tokens, attach structural metadata, group values, and construct" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="building-asts-in-lua-with-lpeg-captures">Building ASTs in Lua
+with LPeg Captures</h1>
+<p>LPeg (Parsing Expression Grammars for Lua) provides an expressive
+framework that matches patterns and transforms raw text into structured
+data. By using LPeg captures, developers can extract tokens, attach
+structural metadata, group values, and construct hierarchical Abstract
+Syntax Trees (ASTs) in a single parsing pass. This article explains the
+core capture mechanisms in LPeg and demonstrates how to assemble them to
+build an AST for language parsers, compilers, and interpreters.</p>
+<h2 id="what-are-lpeg-captures">What Are LPeg Captures?</h2>
+<p>In standard LPeg, a pattern either succeeds or fails. When a match
+succeeds without captures, LPeg returns only the index following the
+last matched character.</p>
+<p>Captures produce Lua values from matched text. When an LPeg pattern
+containing captures successfully matches an input, it yields those
+captured values directly to the caller. LPeg provides several capture
+operators suited for structural data representation:</p>
+<ul>
+<li><strong>Simple Capture (<code>lpeg.C(p)</code>):</strong> Captures
+the exact substring matched by pattern <code>p</code>.</li>
+<li><strong>Constant Capture (<code>lpeg.Cc(val)</code>):</strong>
+Injects an arbitrary Lua value (such as a string tag or boolean) into
+the capture list without consuming any input.</li>
+<li><strong>Table Capture (<code>lpeg.Ct(p)</code>):</strong> Collects
+all values captured within pattern <code>p</code> into a single Lua
+table array.</li>
+<li><strong>Group Capture (<code>lpeg.Cg(p, [key])</code>):</strong>
+Groups captures together, optionally associating them with a specific
+table key when placed inside a table capture.</li>
+<li><strong>Function/Replacement Capture (<code>p / fn</code> or
+<code>p / table</code>):</strong> Passes all captures produced by
+<code>p</code> as arguments to a function <code>fn</code>, or uses the
+first capture as a key to look up a value in <code>table</code>.</li>
+<li><strong>Fold Capture (<code>lpeg.Cf(p, fn)</code>):</strong>
+Iteratively folds captured values using an accumulator function, ideal
+for left-associative binary operations.</li>
+</ul>
+<h2 id="building-individual-ast-nodes">Building Individual AST
+Nodes</h2>
+<p>An AST is a tree structure composed of nodes, where each node
+typically contains a type tag, positional or metadata properties, and
+zero or more child nodes.</p>
+<p>There are two primary patterns for constructing AST nodes using LPeg
+captures: using <code>lpeg.Ct</code> with <code>lpeg.Cc</code>, or using
+replacement captures (<code>/</code>) with constructor functions.</p>
+<h3 id="approach-1-table-captures-with-constant-tags">Approach 1: Table
+Captures with Constant Tags</h3>
+<p>Using <code>lpeg.Ct</code> combined with <code>lpeg.Cc</code> is a
+purely declarative way to build node tables:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">lpeg</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;lpeg&quot;</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="cn">C</span><span class="op">,</span> <span class="va">Cc</span><span class="op">,</span> <span class="va">Ct</span><span class="op">,</span> <span class="cn">R</span><span class="op">,</span> <span class="cn">S</span> <span class="op">=</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">C</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="va">Cc</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="va">Ct</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">R</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">S</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">digits</span> <span class="op">=</span> R<span class="op">(</span><span class="st">&quot;09&quot;</span><span class="op">)^</span><span class="dv">1</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">number_node</span> <span class="op">=</span> Ct<span class="op">(</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    Cc<span class="op">(</span><span class="st">&quot;tag&quot;</span><span class="op">)</span> <span class="op">*</span> <span class="va">lpeg</span><span class="op">.</span>Cg<span class="op">(</span>Cc<span class="op">(</span><span class="st">&quot;NumberLiteral&quot;</span><span class="op">),</span> <span class="st">&quot;type&quot;</span><span class="op">)</span> <span class="op">*</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    Cc<span class="op">(</span><span class="st">&quot;value&quot;</span><span class="op">)</span> <span class="op">*</span> <span class="va">lpeg</span><span class="op">.</span>Cg<span class="op">(</span><span class="va">digits</span> <span class="op">/</span> <span class="fu">tonumber</span><span class="op">,</span> <span class="st">&quot;value&quot;</span><span class="op">)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<p>Matching <code>"42"</code> against <code>number_node</code>
+outputs:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="op">{</span> <span class="fu">type</span> <span class="op">=</span> <span class="st">&quot;NumberLiteral&quot;</span><span class="op">,</span> <span class="va">value</span> <span class="op">=</span> <span class="dv">42</span> <span class="op">}</span></span></code></pre></div>
+<h3
+id="approach-2-constructor-functions-via-replacement-capture">Approach
+2: Constructor Functions via Replacement Capture</h3>
+<p>Using the division operator <code>/</code> allows constructor
+functions to standardize node shapes:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> make_node<span class="op">(</span><span class="va">tag</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">function</span><span class="op">(...)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="va">tag</span><span class="op">,</span> <span class="op">...</span> <span class="op">}</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> make_binary_node<span class="op">(</span><span class="va">op</span><span class="op">,</span> <span class="va">left</span><span class="op">,</span> <span class="va">right</span><span class="op">)</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;BinaryExpr&quot;</span><span class="op">,</span> <span class="va">operator</span> <span class="op">=</span> <span class="va">op</span><span class="op">,</span> <span class="va">left</span> <span class="op">=</span> <span class="va">left</span><span class="op">,</span> <span class="va">right</span> <span class="op">=</span> <span class="va">right</span> <span class="op">}</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">identifier</span> <span class="op">=</span> <span class="va">lpeg</span><span class="op">.</span>C<span class="op">(</span>R<span class="op">(</span><span class="st">&quot;az&quot;</span><span class="op">,</span> <span class="st">&quot;AZ&quot;</span><span class="op">)</span> <span class="op">*</span> R<span class="op">(</span><span class="st">&quot;az&quot;</span><span class="op">,</span> <span class="st">&quot;AZ&quot;</span><span class="op">,</span> <span class="st">&quot;09&quot;</span><span class="op">)^</span><span class="dv">0</span><span class="op">)</span> <span class="op">/</span> make_node<span class="op">(</span><span class="st">&quot;Identifier&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>Whenever <code>identifier</code> matches, the matched substring is
+passed to <code>make_node("Identifier")</code>, producing
+<code>{ tag = "Identifier", [1] = "matched_name" }</code>.</p>
+<h2 id="managing-operator-precedence-with-fold-captures">Managing
+Operator Precedence with Fold Captures</h2>
+<p>Expressions typically feature left-associativity and varying operator
+precedence (such as multiplication binding tighter than addition).
+LPeg's <code>lpeg.Cf</code> simplifies building nested binary AST nodes
+without requiring manual post-processing passes.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">lpeg</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;lpeg&quot;</span><span class="op">)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="cn">P</span><span class="op">,</span> <span class="cn">S</span><span class="op">,</span> <span class="cn">R</span><span class="op">,</span> <span class="cn">C</span><span class="op">,</span> <span class="va">Cf</span><span class="op">,</span> <span class="va">Cg</span> <span class="op">=</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">P</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">S</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">R</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">C</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="va">Cf</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="va">Cg</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ws</span> <span class="op">=</span> S<span class="op">(</span><span class="st">&quot; </span><span class="sc">\t\n</span><span class="st">&quot;</span><span class="op">)^</span><span class="dv">0</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> token<span class="op">(</span><span class="va">p</span><span class="op">)</span> <span class="cf">return</span> <span class="va">p</span> <span class="op">*</span> <span class="va">ws</span> <span class="kw">end</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> fold_binary<span class="op">(</span><span class="va">left</span><span class="op">,</span> <span class="va">op</span><span class="op">,</span> <span class="va">right</span><span class="op">)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">{</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;BinaryExpr&quot;</span><span class="op">,</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>        <span class="va">operator</span> <span class="op">=</span> <span class="va">op</span><span class="op">,</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>        <span class="va">left</span> <span class="op">=</span> <span class="va">left</span><span class="op">,</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>        <span class="va">right</span> <span class="op">=</span> <span class="va">right</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="co">-- Primary expressions</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">number</span> <span class="op">=</span> token<span class="op">(</span>R<span class="op">(</span><span class="st">&quot;09&quot;</span><span class="op">)^</span><span class="dv">1</span><span class="op">)</span> <span class="op">/</span> <span class="kw">function</span><span class="op">(</span><span class="va">v</span><span class="op">)</span> </span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;NumberLiteral&quot;</span><span class="op">,</span> <span class="va">value</span> <span class="op">=</span> <span class="fu">tonumber</span><span class="op">(</span><span class="va">v</span><span class="op">)</span> <span class="op">}</span> </span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="co">-- Factors: handles &#39;*&#39; and &#39;/&#39;</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">mul_op</span> <span class="op">=</span> token<span class="op">(</span>C<span class="op">(</span>S<span class="op">(</span><span class="st">&quot;*/&quot;</span><span class="op">)))</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">factor</span> <span class="op">=</span> Cf<span class="op">(</span><span class="va">number</span> <span class="op">*</span> Cg<span class="op">(</span><span class="va">mul_op</span> <span class="op">*</span> <span class="va">number</span><span class="op">)^</span><span class="dv">0</span><span class="op">,</span> <span class="va">fold_binary</span><span class="op">)</span></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a><span class="co">-- Terms: handles &#39;+&#39; and &#39;-&#39;</span></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">add_op</span> <span class="op">=</span> token<span class="op">(</span>C<span class="op">(</span>S<span class="op">(</span><span class="st">&quot;+-&quot;</span><span class="op">)))</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">expr</span> <span class="op">=</span> Cf<span class="op">(</span><span class="va">factor</span> <span class="op">*</span> Cg<span class="op">(</span><span class="va">add_op</span> <span class="op">*</span> <span class="va">factor</span><span class="op">)^</span><span class="dv">0</span><span class="op">,</span> <span class="va">fold_binary</span><span class="op">)</span></span></code></pre></div>
+<p>When evaluating the string <code>"1 + 2 * 3"</code>, the grammar
+performs the following operations:</p>
+<ol type="1">
+<li><p><code>factor</code> matches <code>2 * 3</code>, yielding:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="op">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;BinaryExpr&quot;</span><span class="op">,</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">operator</span> <span class="op">=</span> <span class="st">&quot;*&quot;</span><span class="op">,</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">left</span> <span class="op">=</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;NumberLiteral&quot;</span><span class="op">,</span> <span class="va">value</span> <span class="op">=</span> <span class="dv">2</span> <span class="op">},</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">right</span> <span class="op">=</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;NumberLiteral&quot;</span><span class="op">,</span> <span class="va">value</span> <span class="op">=</span> <span class="dv">3</span> <span class="op">}</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><code>expr</code> encounters the <code>+</code> operator and
+folds the number <code>1</code> with the higher-precedence
+multiplication subtree, resulting in:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="op">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;BinaryExpr&quot;</span><span class="op">,</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">operator</span> <span class="op">=</span> <span class="st">&quot;+&quot;</span><span class="op">,</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">left</span> <span class="op">=</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;NumberLiteral&quot;</span><span class="op">,</span> <span class="va">value</span> <span class="op">=</span> <span class="dv">1</span> <span class="op">},</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">right</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>        <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;BinaryExpr&quot;</span><span class="op">,</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">operator</span> <span class="op">=</span> <span class="st">&quot;*&quot;</span><span class="op">,</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">left</span> <span class="op">=</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;NumberLiteral&quot;</span><span class="op">,</span> <span class="va">value</span> <span class="op">=</span> <span class="dv">2</span> <span class="op">},</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        <span class="va">right</span> <span class="op">=</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;NumberLiteral&quot;</span><span class="op">,</span> <span class="va">value</span> <span class="op">=</span> <span class="dv">3</span> <span class="op">}</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+</ol>
+<h2 id="complete-example-expression-grammar-to-ast">Complete Example:
+Expression Grammar to AST</h2>
+<p>Combining these techniques allows full grammars using
+<code>lpeg.V</code> (grammar variables) to output a complete AST:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">lpeg</span> <span class="op">=</span> <span class="fu">require</span><span class="op">(</span><span class="st">&quot;lpeg&quot;</span><span class="op">)</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="cn">P</span><span class="op">,</span> <span class="cn">V</span><span class="op">,</span> <span class="cn">S</span><span class="op">,</span> <span class="cn">R</span><span class="op">,</span> <span class="cn">C</span><span class="op">,</span> <span class="va">Ct</span><span class="op">,</span> <span class="va">Cc</span><span class="op">,</span> <span class="va">Cf</span><span class="op">,</span> <span class="va">Cg</span> <span class="op">=</span> </span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">lpeg</span><span class="op">.</span><span class="cn">P</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">V</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">S</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">R</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="cn">C</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="va">Ct</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="va">Cc</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="va">Cf</span><span class="op">,</span> <span class="va">lpeg</span><span class="op">.</span><span class="va">Cg</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ws</span> <span class="op">=</span> S<span class="op">(</span><span class="st">&quot; </span><span class="sc">\t\r\n</span><span class="st">&quot;</span><span class="op">)^</span><span class="dv">0</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> tok<span class="op">(</span><span class="va">pat</span><span class="op">)</span> <span class="cf">return</span> <span class="va">pat</span> <span class="op">*</span> <span class="va">ws</span> <span class="kw">end</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> binary_fold<span class="op">(</span><span class="va">left</span><span class="op">,</span> <span class="va">op</span><span class="op">,</span> <span class="va">right</span><span class="op">)</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;Binary&quot;</span><span class="op">,</span> <span class="va">op</span> <span class="op">=</span> <span class="va">op</span><span class="op">,</span> <span class="va">left</span> <span class="op">=</span> <span class="va">left</span><span class="op">,</span> <span class="va">right</span> <span class="op">=</span> <span class="va">right</span> <span class="op">}</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">grammar</span> <span class="op">=</span> P<span class="op">{</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;Program&quot;</span><span class="op">,</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    <span class="va">Program</span> <span class="op">=</span> <span class="va">ws</span> <span class="op">*</span> V<span class="op">(</span><span class="st">&quot;Expr&quot;</span><span class="op">)</span> <span class="op">*</span> P<span class="op">(-</span><span class="dv">1</span><span class="op">),</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>    <span class="va">Expr</span> <span class="op">=</span> Cf<span class="op">(</span>V<span class="op">(</span><span class="st">&quot;Term&quot;</span><span class="op">)</span> <span class="op">*</span> Cg<span class="op">(</span>tok<span class="op">(</span>C<span class="op">(</span>S<span class="op">(</span><span class="st">&quot;+-&quot;</span><span class="op">)))</span> <span class="op">*</span> V<span class="op">(</span><span class="st">&quot;Term&quot;</span><span class="op">))^</span><span class="dv">0</span><span class="op">,</span> <span class="va">binary_fold</span><span class="op">),</span></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>    <span class="va">Term</span> <span class="op">=</span> Cf<span class="op">(</span>V<span class="op">(</span><span class="st">&quot;Factor&quot;</span><span class="op">)</span> <span class="op">*</span> Cg<span class="op">(</span>tok<span class="op">(</span>C<span class="op">(</span>S<span class="op">(</span><span class="st">&quot;*/&quot;</span><span class="op">)))</span> <span class="op">*</span> V<span class="op">(</span><span class="st">&quot;Factor&quot;</span><span class="op">))^</span><span class="dv">0</span><span class="op">,</span> <span class="va">binary_fold</span><span class="op">),</span></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>    <span class="va">Factor</span> <span class="op">=</span> V<span class="op">(</span><span class="st">&quot;Number&quot;</span><span class="op">)</span></span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>           <span class="op">+</span> tok<span class="op">(</span>P<span class="op">(</span><span class="st">&quot;(&quot;</span><span class="op">))</span> <span class="op">*</span> V<span class="op">(</span><span class="st">&quot;Expr&quot;</span><span class="op">)</span> <span class="op">*</span> tok<span class="op">(</span>P<span class="op">(</span><span class="st">&quot;)&quot;</span><span class="op">))</span></span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>           <span class="op">+</span> V<span class="op">(</span><span class="st">&quot;Variable&quot;</span><span class="op">),</span></span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>           </span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>    <span class="va">Number</span> <span class="op">=</span> tok<span class="op">(</span>C<span class="op">(</span>R<span class="op">(</span><span class="st">&quot;09&quot;</span><span class="op">)^</span><span class="dv">1</span><span class="op">))</span> <span class="op">/</span> <span class="kw">function</span><span class="op">(</span><span class="va">n</span><span class="op">)</span></span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;Number&quot;</span><span class="op">,</span> <span class="va">value</span> <span class="op">=</span> <span class="fu">tonumber</span><span class="op">(</span><span class="va">n</span><span class="op">)</span> <span class="op">}</span></span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="op">,</span></span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>    <span class="va">Variable</span> <span class="op">=</span> tok<span class="op">(</span>C<span class="op">(</span>R<span class="op">(</span><span class="st">&quot;az&quot;</span><span class="op">,</span> <span class="st">&quot;AZ&quot;</span><span class="op">)</span> <span class="op">*</span> R<span class="op">(</span><span class="st">&quot;az&quot;</span><span class="op">,</span> <span class="st">&quot;AZ&quot;</span><span class="op">,</span> <span class="st">&quot;09&quot;</span><span class="op">)^</span><span class="dv">0</span><span class="op">))</span> <span class="op">/</span> <span class="kw">function</span><span class="op">(</span><span class="va">id</span><span class="op">)</span></span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="op">{</span> <span class="va">tag</span> <span class="op">=</span> <span class="st">&quot;Variable&quot;</span><span class="op">,</span> <span class="va">name</span> <span class="op">=</span> <span class="va">id</span> <span class="op">}</span></span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ast</span> <span class="op">=</span> <span class="va">grammar</span><span class="op">:</span><span class="fu">match</span><span class="op">(</span><span class="st">&quot;x + 10 * 5&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>The resulting <code>ast</code> table accurately reflects the
+precedence rules and semantic hierarchy of the input program without
+requiring separate tokenization or tree-transformation phases.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/building-as-ts-in-lua-with-l-peg-captures';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

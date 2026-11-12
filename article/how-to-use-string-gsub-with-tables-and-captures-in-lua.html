@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Use string.gsub with Tables and Captures in Lua - lua</title>
+    <meta name="description" content="In Lua, the string.gsub function is a versatile tool for pattern matching and global string substitution. While it commonly replaces text using static strings, it also accepts tables as replacement values, mapping matched text or explicit capture groups d">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-use-string-gsub-with-tables-and-captures-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Use string.gsub with Tables and Captures in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-use-string-gsub-with-tables-and-captures-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In Lua, the string.gsub function is a versatile tool for pattern matching and global string substitution. While it commonly replaces text using static strings, it also accepts tables as replacement values, mapping matched text or explicit capture groups d" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-use-stringgsub-with-tables-and-captures-in-lua">How to
+Use string.gsub with Tables and Captures in Lua</h1>
+<p>In Lua, the <code>string.gsub</code> function is a versatile tool for
+pattern matching and global string substitution. While it commonly
+replaces text using static strings, it also accepts tables as
+replacement values, mapping matched text or explicit capture groups
+directly to key-value pairs. This article explains the underlying
+mechanism of how <code>string.gsub</code> handles capture groups when
+paired with replacement tables, including lookup rules, fallback
+behaviors, and code examples.</p>
+<h3 id="the-mechanics-of-stringgsub">The Mechanics of
+<code>string.gsub</code></h3>
+<p>The basic syntax of the function is:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">string.gsub</span><span class="op">(</span><span class="va">s</span><span class="op">,</span> <span class="va">pattern</span><span class="op">,</span> <span class="va">repl</span> <span class="op">[,</span> <span class="va">n</span><span class="op">])</span></span></code></pre></div>
+<ul>
+<li><code>s</code>: The source string.</li>
+<li><code>pattern</code>: The pattern to search for, which may contain
+parentheses to define captures.</li>
+<li><code>repl</code>: The replacement specification, which can be a
+string, a function, or a table.</li>
+<li><code>n</code> (optional): The maximum number of substitutions to
+perform.</li>
+</ul>
+<p>When <code>repl</code> is a table, <code>string.gsub</code> performs
+a lookup for every match found by <code>pattern</code>, using matched
+elements as keys to retrieve replacement values.</p>
+<hr />
+<h3 id="how-replacement-tables-work-without-captures">How Replacement
+Tables Work Without Captures</h3>
+<p>If the pattern contains no capture groups (no parentheses),
+<code>string.gsub</code> uses the entire matched substring as the table
+key.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">dictionary</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">cat</span> <span class="op">=</span> <span class="st">&quot;feline&quot;</span><span class="op">,</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">dog</span> <span class="op">=</span> <span class="st">&quot;canine&quot;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">text</span> <span class="op">=</span> <span class="st">&quot;The cat chased the dog.&quot;</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> <span class="fu">string.gsub</span><span class="op">(</span><span class="va">text</span><span class="op">,</span> <span class="st">&quot;%a+&quot;</span><span class="op">,</span> <span class="va">dictionary</span><span class="op">)</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- Output: The feline chased the canine.</span></span></code></pre></div>
+<p><strong>Key behavior:</strong></p>
+<ul>
+<li>For <code>"cat"</code>, <code>dictionary["cat"]</code> returns
+<code>"feline"</code>, so <code>"cat"</code> is replaced.</li>
+<li>For <code>"The"</code>, <code>dictionary["The"]</code> returns
+<code>nil</code>. When a key is missing or evaluates to <code>nil</code>
+or <code>false</code>, <code>string.gsub</code> leaves the original
+matched substring unchanged.</li>
+</ul>
+<hr />
+<h3 id="how-capture-groups-interact-with-replacement-tables">How Capture
+Groups Interact with Replacement Tables</h3>
+<p>When parentheses are added to a pattern, Lua creates capture groups.
+When using a table as the replacement parameter, <strong>only the first
+capture group is used as the lookup key</strong>, regardless of how many
+capture groups are defined.</p>
+<h4 id="1-isolating-the-key-with-a-single-capture">1. Isolating the Key
+with a Single Capture</h4>
+<p>Captures allow you to match a broader context while using only a
+specific portion of the match as the table key:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">vars</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">user</span> <span class="op">=</span> <span class="st">&quot;Alice&quot;</span><span class="op">,</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">role</span> <span class="op">=</span> <span class="st">&quot;Admin&quot;</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">template</span> <span class="op">=</span> <span class="st">&quot;Hello, $user! Your role is $role.&quot;</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- Match &#39;$&#39; followed by alphanumeric characters, capturing only the name</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> <span class="fu">string.gsub</span><span class="op">(</span><span class="va">template</span><span class="op">,</span> <span class="st">&quot;%$(%w+)&quot;</span><span class="op">,</span> <span class="va">vars</span><span class="op">)</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co">-- Output: Hello, Alice! Your role is Admin.</span></span></code></pre></div>
+<p>In this example:</p>
+<ul>
+<li>The pattern <code>%$%w+</code> matches <code>$user</code>.</li>
+<li>The capture group <code>(%w+)</code> isolates
+<code>user</code>.</li>
+<li><code>string.gsub</code> looks up <code>vars["user"]</code>, which
+yields <code>"Alice"</code>.</li>
+<li>The entire matched portion (<code>$user</code>) is replaced by
+<code>"Alice"</code>.</li>
+</ul>
+<h4 id="2-behavior-with-multiple-captures">2. Behavior with Multiple
+Captures</h4>
+<p>If a pattern defines multiple capture groups,
+<code>string.gsub</code> ignores all captures after the first when
+performing a table lookup.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">map</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="cn">X</span> <span class="op">=</span> <span class="st">&quot;Success&quot;</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">text</span> <span class="op">=</span> <span class="st">&quot;Key: X=100&quot;</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- Two captures: (%a) and (%d+)</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> <span class="fu">string.gsub</span><span class="op">(</span><span class="va">text</span><span class="op">,</span> <span class="st">&quot;(%a)=(%d+)&quot;</span><span class="op">,</span> <span class="va">map</span><span class="op">)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">result</span><span class="op">)</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- Output: Key: Success</span></span></code></pre></div>
+<p>Even though both <code>(%a)</code> and <code>(%d+)</code> are
+captured, only the value of the first capture (<code>"X"</code>) is
+passed to <code>map</code>. The entire match (<code>"X=100"</code>) is
+replaced with the value of <code>map["X"]</code>.</p>
+<hr />
+<h3 id="handling-missing-keys-and-non-string-values">Handling Missing
+Keys and Non-String Values</h3>
+<p>When <code>string.gsub</code> resolves a table lookup:</p>
+<ul>
+<li><strong>String or Number</strong>: If the value at
+<code>table[key]</code> is a string or a number, that value replaces the
+match.</li>
+<li><strong>Nil or False</strong>: If <code>table[key]</code> is
+<code>nil</code> or <code>false</code>, the match is not replaced, and
+the original text remains intact.</li>
+<li><strong>Other Types</strong>: If <code>table[key]</code> is any
+other type (such as a boolean <code>true</code>, another table, or a
+thread), Lua throws a runtime error stating that the replacement is an
+invalid type.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-to-use-string-gsub-with-tables-and-captures-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

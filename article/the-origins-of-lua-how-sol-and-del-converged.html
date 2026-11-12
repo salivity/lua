@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Origins of Lua: How SOL and DEL Converged - lua</title>
+    <meta name="description" content="Before Lua emerged as one of the world&#39;s most widely adopted embedded scripting languages, it began as two distinct, specialized internal tools developed at Tecgraf (the Computer Graphics Technology Group at PUC-Rio) in Brazil. In the early 1990s, softwar">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/the-origins-of-lua-how-sol-and-del-converged">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Origins of Lua: How SOL and DEL Converged - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/the-origins-of-lua-how-sol-and-del-converged" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Before Lua emerged as one of the world&#39;s most widely adopted embedded scripting languages, it began as two distinct, specialized internal tools developed at Tecgraf (the Computer Graphics Technology Group at PUC-Rio) in Brazil. In the early 1990s, softwar" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="the-origins-of-lua-how-sol-and-del-converged">The Origins of
+Lua: How SOL and DEL Converged</h1>
+<p>Before Lua emerged as one of the world's most widely adopted embedded
+scripting languages, it began as two distinct, specialized internal
+tools developed at Tecgraf (the Computer Graphics Technology Group at
+PUC-Rio) in Brazil. In the early 1990s, software projects developed for
+the state oil company Petrobras required sophisticated configuration and
+data entry mechanisms. Rather than using rigid external tools or clunky
+standalone interpreters, the team created DEL (Data Entry Language) and
+SOL (Simple Object Language). In 1993, the distinct procedural
+capabilities of DEL and the structural data-description abilities of SOL
+converged directly into Lua 1.0, uniting declarative syntax with
+procedural programming inside a single, lightweight embedded engine.</p>
+<h3 id="the-needs-of-tecgraf-and-brazilian-trade-restrictions">The Needs
+of Tecgraf and Brazilian Trade Restrictions</h3>
+<p>Between 1977 and 1992, Brazil maintained a strict regulatory reserve
+on domestic computer hardware and software imports. Because Brazilian
+developers could not easily purchase commercial software from abroad,
+Tecgraf had to build custom in-house tools for clients like Petrobras.
+Petrobras engineers needed custom graphical user interfaces and data
+visualization programs for complex tasks, such as lithology
+visualization and structural engineering simulations. These programs
+required intuitive ways for non-programmers to define data structures,
+layout forms, and control application behavior.</p>
+<h3 id="del-the-data-entry-language">DEL: The Data Entry Language</h3>
+<p>DEL was developed in 1992 as a specialized, declarative language
+designed to create interactive data entry forms. Engineers needed to
+input geological profiles and interactive parameters without manually
+coding each interface in C.</p>
+<p>DEL allowed users to define input forms and specify constraints,
+validations, and graphical interface layouts. It also provided
+rudimentary procedural capabilities, enabling actions and triggers to be
+associated with specific form fields. However, DEL lacked deep data
+structuring capabilities; it could not easily handle deeply nested,
+hierarchical, or compound data models. As users demanded more complex
+configuration logic, the language began outgrowing its original
+purpose.</p>
+<h3 id="sol-the-simple-object-language">SOL: The Simple Object
+Language</h3>
+<p>Around the same period in 1993, another Petrobras project required a
+system for describing complex structural models for finite element
+analysis. The software needed an expressive way to describe compound
+objects, relationships, materials, and geometric coordinates.</p>
+<p>This led to the design of SOL (Simple Object Language). Heavily
+influenced by the declarative formats of BibTeX and Motif’s User
+Interface Language (UIL), SOL was strictly a data-description language.
+It introduced simple, clear syntax for defining record types, compound
+attributes, and lists, complete with basic type checking. SOL succeeded
+in making data files human-readable and clean. However, it had a major
+limitation: it was entirely static. It contained no control flow
+structures, conditional branches, loops, or user-defined procedural
+functions. Whenever dynamic behavior was needed, developers had to write
+custom C routines to parse and process the SOL declarations.</p>
+<h3 id="the-direct-convergence-into-lua">The Direct Convergence into
+Lua</h3>
+<p>By mid-1993, Roberto Ierusalimschy, Luiz Henrique de Figueiredo, and
+Waldemar Celes realized that maintaining two distinct domain-specific
+languages—one procedural for data entry (DEL) and one structural for
+data description (SOL)—was redundant and inefficient. Modern application
+development required both capabilities simultaneously: engineers needed
+to configure complex data models (SOL) while writing procedural logic to
+manipulate, validate, and compute that data (DEL).</p>
+<p>The team decided to merge both paradigms into a completely new,
+embedded language. Because <em>sol</em> means "sun" in Portuguese, they
+named the new language <strong>Lua</strong>, meaning "moon."</p>
+<p>Lua synthesized the primary strengths of its predecessors into a
+minimal core:</p>
+<ul>
+<li><strong>From SOL</strong>, Lua inherited its syntax for records and
+object constructors. The declarative nesting format of SOL directly
+evolved into Lua’s fundamental composite data structure: the associative
+array, or table.</li>
+<li><strong>From DEL</strong>, Lua inherited its procedural paradigm,
+incorporating full control structures (<code>if</code>,
+<code>while</code>), assignment statements, and first-class functions to
+handle user interaction and runtime computation.</li>
+</ul>
+<p>Instead of keeping data description separate from programming logic,
+Lua unified them. A single configuration file could now describe an
+intricate graphical form or physical model while simultaneously
+containing the algorithmic code to run it. By consolidating DEL's
+procedural nature with SOL's structural simplicity, Lua 1.0 established
+the blueprint for a lightweight, general-purpose embeddable scripting
+language.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/the-origins-of-lua-how-sol-and-del-converged';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

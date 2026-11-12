@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Goto Statement and Label Constraints Explained - lua</title>
+    <meta name="description" content="The goto statement, introduced in Lua 5.2, provides a low-level control flow mechanism designed to implement algorithms that require non-trivial jumps, such as finite-state machines, error handling paths, and simulated loop controls. While often avoided i">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-goto-statement-and-label-constraints-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Goto Statement and Label Constraints Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-goto-statement-and-label-constraints-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The goto statement, introduced in Lua 5.2, provides a low-level control flow mechanism designed to implement algorithms that require non-trivial jumps, such as finite-state machines, error handling paths, and simulated loop controls. While often avoided i" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-goto-statement-and-label-constraints-explained">Lua Goto
+Statement and Label Constraints Explained</h1>
+<p>The <code>goto</code> statement, introduced in Lua 5.2, provides a
+low-level control flow mechanism designed to implement algorithms that
+require non-trivial jumps, such as finite-state machines, error handling
+paths, and simulated loop controls. While often avoided in high-level
+programming due to readability concerns, Lua incorporates
+<code>goto</code> with strict syntactic constraints that prevent common
+pitfalls, such as jumping into the scope of uninitialized local
+variables or across function boundaries.</p>
+<h3 id="why-lua-provides-the-goto-statement">Why Lua Provides the
+<code>goto</code> Statement</h3>
+<p>Lua is designed around the philosophy of minimalism, aiming to
+provide a small set of foundational features that allow developers to
+construct complex behaviors rather than bloating the language with
+specialized syntax. The <code>goto</code> statement was added to serve
+several specific use cases:</p>
+<ul>
+<li><strong>Emulating Missing Loop Controls:</strong> Lua deliberately
+omits a built-in <code>continue</code> statement to keep the grammar
+compact. Developers can place a label at the very end of a loop body
+(<code>::continue::</code>) and use <code>goto continue</code> to
+reproduce <code>continue</code> behavior cleanly without nested
+conditionals or auxiliary boolean flags.</li>
+<li><strong>Centralized Error Handling and Cleanup:</strong> In
+resource-heavy procedures, a failure often requires rolling back
+previous allocations. Similar to idioms in the C programming language, a
+jump to an <code>::error::</code> or <code>::cleanup::</code> label at
+the end of a block allows centralized handling of cleanup routines
+before returning.</li>
+<li><strong>Finite-State Machines (FSMs):</strong> Parsers, protocol
+decoders, and generated code frequently model transitions between
+distinct states. Using <code>goto</code> to hop directly between labeled
+states avoids the overhead of function call recursion and the complexity
+of <code>while</code>-<code>switch</code> dispatch tables.</li>
+<li><strong>Code Generation Target:</strong> When other languages or
+domain-specific tools compile down to Lua, having an explicit,
+unrestricted forward and backward jump primitive makes generating
+efficient control flow significantly easier.</li>
+</ul>
+<h3 id="syntax-of-goto-and-labels">Syntax of <code>goto</code> and
+Labels</h3>
+<p>A label is defined by surrounding an identifier with double
+colons:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">::</span><span class="va">mylabel</span><span class="op">::</span></span></code></pre></div>
+<p>A jump is invoked with the <code>goto</code> keyword followed by the
+target label's identifier:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="cf">goto</span> <span class="va">mylabel</span></span></code></pre></div>
+<h3 id="label-jumping-constraints">Label Jumping Constraints</h3>
+<p>To preserve memory safety, scope guarantees, and predictably
+determinable variable lifetimes, Lua imposes strict validation rules on
+<code>goto</code> statements at compile time:</p>
+<h4 id="1-cannot-jump-into-the-scope-of-a-local-variable">1. Cannot Jump
+Into the Scope of a Local Variable</h4>
+<p>A <code>goto</code> cannot jump from a point where a local variable
+is not yet visible to a point where that variable is in scope. For
+instance, skipping forward over a <code>local x = 10</code> declaration
+to execute code that expects <code>x</code> to exist is illegal:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="cf">goto</span> <span class="va">skip</span> <span class="co">-- Compile error: &lt;goto skip&gt; jumps into the scope of local &#39;x&#39;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">x</span> <span class="op">=</span> <span class="dv">10</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="op">::</span><span class="va">skip</span><span class="op">::</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">x</span><span class="op">)</span></span></code></pre></div>
+<p>However, jumping <em>backward</em> across a local variable
+declaration is permitted. In this case, the variable goes out of scope
+upon the backward jump and is freshly reallocated and initialized when
+the declaration is reached again.</p>
+<h4 id="2-scope-confinement">2. Scope Confinement</h4>
+<p>Labels are scoped to the block in which they are declared. A
+<code>goto</code> statement can only jump to a label that is visible
+within its current block, an enclosing outer block, or a sibling block
+if no scoping rules are violated. Under no circumstances can a
+<code>goto</code> jump into an inner nested block from an outer
+block.</p>
+<h4 id="3-no-function-boundary-crossings">3. No Function Boundary
+Crossings</h4>
+<p>A jump cannot leave the function in which it is invoked, nor can it
+jump into another function. Functions in Lua define strict execution
+frames and closures; jumps across function lines are completely
+disallowed.</p>
+<h4 id="4-duplicate-label-restrictions">4. Duplicate Label
+Restrictions</h4>
+<p>A label cannot be declared with the same name more than once within
+the same block, even if the declarations are separated by other
+statements. While inner blocks may shadow label names defined in outer
+blocks, having identical labels within the same lexical scope produces a
+syntax error.</p>
+<h4 id="5-proper-finalization-of-closed-variables">5. Proper
+Finalization of Closed Variables</h4>
+<p>In Lua 5.4 and later, jumping out of a scope using <code>goto</code>
+correctly triggers the <code>&lt;close&gt;</code> variable handlers
+(to-be-closed variables). The runtime ensures that any resources tied to
+the exited scope are finalized before execution continues at the target
+label, preventing resource leaks during early exits.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-goto-statement-and-label-constraints-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

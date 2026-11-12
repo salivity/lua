@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Efficient Lua ECS Architecture with Tables - lua</title>
+    <meta name="description" content="This article outlines how to implement an efficient Entity-Component-System (ECS) architecture in Lua using its native table structure. It details the design of lightweight entity identifiers, optimal component storage techniques using contiguous array-ba">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/efficient-lua-ecs-architecture-with-tables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Efficient Lua ECS Architecture with Tables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/efficient-lua-ecs-architecture-with-tables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article outlines how to implement an efficient Entity-Component-System (ECS) architecture in Lua using its native table structure. It details the design of lightweight entity identifiers, optimal component storage techniques using contiguous array-ba" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="efficient-lua-ecs-architecture-with-tables">Efficient Lua ECS
+Architecture with Tables</h1>
+<p>This article outlines how to implement an efficient
+Entity-Component-System (ECS) architecture in Lua using its native table
+structure. It details the design of lightweight entity identifiers,
+optimal component storage techniques using contiguous array-backed
+tables, and decoupled systems. You will learn how to optimize memory
+access patterns, leverage Lua's internal array-versus-hash
+representation, and minimize Garbage Collection (GC) pauses to achieve
+high performance in real-time game loops.</p>
+<h2 id="understanding-the-ecs-model-in-lua">Understanding the ECS Model
+in Lua</h2>
+<p>In an ECS architecture:</p>
+<ul>
+<li><strong>Entities</strong> are unique identifiers with no logic or
+data of their own.</li>
+<li><strong>Components</strong> are pure data containers without
+methods.</li>
+<li><strong>Systems</strong> are functions containing logic that operate
+across all entities possessing a specific set of components.</li>
+</ul>
+<p>In Lua, the table is the sole data structure for arrays, hashes, and
+objects. An efficient Lua ECS leverages Lua's underlying C
+implementation of tables—specifically ensuring tables operate in their
+fast "array part" rather than their "hash part."</p>
+<h2 id="entity-management-numeric-identifiers">Entity Management:
+Numeric Identifiers</h2>
+<p>Entities should never be tables containing their own components.
+Instead, represent an entity as an integer ID. This avoids allocating a
+table per entity, keeping memory overhead to zero during entity creation
+and destruction.</p>
+<p>Use an ID pool to reuse dead entity IDs to prevent integer overflow
+and maintain dense data sets:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">EntityManager</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">next_id</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">free_ids</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">EntityManager</span><span class="op">.</span>create<span class="op">()</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">#</span><span class="va">EntityManager</span><span class="op">.</span><span class="va">free_ids</span> <span class="op">&gt;</span> <span class="dv">0</span> <span class="cf">then</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="fu">table.remove</span><span class="op">(</span><span class="va">EntityManager</span><span class="op">.</span><span class="va">free_ids</span><span class="op">)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">id</span> <span class="op">=</span> <span class="va">EntityManager</span><span class="op">.</span><span class="va">next_id</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">EntityManager</span><span class="op">.</span><span class="va">next_id</span> <span class="op">=</span> <span class="va">EntityManager</span><span class="op">.</span><span class="va">next_id</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">id</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">EntityManager</span><span class="op">.</span>destroy<span class="op">(</span><span class="va">id</span><span class="op">)</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">table.insert</span><span class="op">(</span><span class="va">EntityManager</span><span class="op">.</span><span class="va">free_ids</span><span class="op">,</span> <span class="va">id</span><span class="op">)</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h2 id="component-storage-strategies">Component Storage Strategies</h2>
+<p>The way components are stored directly dictates memory performance
+and cache behavior in Lua.</p>
+<h3 id="approach-1-table-per-component-type-sparse-array">Approach 1:
+Table-per-Component Type (Sparse Array)</h3>
+<p>Allocate one master table per component type, indexed by the entity
+ID:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Position</span> <span class="op">=</span> <span class="op">{}</span> <span class="co">-- Position[entity_id] = {x = 0, y = 0}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Velocity</span> <span class="op">=</span> <span class="op">{}</span> <span class="co">-- Velocity[entity_id] = {dx = 0, dy = 0}</span></span></code></pre></div>
+<p>While idiomatic, allocating a small <code>{x = 0, y = 0}</code> table
+per entity introduces significant GC churn.</p>
+<h3 id="approach-2-flat-primitive-arrays-high-efficiency">Approach 2:
+Flat Primitive Arrays (High Efficiency)</h3>
+<p>To eliminate GC allocations and maximize performance, decompose
+components into parallel flat arrays of primitive types:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">PositionX</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">PositionY</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">VelocityX</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">VelocityY</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> set_position<span class="op">(</span><span class="va">entity</span><span class="op">,</span> <span class="va">x</span><span class="op">,</span> <span class="va">y</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">PositionX</span><span class="op">[</span><span class="va">entity</span><span class="op">]</span> <span class="op">=</span> <span class="va">x</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">PositionY</span><span class="op">[</span><span class="va">entity</span><span class="op">]</span> <span class="op">=</span> <span class="va">y</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> set_velocity<span class="op">(</span><span class="va">entity</span><span class="op">,</span> <span class="va">dx</span><span class="op">,</span> <span class="va">dy</span><span class="op">)</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="va">VelocityX</span><span class="op">[</span><span class="va">entity</span><span class="op">]</span> <span class="op">=</span> <span class="va">dx</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    <span class="va">VelocityY</span><span class="op">[</span><span class="va">entity</span><span class="op">]</span> <span class="op">=</span> <span class="va">dy</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Lua allocates contiguous memory for arrays indexed by consecutive
+positive integers. Storing primitives (<code>number</code>,
+<code>boolean</code>) directly in index-based tables uses the fast
+C-array segment of Lua tables, reducing pointer indirection and
+completely avoiding table allocations during runtime.</p>
+<h3
+id="approach-3-packed-arrays-with-dense-sets-sparse-dense-architecture">Approach
+3: Packed Arrays with Dense Sets (Sparse-Dense Architecture)</h3>
+<p>Sparse arrays indexed directly by entity ID can leave gaps when
+entities are destroyed, degrading iteration speed. A sparse-dense
+approach maintains two tracking arrays:</p>
+<ol type="1">
+<li><strong>Dense Array:</strong> Contains consecutive entity IDs and
+their component data.</li>
+<li><strong>Sparse Array:</strong> Maps an entity ID to its index in the
+dense array.</li>
+</ol>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">DenseEntities</span> <span class="op">=</span> <span class="op">{}</span>  <span class="co">-- [dense_idx] = entity_id</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">SparseIndices</span> <span class="op">=</span> <span class="op">{}</span>  <span class="co">-- [entity_id] = dense_idx</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Count</span> <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> add_component<span class="op">(</span><span class="va">entity</span><span class="op">,</span> <span class="va">x</span><span class="op">,</span> <span class="va">y</span><span class="op">)</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">Count</span> <span class="op">=</span> <span class="va">Count</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="va">DenseEntities</span><span class="op">[</span><span class="va">Count</span><span class="op">]</span> <span class="op">=</span> <span class="va">entity</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">SparseIndices</span><span class="op">[</span><span class="va">entity</span><span class="op">]</span> <span class="op">=</span> <span class="va">Count</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="va">PositionX</span><span class="op">[</span><span class="va">Count</span><span class="op">]</span> <span class="op">=</span> <span class="va">x</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="va">PositionY</span><span class="op">[</span><span class="va">Count</span><span class="op">]</span> <span class="op">=</span> <span class="va">y</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> remove_component<span class="op">(</span><span class="va">entity</span><span class="op">)</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">idx</span> <span class="op">=</span> <span class="va">SparseIndices</span><span class="op">[</span><span class="va">entity</span><span class="op">]</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="va">idx</span> <span class="cf">then</span> <span class="cf">return</span> <span class="cf">end</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">last_entity</span> <span class="op">=</span> <span class="va">DenseEntities</span><span class="op">[</span><span class="va">Count</span><span class="op">]</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    </span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Swap with the last element to maintain contiguous memory</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="va">DenseEntities</span><span class="op">[</span><span class="va">idx</span><span class="op">]</span> <span class="op">=</span> <span class="va">last_entity</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="va">PositionX</span><span class="op">[</span><span class="va">idx</span><span class="op">]</span> <span class="op">=</span> <span class="va">PositionX</span><span class="op">[</span><span class="va">Count</span><span class="op">]</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>    <span class="va">PositionY</span><span class="op">[</span><span class="va">idx</span><span class="op">]</span> <span class="op">=</span> <span class="va">PositionY</span><span class="op">[</span><span class="va">Count</span><span class="op">]</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    <span class="va">SparseIndices</span><span class="op">[</span><span class="va">last_entity</span><span class="op">]</span> <span class="op">=</span> <span class="va">idx</span></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Clear last entry</span></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>    <span class="va">DenseEntities</span><span class="op">[</span><span class="va">Count</span><span class="op">]</span> <span class="op">=</span> <span class="kw">nil</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>    <span class="va">PositionX</span><span class="op">[</span><span class="va">Count</span><span class="op">]</span> <span class="op">=</span> <span class="kw">nil</span></span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>    <span class="va">PositionY</span><span class="op">[</span><span class="va">Count</span><span class="op">]</span> <span class="op">=</span> <span class="kw">nil</span></span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>    <span class="va">SparseIndices</span><span class="op">[</span><span class="va">entity</span><span class="op">]</span> <span class="op">=</span> <span class="kw">nil</span></span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>    <span class="va">Count</span> <span class="op">=</span> <span class="va">Count</span> <span class="op">-</span> <span class="dv">1</span></span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>This guarantees that systems can iterate sequentially through
+<code>1</code> to <code>Count</code> with zero gaps.</p>
+<h2 id="implementing-systems">Implementing Systems</h2>
+<p>Systems are pure functions that run once per frame. They do not
+maintain internal state; they loop directly through the component
+tables.</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> MovementSystem<span class="op">(</span><span class="va">dt</span><span class="op">)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Iterates through packed arrays sequentially</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="va">Count</span> <span class="cf">do</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">PositionX</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">=</span> <span class="va">PositionX</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">+</span> <span class="va">VelocityX</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">*</span> <span class="va">dt</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">PositionY</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">=</span> <span class="va">PositionY</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">+</span> <span class="va">VelocityY</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">*</span> <span class="va">dt</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>When systems require multiple component types, iterate over the
+component type with the smallest count (the driving query), and look up
+the secondary components via direct indexing.</p>
+<h2 id="managing-signatures-with-bitmasks">Managing Signatures with
+Bitmasks</h2>
+<p>For fast component matching across multiple systems, assign each
+component type a bit flag using Lua 5.3+ native bitwise operators:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="cn">COMPONENT_POSITION</span> <span class="op">=</span> <span class="dv">1</span> <span class="op">&lt;&lt;</span> <span class="dv">0</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="cn">COMPONENT_VELOCITY</span> <span class="op">=</span> <span class="dv">1</span> <span class="op">&lt;&lt;</span> <span class="dv">1</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="cn">COMPONENT_RENDER</span>   <span class="op">=</span> <span class="dv">1</span> <span class="op">&lt;&lt;</span> <span class="dv">2</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">EntityMasks</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> add_entity_mask<span class="op">(</span><span class="va">entity</span><span class="op">,</span> <span class="va">component_flag</span><span class="op">)</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">EntityMasks</span><span class="op">[</span><span class="va">entity</span><span class="op">]</span> <span class="op">=</span> <span class="op">(</span><span class="va">EntityMasks</span><span class="op">[</span><span class="va">entity</span><span class="op">]</span> <span class="kw">or</span> <span class="dv">0</span><span class="op">)</span> <span class="op">|</span> <span class="va">component_flag</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> has_components<span class="op">(</span><span class="va">entity</span><span class="op">,</span> <span class="va">required_mask</span><span class="op">)</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">(</span><span class="va">EntityMasks</span><span class="op">[</span><span class="va">entity</span><span class="op">]</span> <span class="op">&amp;</span> <span class="va">required_mask</span><span class="op">)</span> <span class="op">==</span> <span class="va">required_mask</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Bitmask checks allow systems to quickly filter non-qualifying
+entities before performing any data lookups.</p>
+<h2 id="garbage-collection-and-performance-optimization">Garbage
+Collection and Performance Optimization</h2>
+<ol type="1">
+<li><p><strong>Avoid Temporary Tables in Systems:</strong> Never
+instantiate <code>{}</code> inside a loop. If a system must return
+complex data, pass a pre-allocated table as an out-parameter.</p></li>
+<li><p><strong>Pre-allocate Tables:</strong> If using LuaJIT, use
+<code>table.new(narr, nhash)</code> to pre-allocate table storage,
+preventing dynamic resizing during gameplay.</p></li>
+<li><p><strong>Localize Table References:</strong> Cache global tables
+and functions inside local variables before executing tight loops:</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">px</span><span class="op">,</span> <span class="va">py</span> <span class="op">=</span> <span class="va">PositionX</span><span class="op">,</span> <span class="va">PositionY</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">vx</span><span class="op">,</span> <span class="va">vy</span> <span class="op">=</span> <span class="va">VelocityX</span><span class="op">,</span> <span class="va">VelocityY</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="va">i</span> <span class="op">=</span> <span class="dv">1</span><span class="op">,</span> <span class="va">Count</span> <span class="cf">do</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="va">px</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">=</span> <span class="va">px</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">+</span> <span class="va">vx</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">*</span> <span class="va">dt</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">py</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">=</span> <span class="va">py</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">+</span> <span class="va">vy</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">*</span> <span class="va">dt</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div></li>
+<li><p><strong>Use Sequential Integer Keys:</strong> Do not use string
+keys for component variables if performance is critical; string lookups
+force hash resolution, whereas sequential numeric keys map directly to C
+arrays in the Lua runtime.</p></li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/efficient-lua-ecs-architecture-with-tables';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

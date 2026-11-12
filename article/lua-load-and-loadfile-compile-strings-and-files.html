@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua load and loadfile: Compile Strings and Files - lua</title>
+    <meta name="description" content="In the Lua programming language, dynamic code execution is achieved by compiling source code at runtime into executable chunks. This article explains how the load and loadfile functions parse raw strings and external files, transform them into anonymous f">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-load-and-loadfile-compile-strings-and-files">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua load and loadfile: Compile Strings and Files - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-load-and-loadfile-compile-strings-and-files" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, dynamic code execution is achieved by compiling source code at runtime into executable chunks. This article explains how the load and loadfile functions parse raw strings and external files, transform them into anonymous f" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-load-and-loadfile-compile-strings-and-files">Lua load and
+loadfile: Compile Strings and Files</h1>
+<p>In the Lua programming language, dynamic code execution is achieved
+by compiling source code at runtime into executable chunks. This article
+explains how the <code>load</code> and <code>loadfile</code> functions
+parse raw strings and external files, transform them into anonymous
+functions, handle syntax errors, and execute the compiled bytecode
+safely within defined environments.</p>
+<h2 id="the-load-function-compiling-raw-strings">The <code>load</code>
+Function: Compiling Raw Strings</h2>
+<p>The <code>load</code> function takes a string containing valid Lua
+code (or a reader function) and compiles it into an anonymous function,
+commonly called a chunk. It does not execute the code immediately;
+instead, it returns a callable function if the syntax is valid.</p>
+<h3 id="syntax-and-basic-usage">Syntax and Basic Usage</h3>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">chunk</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">load</span><span class="op">(</span><span class="va">chunk_string</span><span class="op">,</span> <span class="va">chunk_name</span><span class="op">,</span> <span class="va">mode</span><span class="op">,</span> <span class="va">env</span><span class="op">)</span></span></code></pre></div>
+<ul>
+<li><strong><code>chunk_string</code></strong>: The string of code to
+compile.</li>
+<li><strong><code>chunk_name</code></strong> <em>(optional)</em>: An
+identifier used in error messages and debug traces.</li>
+<li><strong><code>mode</code></strong> <em>(optional)</em>: Controls
+whether the chunk can be text (<code>"t"</code>), binary bytecode
+(<code>"b"</code>), or either (<code>"bt"</code>).</li>
+<li><strong><code>env</code></strong> <em>(optional)</em>: The
+environment table assigned as <code>_ENV</code> for the chunk.</li>
+</ul>
+<p>If compilation succeeds, <code>load</code> returns the compiled
+function. If there is a syntax error, it returns <code>nil</code>
+followed by the error message.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">code</span> <span class="op">=</span> <span class="st">&quot;local x, y = 10, 20; return x + y&quot;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">compiled_func</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">load</span><span class="op">(</span><span class="va">code</span><span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">compiled_func</span> <span class="cf">then</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Compilation error: &quot;</span> <span class="op">..</span> <span class="va">err</span><span class="op">)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> compiled_func<span class="op">()</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Result: &quot;</span> <span class="op">..</span> <span class="va">result</span><span class="op">)</span> <span class="co">-- Outputs: Result: 30</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h2 id="the-loadfile-function-compiling-external-files">The
+<code>loadfile</code> Function: Compiling External Files</h2>
+<p>The <code>loadfile</code> function operates similarly to
+<code>load</code>, but it reads and compiles Lua code directly from a
+specified file on disk instead of an in-memory string.</p>
+<h3 id="syntax-and-basic-usage-1">Syntax and Basic Usage</h3>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">chunk</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">loadfile</span><span class="op">(</span><span class="va">filename</span><span class="op">,</span> <span class="va">mode</span><span class="op">,</span> <span class="va">env</span><span class="op">)</span></span></code></pre></div>
+<ul>
+<li><strong><code>filename</code></strong>: The path to the file. If
+omitted, it reads from standard input.</li>
+<li><strong><code>mode</code></strong> and
+<strong><code>env</code></strong>: Serve the same roles as in
+<code>load</code>.</li>
+</ul>
+<p>Like <code>load</code>, <code>loadfile</code> does not run the file;
+it prepares it for execution.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Assume &#39;script.lua&#39; contains: print(&quot;Hello from external file!&quot;)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">run_script</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">loadfile</span><span class="op">(</span><span class="st">&quot;script.lua&quot;</span><span class="op">)</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">run_script</span> <span class="cf">then</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Failed to load file: &quot;</span> <span class="op">..</span> <span class="va">err</span><span class="op">)</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    run_script<span class="op">()</span> <span class="co">-- Executes the file contents</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h2 id="executing-compiled-chunks-and-passing-arguments">Executing
+Compiled Chunks and Passing Arguments</h2>
+<p>Because compiled chunks are regular Lua functions, they can accept
+arguments and return values. Arguments passed to the compiled function
+are received inside the chunk via the vararg expression
+(<code>...</code>).</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">multiplier</span> <span class="op">=</span> <span class="fu">load</span><span class="op">(</span><span class="st">&quot;local a, b = ...; return a * b&quot;</span><span class="op">)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">product</span> <span class="op">=</span> multiplier<span class="op">(</span><span class="dv">6</span><span class="op">,</span> <span class="dv">7</span><span class="op">)</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">product</span><span class="op">)</span> <span class="co">-- Outputs: 42</span></span></code></pre></div>
+<p>To safely catch runtime errors (as opposed to compile-time syntax
+errors), invoke the compiled function using <code>pcall</code>:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">safe_func</span> <span class="op">=</span> <span class="fu">load</span><span class="op">(</span><span class="st">&quot;error(&#39;Runtime failure!&#39;)&quot;</span><span class="op">)</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">result_or_err</span> <span class="op">=</span> <span class="fu">pcall</span><span class="op">(</span><span class="va">safe_func</span><span class="op">)</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">success</span> <span class="cf">then</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Caught error: &quot;</span> <span class="op">..</span> <span class="va">result_or_err</span><span class="op">)</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<h2 id="controlling-the-environment-sandboxing">Controlling the
+Environment (Sandboxing)</h2>
+<p>In modern Lua (5.2 and later), both <code>load</code> and
+<code>loadfile</code> accept an optional <code>env</code> argument. This
+defines the <code>_ENV</code> upvalue for the compiled code, allowing
+you to isolate untrusted code from standard global variables like
+<code>os</code>, <code>io</code>, or <code>package</code>.</p>
+<div class="sourceCode" id="cb7"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">untrusted_code</span> <span class="op">=</span> <span class="st">&quot;return math.sqrt(value)&quot;</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Restrict the environment to safe functions only</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">sandbox_env</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="va">math</span> <span class="op">=</span> <span class="op">{</span> <span class="va">sqrt</span> <span class="op">=</span> <span class="fu">math.sqrt</span> <span class="op">},</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">value</span> <span class="op">=</span> <span class="dv">64</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">sandboxed_func</span> <span class="op">=</span> <span class="fu">load</span><span class="op">(</span><span class="va">untrusted_code</span><span class="op">,</span> <span class="st">&quot;sandbox&quot;</span><span class="op">,</span> <span class="st">&quot;t&quot;</span><span class="op">,</span> <span class="va">sandbox_env</span><span class="op">)</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>sandboxed_func<span class="op">())</span> <span class="co">-- Outputs: 8</span></span></code></pre></div>
+<p>If the untrusted code attempts to access unauthorized globals, such
+as <code>os.execute</code>, it will receive <code>nil</code>, preventing
+unauthorized actions.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-load-and-loadfile-compile-strings-and-files';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

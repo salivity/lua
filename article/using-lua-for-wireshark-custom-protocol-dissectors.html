@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Using Lua for Wireshark Custom Protocol Dissectors - lua</title>
+    <meta name="description" content="Wireshark incorporates an embedded Lua interpreter that allows network engineers and developers to parse proprietary or unsupported network protocols without recompiling the application from source code. By exposing its core packet-processing architecture">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/using-lua-for-wireshark-custom-protocol-dissectors">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Using Lua for Wireshark Custom Protocol Dissectors - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/using-lua-for-wireshark-custom-protocol-dissectors" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Wireshark incorporates an embedded Lua interpreter that allows network engineers and developers to parse proprietary or unsupported network protocols without recompiling the application from source code. By exposing its core packet-processing architecture" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="using-lua-for-wireshark-custom-protocol-dissectors">Using Lua
+for Wireshark Custom Protocol Dissectors</h1>
+<p>Wireshark incorporates an embedded Lua interpreter that allows
+network engineers and developers to parse proprietary or unsupported
+network protocols without recompiling the application from source code.
+By exposing its core packet-processing architecture through a
+lightweight Lua API, Wireshark enables users to declare new protocol
+structures, extract and format raw packet data, register dissectors to
+specific transport ports, and inspect traffic dynamically. This article
+outlines the specific mechanisms and architectural components Wireshark
+uses to support custom Lua protocol dissection.</p>
+<h3 id="embedded-scripting-engine">Embedded Scripting Engine</h3>
+<p>Wireshark embeds a lightweight Lua execution environment directly
+into its core binary. Unlike native C-based dissectors, which require
+setting up a full development environment and compiling the Wireshark
+source tree, Lua scripts execute at runtime. Wireshark loads these
+scripts automatically upon startup or manually through the graphical
+interface. This architecture permits real-time updates: developers can
+modify a <code>.lua</code> file and reload it instantly using the
+<code>Ctrl+Shift+L</code> shortcut without interrupting an active packet
+capture session.</p>
+<h3 id="protocol-and-field-declarations">Protocol and Field
+Declarations</h3>
+<p>Wireshark provides the <code>Proto</code> class to declare a new
+protocol within the system. Along with the protocol declaration,
+Wireshark exposes the <code>ProtoField</code> class, which allows
+developers to define individual data fields that appear within the
+packet details tree and can be used in display filters.</p>
+<p>Wireshark uses typed field definitions, such as:</p>
+<ul>
+<li><code>ProtoField.uint8</code>, <code>ProtoField.uint16</code>,
+<code>ProtoField.uint32</code> for binary integer data.</li>
+<li><code>ProtoField.string</code> and <code>ProtoField.stringz</code>
+for standard and null-terminated text.</li>
+<li><code>ProtoField.ipv4</code> and <code>ProtoField.ether</code> for
+network addresses.</li>
+<li><code>ProtoField.bool</code> for bitwise flags.</li>
+</ul>
+<p>Declaring fields this way gives custom Lua protocols native parity
+with Wireshark's built-in dissectors, automatically enabling features
+like search indexing, packet filtering, and data type validation.</p>
+<h3 id="the-dissector-function-execution">The Dissector Function
+Execution</h3>
+<p>The core of protocol processing in Lua is the dissector function,
+assigned to <code>Proto.dissector</code>. When Wireshark processes a
+frame that matches the protocol's trigger criteria, it executes this
+callback and passes three essential objects:</p>
+<ol type="1">
+<li><strong>Testy Virtual Buffer (TVB):</strong> The <code>tvb</code>
+object provides access to the raw payload bytes of the packet. Wireshark
+gives the Lua script methods to slice byte ranges, extract values in
+big-endian or little-endian order, and measure remaining payload
+lengths.</li>
+<li><strong>Packet Information (<code>Pinfo</code>):</strong> The
+<code>pinfo</code> object represents packet metadata. Lua scripts modify
+this object to update the summary columns in Wireshark’s main packet
+list view, such as changing the protocol column name or appending custom
+text to the "Info" column.</li>
+<li><strong>Protocol Tree (<code>TreeItem</code>):</strong> The
+<code>tree</code> object represents the visual hierarchy in the "Packet
+Details" pane. The script creates subtrees and appends parsed
+<code>ProtoField</code> instances to display decoded protocol elements
+to the user.</li>
+</ol>
+<h3 id="dissector-table-registration">Dissector Table Registration</h3>
+<p>Wireshark utilizes <code>DissectorTable</code> objects to delegate
+packet analysis to the correct protocol parser based on lower-layer
+identifiers. A Lua dissector binds itself to an existing table to
+intercept relevant traffic. For example, a dissector can attach to the
+<code>"tcp.port"</code> or <code>"udp.port"</code> table to
+automatically decode traffic bound for a designated port number. It can
+also register against tables like <code>"ethertype"</code> or
+lower-layer protocol fields to handle custom encapsulation.</p>
+<h3 id="heuristic-and-post-dissectors">Heuristic and
+Post-Dissectors</h3>
+<p>Beyond simple port-based bindings, Wireshark utilizes Lua for complex
+matching scenarios through heuristic dissectors and post-dissectors:</p>
+<ul>
+<li><strong>Heuristic Dissectors:</strong> When a protocol does not
+operate on a fixed port, a Lua script can register as a heuristic
+dissector. Wireshark passes candidate payloads to the script, which
+checks for unique magic bytes, structure lengths, or validation
+checksums. The script returns <code>true</code> if the packet belongs to
+its protocol or <code>false</code> to pass it to the next
+dissector.</li>
+<li><strong>Post-Dissectors:</strong> Wireshark allows Lua scripts to
+register as post-dissectors, which run after all standard protocol
+dissection is complete. This allows scripts to evaluate higher-level
+interactions across multiple existing protocols, calculate custom
+statistics, or flag cross-layer anomalies without replacing existing
+native decoders.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/using-lua-for-wireshark-custom-protocol-dissectors';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

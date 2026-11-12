@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua -e Flag Explained: Running One-Liners - lua</title>
+    <meta name="description" content="In the Lua programming language, the -e command-line flag allows users to directly execute small snippets of code without having to create or manage external script files. This article covers how the -e flag functions within the Lua standalone interpreter">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-e-flag-explained-running-one-liners">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua -e Flag Explained: Running One-Liners - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-e-flag-explained-running-one-liners" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the -e command-line flag allows users to directly execute small snippets of code without having to create or manage external script files. This article covers how the -e flag functions within the Lua standalone interpreter" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua--e-flag-explained-running-one-liners">Lua -e Flag Explained:
+Running One-Liners</h1>
+<p>In the Lua programming language, the <code>-e</code> command-line
+flag allows users to directly execute small snippets of code without
+having to create or manage external script files. This article covers
+how the <code>-e</code> flag functions within the Lua standalone
+interpreter, how it can be combined for complex workflows, and common
+use cases including environment checks, debugging, and shell pipeline
+integration.</p>
+<p>The <code>-e</code> option stands for "execute" or "evaluate." When
+passed to the <code>lua</code> executable followed by a string
+containing Lua code, the interpreter parses and runs that string
+immediately before terminating or proceeding with other arguments.</p>
+<h3 id="basic-syntax-and-usage">Basic Syntax and Usage</h3>
+<p>The standard syntax involves passing a quoted string containing valid
+Lua statements directly after the flag:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-e</span> <span class="st">&#39;print(&quot;Hello, World!&quot;)&#39;</span></span></code></pre></div>
+<p>Because shell environments typically interpret double and single
+quotes differently, wrapping the Lua statement in single quotes is
+standard practice to preserve string literals and special characters
+inside the Lua code.</p>
+<h3 id="sequential-execution">Sequential Execution</h3>
+<p>Lua permits the use of multiple <code>-e</code> flags in a single
+command. The interpreter evaluates each statement sequentially from left
+to right in the same global environment:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-e</span> <span class="st">&#39;x = 10&#39;</span> <span class="at">-e</span> <span class="st">&#39;y = 20&#39;</span> <span class="at">-e</span> <span class="st">&#39;print(x + y)&#39;</span></span></code></pre></div>
+<p>In this example, variables defined in earlier <code>-e</code> blocks
+remain accessible in subsequent blocks during the same run.</p>
+<h3 id="combining--e-with-files-and-interactive-mode">Combining
+<code>-e</code> with Files and Interactive Mode</h3>
+<p>The <code>-e</code> flag can be combined with other interpreter flags
+and script files:</p>
+<ul>
+<li><p><strong>Interactive Mode (<code>-i</code>):</strong> You can run
+setup code via <code>-e</code> and enter interactive mode immediately
+afterward by adding the <code>-i</code> flag:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-e</span> <span class="st">&#39;data = {1, 2, 3}&#39;</span> <span class="at">-i</span></span></code></pre></div></li>
+<li><p><strong>Pre-loading Modules:</strong> You can use <code>-e</code>
+to require modules or set global configurations before executing a
+script file:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-e</span> <span class="st">&#39;DEBUG = true&#39;</span> myscript.lua</span></code></pre></div></li>
+</ul>
+<h3 id="common-use-cases">Common Use Cases</h3>
+<ul>
+<li><p><strong>Checking Interpreter Version:</strong> A fast way to
+confirm the active runtime version is running
+<code>lua -e 'print(_VERSION)'</code>.</p></li>
+<li><p><strong>Inline Arithmetic and Quick Testing:</strong> You can
+test standard library behavior or perform rapid calculations without
+opening an interactive session:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-e</span> <span class="st">&#39;print(math.sqrt(144) * 2)&#39;</span></span></code></pre></div></li>
+<li><p><strong>Shell Integration:</strong> The output of a Lua one-liner
+can be piped directly into standard Unix utilities like
+<code>grep</code>, <code>awk</code>, or redirected to files as part of
+shell automation.</p></li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-e-flag-explained-running-one-liners';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

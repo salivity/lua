@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua User Values and Userdata Auxiliary Tables - lua</title>
+    <meta name="description" content="This article explains user values in Lua, exploring what they are and how they allow developers using the Lua C API to attach auxiliary tables directly to full userdata objects. By leveraging user values, developers can seamlessly associate dynamic Lua da">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-user-values-and-userdata-auxiliary-tables">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua User Values and Userdata Auxiliary Tables - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-user-values-and-userdata-auxiliary-tables" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explains user values in Lua, exploring what they are and how they allow developers using the Lua C API to attach auxiliary tables directly to full userdata objects. By leveraging user values, developers can seamlessly associate dynamic Lua da" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-user-values-and-userdata-auxiliary-tables">Lua User Values
+and Userdata Auxiliary Tables</h1>
+<p>This article explains user values in Lua, exploring what they are and
+how they allow developers using the Lua C API to attach auxiliary tables
+directly to full userdata objects. By leveraging user values, developers
+can seamlessly associate dynamic Lua data and tables with C-managed
+memory blocks while ensuring that the Lua garbage collector tracks all
+object references correctly.</p>
+<h3 id="what-are-user-values-in-lua">What Are User Values in Lua?</h3>
+<p>In the Lua C API, a full userdata represents a block of raw C memory
+managed by the Lua garbage collector. While full userdata can possess
+metatables to define operations and methods, raw C memory cannot
+directly store Lua values such as strings, numbers, or tables without
+risk of those values being collected prematurely.</p>
+<p>A "user value" (or <code>uservalue</code>) is an auxiliary Lua value
+stored directly alongside a full userdata object. The garbage collector
+automatically marks and traverses user values, ensuring that any Lua
+references stored within them remain alive for as long as the userdata
+exists. This mechanism bridges raw C pointers and the Lua runtime,
+allowing C data structures to hold references to arbitrary Lua
+objects.</p>
+<h3 id="evolution-across-lua-versions">Evolution Across Lua
+Versions</h3>
+<p>The implementation of user values has evolved across Lua
+releases:</p>
+<ul>
+<li><strong>Lua 5.1:</strong> Userdata used environment tables
+(<code>lua_setfenv</code> and <code>lua_getfenv</code>) to associate
+arbitrary tables with userdata.</li>
+<li><strong>Lua 5.2 and 5.3:</strong> The concept was formalized as a
+single user value per userdata, managed with
+<code>lua_setuservalue</code> and <code>lua_getuservalue</code>.</li>
+<li><strong>Lua 5.4:</strong> Lua introduced support for multiple user
+values per userdata, allocated using <code>lua_newuserdatauv</code> and
+manipulated via indexed functions <code>lua_setiuservalue</code> and
+<code>lua_getiuservalue</code>.</li>
+</ul>
+<h3 id="attaching-an-auxiliary-table-to-userdata">Attaching an Auxiliary
+Table to Userdata</h3>
+<p>Attaching an auxiliary table to a userdata enables Lua scripts or C
+functions to store dynamic attributes, event listeners, or cache entries
+on an otherwise static C struct.</p>
+<h4 id="step-1-allocating-userdata-with-user-value-slots">Step 1:
+Allocating Userdata with User Value Slots</h4>
+<p>In Lua 5.4, specify the number of user value slots required when
+creating the userdata:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Allocate userdata with 1 user value slot</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> <span class="op">*</span>data <span class="op">=</span> lua_newuserdatauv<span class="op">(</span>L<span class="op">,</span> <span class="kw">sizeof</span><span class="op">(</span>MyCStruct<span class="op">),</span> <span class="dv">1</span><span class="op">);</span></span></code></pre></div>
+<p>In Lua 5.2 or 5.3, memory allocation is performed with
+<code>lua_newuserdata(L, sizeof(MyCStruct))</code>, which implicitly
+allocates space for a single user value initialized to
+<code>nil</code>.</p>
+<h4 id="step-2-creating-and-attaching-the-table">Step 2: Creating and
+Attaching the Table</h4>
+<p>To bind an auxiliary table, push a new table onto the stack and set
+it as the user value:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Assume the userdata is at stack index 1</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>lua_newtable<span class="op">(</span>L<span class="op">);</span> <span class="co">// Push auxiliary table to stack index 2</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Populate the table if necessary</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>lua_pushstring<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;custom_property&quot;</span><span class="op">);</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>lua_pushinteger<span class="op">(</span>L<span class="op">,</span> <span class="dv">42</span><span class="op">);</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>lua_settable<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">3</span><span class="op">);</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co">// Assign the table as the user value (Lua 5.4)</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co">// Argument 1 is the userdata index, argument 2 is the user value index</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>lua_setiuservalue<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">1</span><span class="op">);</span> </span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="co">// For Lua 5.2 / 5.3:</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="co">// lua_setuservalue(L, 1);</span></span></code></pre></div>
+<p>The function pops the table from the top of the stack and attaches it
+to the userdata.</p>
+<h3 id="accessing-and-modifying-the-auxiliary-table">Accessing and
+Modifying the Auxiliary Table</h3>
+<p>Once attached, the auxiliary table can be retrieved at any point to
+read or modify dynamic state:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Retrieve the auxiliary table from the userdata at index 1</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>lua_getiuservalue<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">1</span><span class="op">);</span> <span class="co">// Pushes the table onto the stack (Lua 5.4)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co">// For Lua 5.2 / 5.3: lua_getuservalue(L, 1);</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">(</span>lua_istable<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">1</span><span class="op">))</span> <span class="op">{</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    lua_pushstring<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;custom_property&quot;</span><span class="op">);</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    lua_gettable<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">2</span><span class="op">);</span> <span class="co">// Reads the property from the auxiliary table</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="dt">int</span> value <span class="op">=</span> lua_tointeger<span class="op">(</span>L<span class="op">,</span> <span class="op">-</span><span class="dv">1</span><span class="op">);</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    lua_pop<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">);</span> <span class="co">// Pop value</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>lua_pop<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">);</span> <span class="co">// Pop the auxiliary table</span></span></code></pre></div>
+<p>By delegating dynamic properties to an auxiliary table stored as a
+user value, C libraries maintain efficient memory layouts while allowing
+flexible, garbage-collected Lua state associations.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-user-values-and-userdata-auxiliary-tables';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

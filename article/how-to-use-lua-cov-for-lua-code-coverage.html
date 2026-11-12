@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Use LuaCov for Lua Code Coverage - lua</title>
+    <meta name="description" content="This guide explains how to measure test suite effectiveness in the Lua programming language using LuaCov, a lightweight coverage analysis tool. You will learn how to install LuaCov via LuaRocks, instrument your test runs, generate detailed line-by-line co">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-use-lua-cov-for-lua-code-coverage">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Use LuaCov for Lua Code Coverage - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-use-lua-cov-for-lua-code-coverage" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This guide explains how to measure test suite effectiveness in the Lua programming language using LuaCov, a lightweight coverage analysis tool. You will learn how to install LuaCov via LuaRocks, instrument your test runs, generate detailed line-by-line co" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-use-luacov-for-lua-code-coverage">How to Use LuaCov for
+Lua Code Coverage</h1>
+<p>This guide explains how to measure test suite effectiveness in the
+Lua programming language using LuaCov, a lightweight coverage analysis
+tool. You will learn how to install LuaCov via LuaRocks, instrument your
+test runs, generate detailed line-by-line coverage reports, and
+configure rules to exclude test files or external libraries from your
+metrics.</p>
+<h3 id="installing-luacov">Installing LuaCov</h3>
+<p>The standard method to install LuaCov is through LuaRocks, the
+package manager for Lua modules. Open your terminal and run:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luarocks</span> install luacov</span></code></pre></div>
+<p>This installs both the core coverage tracking module and the
+command-line utility used to generate human-readable reports.</p>
+<h3 id="instrumenting-your-test-suite">Instrumenting Your Test
+Suite</h3>
+<p>LuaCov works by hooking into the Lua debug engine to count how many
+times each line of code is executed. To activate it, you load the
+<code>luacov</code> module before running your test suite.</p>
+<p>If you run your tests with the standard Lua interpreter:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">lua</span> <span class="at">-lluacov</span> test_runner.lua</span></code></pre></div>
+<p>If you use Busted, a popular Lua testing framework, you can enable
+coverage by passing the <code>--coverage</code> flag directly:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">busted</span> <span class="at">--coverage</span></span></code></pre></div>
+<p>Alternatively, you can manually require LuaCov at the very top of
+your main entry point or test runner script:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">require</span><span class="op">(</span><span class="st">&quot;luacov&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>When your test suite finishes running, LuaCov writes raw execution
+data into a file named <code>luacov.stats.out</code> in your project
+root.</p>
+<h3 id="generating-the-coverage-report">Generating the Coverage
+Report</h3>
+<p>The raw stats file must be parsed into a readable format. Run the
+<code>luacov</code> command-line script in the directory where
+<code>luacov.stats.out</code> is located:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">luacov</span></span></code></pre></div>
+<p>This creates a file named <code>luacov.report.out</code>. Inside, you
+will find:</p>
+<ol type="1">
+<li>A summary table listing every executed file, total lines, code
+lines, non-code lines, and coverage percentages.</li>
+<li>A detailed source code view where each line is prefixed with the
+number of times it was hit during testing (or <code>***0***</code> if a
+line was never reached).</li>
+</ol>
+<h3 id="configuring-luacov">Configuring LuaCov</h3>
+<p>By default, LuaCov may track execution inside your test files, system
+libraries, and third-party dependencies. To filter your results, create
+a configuration file named <code>.luacov</code> in your project
+directory:</p>
+<div class="sourceCode" id="cb6"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> <span class="op">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Include only files in your source directory</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="va">include</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;^src/&quot;</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Exclude tests and external libraries</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="va">exclude</span> <span class="op">=</span> <span class="op">{</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;^spec/&quot;</span><span class="op">,</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;^test/&quot;</span><span class="op">,</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;luarocks/&quot;</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Change output report filename if needed</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="va">reportfile</span> <span class="op">=</span> <span class="st">&quot;luacov.report.out&quot;</span><span class="op">,</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    <span class="va">statsfile</span> <span class="op">=</span> <span class="st">&quot;luacov.stats.out&quot;</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>When you rerun the <code>luacov</code> command, it will apply these
+filters and produce an accurate representation of your actual
+application code coverage.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-to-use-lua-cov-for-lua-code-coverage';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

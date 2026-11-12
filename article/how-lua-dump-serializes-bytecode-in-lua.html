@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How lua_dump Serializes Bytecode in Lua - lua</title>
+    <meta name="description" content="The luadump function in the Lua C API serializes a compiled Lua function into a binary byte stream, allowing code to be saved, transmitted, and reloaded without recompilation. This process works by traversing the internal function prototype (Proto) and em">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-dump-serializes-bytecode-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How lua_dump Serializes Bytecode in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-dump-serializes-bytecode-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The luadump function in the Lua C API serializes a compiled Lua function into a binary byte stream, allowing code to be saved, transmitted, and reloaded without recompilation. This process works by traversing the internal function prototype (Proto) and em" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua_dump-serializes-bytecode-in-lua">How lua_dump Serializes
+Bytecode in Lua</h1>
+<p>The <code>lua_dump</code> function in the Lua C API serializes a
+compiled Lua function into a binary byte stream, allowing code to be
+saved, transmitted, and reloaded without recompilation. This process
+works by traversing the internal function prototype (<code>Proto</code>)
+and emitting its constituent elements—including binary headers, virtual
+machine instructions, constants, upvalue references, and debug
+metadata—sequentially through a user-defined writer callback. This
+article details the internal mechanics of <code>lua_dump</code>, how the
+serialization pipeline is structured, and how each component of a
+compiled chunk is represented in binary format.</p>
+<h3 id="the-c-api-interface-and-lua_writer">The C API Interface and
+lua_Writer</h3>
+<p>At the API level, <code>lua_dump</code> is defined with the following
+signature:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> lua_dump <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> lua_Writer writer<span class="op">,</span> <span class="dt">void</span> <span class="op">*</span>data<span class="op">,</span> <span class="dt">int</span> strip<span class="op">);</span></span></code></pre></div>
+<p>The function expects a compiled Lua function at the top of the stack.
+It does not output a monolithic memory buffer directly; instead, it
+delegates output handling to a callback function of type
+<code>lua_Writer</code>:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">typedef</span> <span class="dt">int</span> <span class="op">(*</span>lua_Writer<span class="op">)</span> <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">const</span> <span class="dt">void</span><span class="op">*</span> p<span class="op">,</span> <span class="dt">size_t</span> sz<span class="op">,</span> <span class="dt">void</span><span class="op">*</span> ud<span class="op">);</span></span></code></pre></div>
+<p>Whenever the serialization engine prepares a block of bytes, it calls
+<code>writer</code>, passing the byte buffer pointer <code>p</code>, the
+buffer size <code>sz</code>, and the user-supplied pointer
+<code>data</code>. This streaming model allows Lua to stream bytecode
+directly to files, memory buffers (such as in <code>string.dump</code>),
+or network sockets without allocating large intermediate strings. The
+<code>strip</code> parameter instructs the engine whether to discard
+debug metadata (line numbers, local variable names) to produce smaller
+payloads.</p>
+<h3 id="the-serialization-pipeline-ldumpc">The Serialization Pipeline
+(ldump.c)</h3>
+<p>Internally, <code>lua_dump</code> extracts the underlying
+<code>Proto</code> struct from the closure on the stack and hands
+control to internal dumping logic, implemented primarily in
+<code>ldump.c</code> via the function <code>luaU_dump</code>.</p>
+<p>The process is managed using an internal state structure
+(<code>DumpState</code>), which wraps the target <code>lua_State</code>,
+the writer callback, user data, error status, and the stripping flag.
+The dumper serializes data in strict order:</p>
+<ol type="1">
+<li><strong>The Binary Header</strong>: Validates compatibility when
+reloading.</li>
+<li><strong>The Main Prototype</strong>: The top-level function
+representing the chunk.</li>
+<li><strong>Closing Signatures</strong>: Endianness and floating-point
+format checks.</li>
+</ol>
+<h3 id="structure-of-the-binary-stream">Structure of the Binary
+Stream</h3>
+<h4 id="1-the-chunk-header">1. The Chunk Header</h4>
+<p>Before writing executable bytecode, Lua writes a standardized header
+to ensure that the virtual machine loading the binary matches the
+environment in which it was compiled. The header consists of:</p>
+<ul>
+<li><strong>Signature (Magic Bytes)</strong>: The four-byte sequence
+<code>\x1bLua</code> (0x1B, 0x4C, 0x75, 0x61), identifying the stream as
+precompiled Lua bytecode.</li>
+<li><strong>Version Number</strong>: A single byte encoding the Lua
+version (e.g., <code>0x54</code> for Lua 5.4).</li>
+<li><strong>Format Flag</strong>: A byte indicating the bytecode format
+(0 indicates official standard Lua).</li>
+<li><strong>Environment Validation Data</strong>: Conversion constants
+that verify system architecture:
+<ul>
+<li>Sizes of native types (<code>int</code>, <code>size_t</code>,
+<code>Instruction</code>, <code>lua_Integer</code>,
+<code>lua_Number</code>).</li>
+<li>Endianness test integer (typically <code>0x5678</code> or a defined
+format integer).</li>
+<li>Floating-point format validation number (typically
+<code>370.5</code> or <code>PI</code>).</li>
+</ul></li>
+</ul>
+<p>If any byte in this header does not match the parameters of the
+loading environment, <code>lua_load</code> rejects the chunk immediately
+to prevent memory corruption or execution errors caused by mismatched
+data representations.</p>
+<h4 id="2-function-prototype-serialization">2. Function Prototype
+Serialization</h4>
+<p>A Lua function is represented in memory by a <code>Proto</code>
+object. In <code>luaU_dump</code>, functions are serialized through a
+dedicated internal routine that writes each field of the
+<code>Proto</code> sequentially:</p>
+<ul>
+<li><strong>Source Name</strong>: The string identifying the source file
+or chunk (omitted if <code>strip</code> is enabled).</li>
+<li><strong>Line Defined and Last Line Defined</strong>: Integers
+representing the beginning and ending lines of the function definition
+in the original source code.</li>
+<li><strong>Parameter Count</strong>: The number of fixed parameters
+accepted by the function.</li>
+<li><strong>Vararg Flag</strong>: A byte specifying whether the function
+takes variable arguments (<code>...</code>).</li>
+<li><strong>Max Stack Size</strong>: The maximum number of virtual
+registers required by the execution frame.</li>
+<li><strong>Code (Bytecode Instructions)</strong>: The array of VM
+instructions (<code>Instruction</code>), each written as fixed-size
+integers (typically 32-bit unsigned values) containing the opcode and
+register operands.</li>
+<li><strong>Constants</strong>: The literal values used in the function.
+The dumper first writes the number of constants, followed by each
+constant:
+<ul>
+<li>A tag byte indicating the type (<code>LUA_TNIL</code>,
+<code>LUA_TBOOLEAN</code>, <code>LUA_TNUMFLT</code>,
+<code>LUA_TNUMINT</code>, <code>LUA_TSHRSTR</code>,
+<code>LUA_TLNGSTR</code>).</li>
+<li>The actual value according to the type (strings are prefixed by
+their length).</li>
+</ul></li>
+<li><strong>Upvalues</strong>: A list of descriptors for external
+variables captured in lexical scopes. Each descriptor identifies whether
+the upvalue resides in the immediate parent stack or in the parent's
+upvalue table, along with its index.</li>
+<li><strong>Nested Prototypes</strong>: Functions defined inside the
+current function. The serialization function calls itself recursively
+for each child prototype, embedding nested closures into the byte
+stream.</li>
+<li><strong>Debug Information</strong>: If <code>strip</code> is zero,
+the dumper writes the line mapping array (connecting each bytecode
+instruction to a source line), local variable names with their active
+instruction ranges, and upvalue variable names. If <code>strip</code> is
+non-zero, these fields are written as empty arrays.</li>
+</ul>
+<h3 id="low-level-type-serialization">Low-Level Type Serialization</h3>
+<p>To ensure the byte stream remains compact, <code>ldump.c</code>
+employs specific binary encoders for basic types:</p>
+<ul>
+<li><strong>Integers and Floats</strong>: Native numeric values are
+copied directly as their raw memory bytes using low-level block writes
+(<code>memcpy</code> equivalents).</li>
+<li><strong>Variable-Length Integers</strong>: In modern Lua versions
+(such as Lua 5.4), size markers and line offsets are often encoded using
+variable-length quantities (7 bits per byte, with the eighth bit
+indicating continuation), minimizing storage space for small numerical
+values.</li>
+<li><strong>Strings</strong>: Serialized by first writing their length
+(as a size indicator or variable-length integer) followed by the raw
+byte buffer. Nil strings are indicated by a dedicated size value
+(typically <code>0</code>).</li>
+</ul>
+<p>Once the root prototype and all its child components have been
+processed through the <code>lua_Writer</code> callback, the stream is
+terminated, completing the serialization lifecycle.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-dump-serializes-bytecode-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

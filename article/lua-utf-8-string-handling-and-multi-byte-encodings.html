@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua UTF-8 String Handling and Multi-Byte Encodings - lua</title>
+    <meta name="description" content="In the Lua programming language, native string manipulation functions are inherently byte-oriented rather than character-oriented. Because modern text relies heavily on the UTF-8 encoding standard—where a single character can span anywhere from one to fou">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-utf-8-string-handling-and-multi-byte-encodings">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua UTF-8 String Handling and Multi-Byte Encodings - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-utf-8-string-handling-and-multi-byte-encodings" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, native string manipulation functions are inherently byte-oriented rather than character-oriented. Because modern text relies heavily on the UTF-8 encoding standard—where a single character can span anywhere from one to fou" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-utf-8-string-handling-and-multi-byte-encodings">Lua UTF-8
+String Handling and Multi-Byte Encodings</h1>
+<p>In the Lua programming language, native string manipulation functions
+are inherently byte-oriented rather than character-oriented. Because
+modern text relies heavily on the UTF-8 encoding standard—where a single
+character can span anywhere from one to four bytes—treating strings as
+simple byte arrays leads to miscalculated string lengths, corrupted
+characters during slicing, and broken pattern matching. String
+manipulation in Lua must account for multi-byte sequences to preserve
+text integrity, correctly parse international characters, and ensure
+reliable text processing across applications.</p>
+<h3 id="the-byte-oriented-design-of-standard-lua-strings">The
+Byte-Oriented Design of Standard Lua Strings</h3>
+<p>Standard Lua functions in the <code>string</code> library treat
+strings as immutable sequences of 8-bit bytes. When Lua was designed,
+treating a byte as a character was standard practice for ASCII and
+single-byte encodings like ISO-8859-1.</p>
+<p>UTF-8 is a variable-width encoding format backward-compatible with
+ASCII. ASCII characters (code points 0–127) occupy a single byte, but
+characters from non-Latin alphabets, accented letters, symbols, and
+emojis require between two and four bytes. Because standard Lua
+functions do not recognize code-point boundaries, they cannot
+differentiate between a single multi-byte character and multiple
+distinct single-byte characters.</p>
+<h3 id="key-issues-caused-by-ignoring-multi-byte-sequences">Key Issues
+Caused by Ignoring Multi-Byte Sequences</h3>
+<p>Failing to account for multi-byte UTF-8 encodings causes several
+critical data processing errors:</p>
+<ul>
+<li><strong>Inaccurate String Lengths:</strong> The standard
+<code>string.len()</code> function returns the total number of bytes,
+not visual characters or Unicode code points. For example,
+<code>string.len("café")</code> returns <code>5</code> instead of
+<code>4</code>, because the character <code>é</code> consists of two
+bytes (<code>0xC3</code> and <code>0xA9</code>).</li>
+<li><strong>Data Corruption from Slicing:</strong> Functions like
+<code>string.sub()</code> extract substrings based on raw byte offsets.
+If an offset lands in the middle of a multi-byte sequence, the sequence
+is severed. This produces invalid byte sequences that result in
+malformed data, decoding crashes, or visual replacement characters (``)
+when rendered.</li>
+<li><strong>Broken Pattern Matching:</strong> Lua’s built-in pattern
+matching engine evaluates byte-by-byte. The standard wildcard pattern
+<code>.</code> matches an individual byte rather than an entire
+character. Consequently, matching or substituting characters can alter
+part of a multi-byte sequence while leaving the remainder intact,
+invalidating the encoding.</li>
+<li><strong>Destructive Reversals:</strong> Using
+<code>string.reverse()</code> reverses the raw byte order. Multi-byte
+sequences depend on specific leading and continuation byte arrangements;
+flipping these bytes destroys the sequence structure entirely.</li>
+</ul>
+<h3 id="accounting-for-utf-8-in-lua">Accounting for UTF-8 in Lua</h3>
+<p>To safely manipulate international text, developers must use
+UTF-8-aware functions that calculate offsets and lengths based on
+Unicode code points:</p>
+<ul>
+<li><strong>The Standard <code>utf8</code> Library (Lua 5.3+):</strong>
+Lua introduced a basic native <code>utf8</code> library providing
+functions such as <code>utf8.len()</code> to count code points
+accurately and <code>utf8.offset()</code> to convert character positions
+into exact byte indices before slicing. It also includes
+<code>utf8.codes</code> to iterate over code points safely.</li>
+<li><strong>Third-Party Libraries:</strong> For versions prior to Lua
+5.3, such as Lua 5.1 and LuaJIT, developers rely on comprehensive
+external libraries like <code>luautf8</code>. These libraries replicate
+the standard <code>string</code> API (providing UTF-8 versions of
+<code>sub</code>, <code>find</code>, <code>match</code>, and
+<code>gsub</code>) to allow transparent multi-byte manipulation.</li>
+</ul>
+<p>Accounting for multi-byte encodings guarantees that text remains
+valid UTF-8 throughout processing, prevents data corruption, and ensures
+that software behaves consistently across all languages and scripts.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-utf-8-string-handling-and-multi-byte-encodings';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua C API Stack Indices: Positive vs Negative - lua</title>
+    <meta name="description" content="The Lua C Application Programming Interface (API) communicates with the C runtime through a virtual, Last-In-First-Out (LIFO) stack. When interacting with this stack, developers must reference stack slots using integer indices. This article explains how p">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-c-api-stack-indices-positive-vs-negative">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua C API Stack Indices: Positive vs Negative - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-c-api-stack-indices-positive-vs-negative" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The Lua C Application Programming Interface (API) communicates with the C runtime through a virtual, Last-In-First-Out (LIFO) stack. When interacting with this stack, developers must reference stack slots using integer indices. This article explains how p" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-c-api-stack-indices-positive-vs-negative">Lua C API Stack
+Indices: Positive vs Negative</h1>
+<p>The Lua C Application Programming Interface (API) communicates with
+the C runtime through a virtual, Last-In-First-Out (LIFO) stack. When
+interacting with this stack, developers must reference stack slots using
+integer indices. This article explains how positive and negative
+indexing schemes operate in the Lua C API, detailing how positive
+indices reference items from the bottom of the stack upward, while
+negative indices count downward from the top of the stack.</p>
+<h2 id="the-lua-virtual-stack">The Lua Virtual Stack</h2>
+<p>In the Lua C API, all data exchanges—such as passing arguments,
+reading return values, and manipulating variables—happen through a
+shared stack. Every element pushed onto the stack occupies a specific
+index. The API allows elements to be addressed using either positive
+(absolute) or negative (relative) indices.</p>
+<p>Note that <strong>0 is never a valid stack index</strong> in standard
+Lua C API operations.</p>
+<h2 id="positive-indices-bottom-up-absolute">Positive Indices: Bottom-Up
+(Absolute)</h2>
+<p>Positive indices represent absolute positions starting from the very
+bottom of the stack.</p>
+<ul>
+<li><strong>Index <code>1</code></strong> points to the oldest element
+currently on the stack (the bottom).</li>
+<li><strong>Index <code>2</code></strong> points to the second element
+pushed.</li>
+<li><strong>Index <code>n</code></strong> represents the element <span
+class="math inline">\(n\)</span> steps from the bottom, up to
+<code>lua_gettop(L)</code>, which returns the total number of
+elements.</li>
+</ul>
+<h3 id="use-case">Use Case</h3>
+<p>Positive indices are most commonly used when handling function
+arguments passed from Lua to C. For example, if a Lua function passes
+three parameters to a C function, the first argument is always at index
+<code>1</code>, the second at index <code>2</code>, and the third at
+index <code>3</code>, regardless of how many temporary values you later
+push onto the stack.</p>
+<h2 id="negative-indices-top-down-relative">Negative Indices: Top-Down
+(Relative)</h2>
+<p>Negative indices provide a relative reference measured from the top
+of the stack, which represents the most recently pushed item.</p>
+<ul>
+<li><strong>Index <code>-1</code></strong> refers directly to the top
+element of the stack.</li>
+<li><strong>Index <code>-2</code></strong> refers to the element
+immediately beneath the top element.</li>
+<li><strong>Index <code>-n</code></strong> refers to the <span
+class="math inline">\(n\)</span>-th element down from the top, where
+<code>-lua_gettop(L)</code> refers to the bottom of the stack (the same
+element as index <code>1</code>).</li>
+</ul>
+<h3 id="use-case-1">Use Case</h3>
+<p>Negative indices are ideal for inspecting or manipulating values
+immediately after an operation that pushes results to the stack. For
+instance, after calling a function like <code>lua_getfield</code> or
+<code>lua_pcall</code>, the newly produced value sits at index
+<code>-1</code>. This allows you to inspect results without tracking the
+exact absolute depth of the stack.</p>
+<h2 id="index-mapping-overview">Index Mapping Overview</h2>
+<p>Consider a stack that contains three elements: <code>"apple"</code>
+(pushed first), <code>"banana"</code> (pushed second), and
+<code>"cherry"</code> (pushed last).</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Value</th>
+<th style="text-align: left;">Positive Index</th>
+<th style="text-align: left;">Negative Index</th>
+<th style="text-align: left;">Stack Position</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>"cherry"</code></td>
+<td style="text-align: left;"><code>3</code></td>
+<td style="text-align: left;"><code>-1</code></td>
+<td style="text-align: left;">Top of the stack</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>"banana"</code></td>
+<td style="text-align: left;"><code>2</code></td>
+<td style="text-align: left;"><code>-2</code></td>
+<td style="text-align: left;">Middle</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>"apple"</code></td>
+<td style="text-align: left;"><code>1</code></td>
+<td style="text-align: left;"><code>-3</code></td>
+<td style="text-align: left;">Bottom of the stack</td>
+</tr>
+</tbody>
+</table>
+<p>In this scenario:</p>
+<ul>
+<li>Both index <code>1</code> and index <code>-3</code> access
+<code>"apple"</code>.</li>
+<li>Both index <code>2</code> and index <code>-2</code> access
+<code>"banana"</code>.</li>
+<li>Both index <code>3</code> and index <code>-1</code> access
+<code>"cherry"</code>.</li>
+</ul>
+<h2 id="summary-of-stack-operations">Summary of Stack Operations</h2>
+<ul>
+<li><strong>Use positive indices</strong> when referring to fixed
+parameters, such as function arguments, whose absolute positions remain
+stable even as new items are added to the stack.</li>
+<li><strong>Use negative indices</strong> when working dynamically with
+newly pushed values or when you want to access elements relative to the
+current top of the stack without calculating the total stack size.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-c-api-stack-indices-positive-vs-negative';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

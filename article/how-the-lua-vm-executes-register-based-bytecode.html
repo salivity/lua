@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How the Lua VM Executes Register-Based Bytecode - lua</title>
+    <meta name="description" content="This article explores the execution mechanics of the Lua programming language virtual machine (VM), focusing on its register-based bytecode architecture introduced in Lua 5.0. It covers the structure of Lua bytecode instructions, how virtual registers map">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-the-lua-vm-executes-register-based-bytecode">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How the Lua VM Executes Register-Based Bytecode - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-the-lua-vm-executes-register-based-bytecode" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores the execution mechanics of the Lua programming language virtual machine (VM), focusing on its register-based bytecode architecture introduced in Lua 5.0. It covers the structure of Lua bytecode instructions, how virtual registers map" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-the-lua-vm-executes-register-based-bytecode">How the Lua VM
+Executes Register-Based Bytecode</h1>
+<p>This article explores the execution mechanics of the Lua programming
+language virtual machine (VM), focusing on its register-based bytecode
+architecture introduced in Lua 5.0. It covers the structure of Lua
+bytecode instructions, how virtual registers map to the runtime
+execution stack, and the internal fetch-decode-execute loop that
+interprets these instructions with high performance.</p>
+<h3 id="virtual-registers-and-stack-mapping">Virtual Registers and Stack
+Mapping</h3>
+<p>Unlike traditional virtual machines that utilize an evaluation stack
+(where operands are pushed and popped), the Lua VM uses a register-based
+architecture. However, Lua’s "registers" are not physical hardware CPU
+registers. Instead, they are virtual registers that map directly to
+contiguous slots in Lua’s call stack for the current function call
+frame.</p>
+<p>When a function is called, the VM allocates an activation record on
+the stack. The base of this frame serves as the reference point:
+register <code>0</code> (or <code>R(0)</code>) corresponds to the memory
+location at <code>base + 0</code>, register <code>1</code> to
+<code>base + 1</code>, and so on. Local variables and temporary
+expression values inhabit these register slots directly.</p>
+<h3 id="bytecode-instruction-formats">Bytecode Instruction Formats</h3>
+<p>Lua instructions are fixed-width 32-bit integers. Using fixed-width
+instructions simplifies fetching and decoding. Every instruction
+contains an opcode (typically 6 to 7 bits, depending on the Lua version)
+and several fields representing register indices or constant table
+indices.</p>
+<p>The instructions primarily fall into a few formats:</p>
+<ul>
+<li><strong>iABC</strong>: Contains an 8-bit operand <code>A</code>, and
+two 9-bit operands <code>B</code> and <code>C</code>.</li>
+<li><strong>iABx</strong>: Contains an 8-bit operand <code>A</code> and
+an unsigned 18-bit operand <code>Bx</code>.</li>
+<li><strong>iAsBx</strong>: Contains an 8-bit operand <code>A</code> and
+a signed 18-bit operand <code>sBx</code> (commonly used for jumps).</li>
+<li><strong>iAx</strong>: Contains an expanded 26-bit operand
+<code>Ax</code> for operations needing larger indices.</li>
+</ul>
+<p>Operand <code>A</code> almost always specifies the destination
+register for an operation, while operands <code>B</code> and
+<code>C</code> denote the source values. Lua uses a special bit flag in
+operands <code>B</code> and <code>C</code> (in the <code>iABC</code>
+format) to indicate whether the operand refers to a register on the
+stack or a value in the function's constant pool (<code>K</code>). This
+enables instructions to blend local variables and literals seamlessly
+without dedicated load instructions.</p>
+<h3 id="the-fetch-decode-execute-cycle">The Fetch-Decode-Execute
+Cycle</h3>
+<p>The VM executes bytecode inside a central loop located in the
+function <code>luaV_execute</code> in the Lua runtime source
+(<code>lvm.c</code>).</p>
+<ol type="1">
+<li><p><strong>Fetch</strong>: The VM maintains a program counter
+(<code>pc</code>) pointing to the current instruction array. The VM
+fetches the 32-bit instruction and increments the program counter:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>Instruction i <span class="op">=</span> <span class="op">*</span>pc<span class="op">++;</span></span></code></pre></div></li>
+<li><p><strong>Decode</strong>: The VM extracts the opcode and operands
+using bitwise masks and shifts:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>OpCode op <span class="op">=</span> GET_OPCODE<span class="op">(</span>i<span class="op">);</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> a <span class="op">=</span> GETARG_A<span class="op">(</span>i<span class="op">);</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> b <span class="op">=</span> GETARG_B<span class="op">(</span>i<span class="op">);</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> c <span class="op">=</span> GETARG_C<span class="op">(</span>i<span class="op">);</span></span></code></pre></div></li>
+<li><p><strong>Execute</strong>: The VM branches to the appropriate
+instruction logic, typically via a C <code>switch</code> statement or
+computed <code>goto</code> statements (direct threaded code) when
+supported by the compiler (such as GCC).</p></li>
+</ol>
+<h3 id="instruction-execution-example">Instruction Execution
+Example</h3>
+<p>Consider the Lua expression <code>local a = b + c</code>. In a
+stack-based VM, this requires three to four separate instructions:</p>
+<ol type="1">
+<li>Push <code>b</code></li>
+<li>Push <code>c</code></li>
+<li>Add</li>
+<li>Pop into <code>a</code></li>
+</ol>
+<p>In the Lua register VM, this compiles into a single instruction:</p>
+<pre class="text"><code>ADD R(A) R(B) R(C)</code></pre>
+<p>During execution, the VM resolves the memory locations for
+<code>R(B)</code> and <code>R(C)</code> using the stack pointer
+<code>base</code>, performs the addition, and writes the result directly
+to the stack location corresponding to <code>R(A)</code>:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>TValue <span class="op">*</span>rb <span class="op">=</span> RKB<span class="op">(</span>b<span class="op">);</span> <span class="co">// Resolves to base + b, or constant table</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>TValue <span class="op">*</span>rc <span class="op">=</span> RKC<span class="op">(</span>c<span class="op">);</span> <span class="co">// Resolves to base + c, or constant table</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>setobjs2s<span class="op">(</span>L<span class="op">,</span> base <span class="op">+</span> a<span class="op">,</span> luaV_arith<span class="op">(</span>L<span class="op">,</span> rb<span class="op">,</span> rc<span class="op">,</span> TM_ADD<span class="op">));</span></span></code></pre></div>
+<h3 id="advantages-of-the-approach">Advantages of the Approach</h3>
+<p>By using register-based bytecode, the Lua VM significantly reduces
+the total instruction count required to execute a script compared to
+stack-based alternatives. Although decoding fixed-size 32-bit
+instructions requires bitwise manipulation, the reduced instruction
+dispatch overhead and the elimination of redundant push/pop stack
+operations provide substantial execution speed gains and keep memory
+traversal cache-friendly.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-the-lua-vm-executes-register-based-bytecode';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

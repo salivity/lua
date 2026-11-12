@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua Sandboxing Prevents Arbitrary Code Execution - lua</title>
+    <meta name="description" content="Lua protects against arbitrary code execution (ACE) by operating as an embedded language that grants the host application complete authority over the runtime environment. Rather than relying on traditional operating-system-level isolation, a secure Lua sa">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-sandboxing-prevents-arbitrary-code-execution">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua Sandboxing Prevents Arbitrary Code Execution - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-sandboxing-prevents-arbitrary-code-execution" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua protects against arbitrary code execution (ACE) by operating as an embedded language that grants the host application complete authority over the runtime environment. Rather than relying on traditional operating-system-level isolation, a secure Lua sa" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-sandboxing-prevents-arbitrary-code-execution">How Lua
+Sandboxing Prevents Arbitrary Code Execution</h1>
+<p>Lua protects against arbitrary code execution (ACE) by operating as
+an embedded language that grants the host application complete authority
+over the runtime environment. Rather than relying on traditional
+operating-system-level isolation, a secure Lua sandbox mitigates ACE by
+aggressively stripping dangerous native libraries, isolating global
+environments, disallowing untrusted bytecode, and placing strict
+constraints on CPU and memory consumption.</p>
+<h2 id="environment-isolation-and-function-whitelisting">Environment
+Isolation and Function Whitelisting</h2>
+<p>In standard Lua, scripts execute within a global environment table
+(<code>_G</code> in Lua 5.1, or managed via <code>_ENV</code> in Lua 5.2
+and later) containing all built-in functions. Sandboxing eliminates the
+default global table and replaces it with an isolated, whitelisted
+environment.</p>
+<ul>
+<li><strong>Explicit Whitelisting:</strong> Untrusted code is granted
+access only to safe, side-effect-free primitives, such as standard math
+operations, string manipulation, and table utilities.</li>
+<li><strong>Lexical Scoping (<code>_ENV</code>):</strong> Modern Lua
+binds chunks to a designated environment table at compile time.
+Sandboxes define a custom <code>_ENV</code> that omits references to the
+system runtime, preventing the script from resolving symbols outside its
+designated scope.</li>
+</ul>
+<h2 id="disabling-dangerous-standard-libraries">Disabling Dangerous
+Standard Libraries</h2>
+<p>To prevent interaction with the host operating system, secure
+sandboxes remove core standard libraries that could be weaponized to
+execute arbitrary commands or manipulate the file system:</p>
+<ul>
+<li><strong>The <code>os</code> Library:</strong> Functions like
+<code>os.execute</code> and <code>os.remove</code> are completely
+removed to stop shell command injection and unauthorized file
+deletion.</li>
+<li><strong>The <code>io</code> Library:</strong> Removing input/output
+capabilities stops scripts from reading, modifying, or writing files on
+the host machine.</li>
+<li><strong>The <code>package</code> Library:</strong> Disabling
+<code>package.loadlib</code> and modifying <code>require</code> prevents
+untrusted scripts from loading external native C dynamic libraries
+(<code>.so</code>, <code>.dll</code>) into the host process's address
+space.</li>
+<li><strong>The <code>debug</code> Library:</strong> The debug interface
+provides mechanisms to inspect and modify internal states, manipulate
+upvalues, bypass lexical scoping, and overwrite metatables. Disabling
+the <code>debug</code> library is critical to prevent scripts from
+escaping their designated <code>_ENV</code>.</li>
+</ul>
+<h2 id="blocking-precompiled-bytecode">Blocking Precompiled
+Bytecode</h2>
+<p>Loading precompiled binary chunks represents one of the most critical
+attack vectors for arbitrary code execution in Lua. Standard Lua
+runtimes do not include a fully hardened bytecode verifier. Specially
+crafted, malformed bytecode can trigger memory corruption, buffer
+overflows, or out-of-bounds reads and writes in the C virtual
+machine.</p>
+<p>To eliminate this vector:</p>
+<ul>
+<li>Sandboxes load scripts strictly as plaintext source code.</li>
+<li>In Lua 5.2 and later, calls to <code>load()</code> or
+<code>loadstring()</code> explicitly enforce the text-only mode by
+passing <code>"t"</code> as the mode parameter (e.g.,
+<code>load(untrusted_code, nil, "t", sandbox_env)</code>), which
+immediately rejects any chunk beginning with the binary Lua bytecode
+signature.</li>
+</ul>
+<h2 id="resource-constraints-and-execution-hooks">Resource Constraints
+and Execution Hooks</h2>
+<p>While not directly an ACE vulnerability, uncontrolled resource
+consumption can lead to denial-of-service conditions that make the host
+process vulnerable to secondary exploits. Lua provides native C API
+mechanisms to maintain control:</p>
+<ul>
+<li><strong>Instruction Limits via Hooks:</strong> Host applications use
+<code>lua_sethook</code> to intercept execution after a defined number
+of VM instructions (count hooks). If a script attempts infinite loops or
+excessive computation, the hook terminates execution.</li>
+<li><strong>Custom Memory Allocators:</strong> When instantiating the
+Lua state with <code>lua_newstate</code>, the host can provide a custom
+memory allocation function. This allows the host to enforce strict
+memory quotas, preventing untrusted scripts from exhausting system
+memory.</li>
+</ul>
+<h2 id="safe-c-host-boundary-control">Safe C-Host Boundary Control</h2>
+<p>Because Lua functions can only interact with the underlying operating
+system through C bridges exposed by the host, the boundary remains
+secure by default. Unless the host developer explicitly registers unsafe
+C functions into the sandbox's environment, a sandboxed Lua script has
+no direct access to system memory, pointers, or system calls,
+effectively neutralizing arbitrary code execution.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-sandboxing-prevents-arbitrary-code-execution';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

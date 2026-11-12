@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Profiler Limits Measuring C Call Overhead - lua</title>
+    <meta name="description" content="Pure-script profilers in the Lua programming language offer an accessible way to instrument code without external dependencies, yet they face severe technical constraints when measuring the performance overhead of C function calls. Relying primarily on Lu">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-profiler-limits-measuring-c-call-overhead">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Profiler Limits Measuring C Call Overhead - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-profiler-limits-measuring-c-call-overhead" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Pure-script profilers in the Lua programming language offer an accessible way to instrument code without external dependencies, yet they face severe technical constraints when measuring the performance overhead of C function calls. Relying primarily on Lu" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-profiler-limits-measuring-c-call-overhead">Lua Profiler
+Limits Measuring C Call Overhead</h1>
+<p>Pure-script profilers in the Lua programming language offer an
+accessible way to instrument code without external dependencies, yet
+they face severe technical constraints when measuring the performance
+overhead of C function calls. Relying primarily on Lua’s built-in
+<code>debug</code> library, these profilers suffer from intrusive
+measurement latency, coarse timer resolutions, an inability to isolate
+VM boundary-transition costs, and disruptive side effects on
+just-in-time (JIT) compilation. Consequently, developers attempting to
+assess the boundary cost between native C code and Lua bytecode often
+receive distorted or misleading profiling data.</p>
+<h3
+id="intrusive-measurement-overhead-and-the-observer-effect">Intrusive
+Measurement Overhead and the Observer Effect</h3>
+<p>Pure-script profilers almost universally depend on
+<code>debug.sethook</code> configured to capture "call" and "return"
+events. Every time a Lua script invokes a native C function, the Lua VM
+triggers the hook, interrupting execution to run pure Lua profiling
+logic.</p>
+<p>The invocation cost of the debug hook itself is often orders of
+magnitude larger than the cost of crossing the Lua-to-C boundary.
+Crossing the language boundary typically requires only a few dozen
+machine instructions—allocating a stack frame, pushing arguments, and
+jumping to a function pointer. Because the profiler's pure Lua hook
+requires dynamic table lookups, arithmetic, and record keeping, the
+profiler heavily distorts the execution timeline, introducing an
+observer effect that drowns out the micro-overhead it aims to
+measure.</p>
+<h3 id="coarse-timer-resolution">Coarse Timer Resolution</h3>
+<p>Measuring boundary overhead requires nanosecond-level precision.
+Standard Lua environments do not provide high-resolution timers
+natively; functions like <code>os.clock()</code> or
+<code>os.time()</code> generally offer only microsecond or millisecond
+precision depending on the underlying OS implementation.</p>
+<p>Because invoking an empty C function typically takes under 100
+nanoseconds on modern hardware, standard script-level timers cannot
+register individual call operations. While developers often mitigate
+this by running millions of iterations in a tight loop to calculate an
+average, a pure-script profiler cannot decouple the cost of the loop
+control structures from the actual C call transition inside such
+microbenchmarks.</p>
+<h3 id="inability-to-isolate-the-boundary-mechanism">Inability to
+Isolate the Boundary Mechanism</h3>
+<p>The Lua debug interface treats C functions as atomic black boxes.
+When the debug hook detects a call to a C function, it cannot inspect
+what happens underneath the VM runtime layer.</p>
+<p>A native call consists of several distinct stages:</p>
+<ol type="1">
+<li>Pushing arguments onto the Lua stack.</li>
+<li>The Lua-to-native C ABI transition.</li>
+<li>Argument validation via the Lua C API (such as
+<code>luaL_checkinteger</code>).</li>
+<li>Native execution of the business logic.</li>
+<li>Pushing results and unwinding back to the Lua interpreter.</li>
+</ol>
+<p>A pure-script profiler cannot differentiate between the static
+overhead of steps 1, 2, and 5 and the dynamic internal work done in
+steps 3 and 4. As a result, the profiler cannot measure the intrinsic
+boundary cost separately from the execution cost of the native code
+itself.</p>
+<h3 id="jit-invalidation-in-luajit">JIT Invalidation in LuaJIT</h3>
+<p>When working within performance-critical runtimes like LuaJIT,
+pure-script profiling fails to represent real-world C call performance
+accurately. LuaJIT achieves its highest performance by compiling traces
+into machine code, allowing low-overhead native calls via the standard
+Lua C API or near-zero-overhead calls via the Foreign Function Interface
+(FFI).</p>
+<p>Activating <code>debug.sethook</code> forces LuaJIT to abort or
+disable trace compilation entirely, falling back to the interpreter. In
+the interpreted state, Lua-to-C calls are handled through generic
+dispatch loops that take significantly longer than compiled transitions.
+Furthermore, pure-script profilers cannot hook directly into compiled
+FFI calls without forcing the runtime to deoptimize them into standard
+interpreted functions. Consequently, the profiling script measures an
+artificial, interpreted worst-case scenario that does not reflect
+production execution.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-profiler-limits-measuring-c-call-overhead';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

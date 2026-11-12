@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Build a Lua Profiler Using Debug Hooks - lua</title>
+    <meta name="description" content="This article explores how developers can utilize the hook functions provided by Lua&#39;s native debug library to build custom performance profilers. By leveraging debug.sethook, developers can intercept runtime events such as function calls, returns, and exe">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-build-a-lua-profiler-using-debug-hooks">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Build a Lua Profiler Using Debug Hooks - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-build-a-lua-profiler-using-debug-hooks" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how developers can utilize the hook functions provided by Lua&#39;s native debug library to build custom performance profilers. By leveraging debug.sethook, developers can intercept runtime events such as function calls, returns, and exe" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-build-a-lua-profiler-using-debug-hooks">How to Build a
+Lua Profiler Using Debug Hooks</h1>
+<p>This article explores how developers can utilize the hook functions
+provided by Lua's native <code>debug</code> library to build custom
+performance profilers. By leveraging <code>debug.sethook</code>,
+developers can intercept runtime events such as function calls, returns,
+and executed lines of code. This guide covers the operational mechanics
+of Lua hooks, how to gather timing and call-frequency metrics, a
+concrete implementation example of a basic profiler, and critical
+performance caveats to keep in mind.</p>
+<h3 id="the-foundation-debugsethook">The Foundation:
+<code>debug.sethook</code></h3>
+<p>The core mechanism for building a profiler in Lua is the
+<code>debug.sethook</code> function. It allows you to register a
+callback function that executes whenever specific interpreter events
+occur.</p>
+<p>The syntax is defined as:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">debug.sethook</span><span class="op">([</span><span class="va">thread</span><span class="op">,]</span> <span class="va">hook_function</span><span class="op">,</span> <span class="va">mask</span> <span class="op">[,</span> <span class="va">count</span><span class="op">])</span></span></code></pre></div>
+<p>The <code>mask</code> string dictates which runtime events trigger
+the <code>hook_function</code>:</p>
+<ul>
+<li><strong><code>"c"</code> (Call):</strong> Triggers whenever Lua
+calls a function.</li>
+<li><strong><code>"r"</code> (Return):</strong> Triggers whenever a
+function returns.</li>
+<li><strong><code>"l"</code> (Line):</strong> Triggers whenever Lua
+executes a new line of code.</li>
+<li><strong>Count:</strong> An optional integer specifying that the hook
+should trigger every <code>count</code> instructions, useful for
+sampling profilers.</li>
+</ul>
+<h3 id="choosing-a-profiling-strategy">Choosing a Profiling
+Strategy</h3>
+<p>Using hooks, you can implement two primary profiling paradigms:</p>
+<ol type="1">
+<li><strong>Deterministic (Instrumentation) Profiling:</strong> By
+setting the mask to <code>"cr"</code>, your hook intercepts every
+function call and return. This allows you to compute exact execution
+counts and elapsed time per function using a high-resolution clock like
+<code>os.clock()</code>.</li>
+<li><strong>Statistical (Sampling) Profiling:</strong> By configuring an
+instruction count hook without <code>"c"</code> or <code>"r"</code>, you
+periodically inspect the current call stack. This drastically reduces
+the overhead introduced by the hook function, making it suitable for
+production environments.</li>
+</ol>
+<h3 id="extracting-metadata-with-debuggetinfo">Extracting Metadata with
+<code>debug.getinfo</code></h3>
+<p>Inside the hook function, the event type (such as <code>"call"</code>
+or <code>"return"</code>) is passed as the first argument. To identify
+which function triggered the event, use <code>debug.getinfo</code>:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> hook<span class="op">(</span><span class="va">event</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Level 2 inspects the function that triggered the hook</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">info</span> <span class="op">=</span> <span class="fu">debug.getinfo</span><span class="op">(</span><span class="dv">2</span><span class="op">,</span> <span class="st">&quot;nS&quot;</span><span class="op">)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">name</span> <span class="op">=</span> <span class="va">info</span><span class="op">.</span><span class="va">name</span> <span class="kw">or</span> <span class="st">&quot;[anonymous]&quot;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">source</span> <span class="op">=</span> <span class="va">info</span><span class="op">.</span><span class="va">short_src</span> <span class="kw">or</span> <span class="st">&quot;[unknown]&quot;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">line</span> <span class="op">=</span> <span class="va">info</span><span class="op">.</span><span class="va">linedefined</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>The <code>"nS"</code> parameter restricts data collection to function
+names (<code>n</code>) and source definitions (<code>S</code>),
+minimizing introspection overhead.</p>
+<h3 id="building-a-simple-call-count-and-timing-profiler">Building a
+Simple Call-Count and Timing Profiler</h3>
+<p>Below is a minimal, functional implementation of a deterministic
+profiler that records invocation counts and execution durations:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">profiler</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">call_data</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">call_stack</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> hook<span class="op">(</span><span class="va">event</span><span class="op">)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">info</span> <span class="op">=</span> <span class="fu">debug.getinfo</span><span class="op">(</span><span class="dv">2</span><span class="op">,</span> <span class="st">&quot;nS&quot;</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">func_id</span> <span class="op">=</span> <span class="fu">string.format</span><span class="op">(</span><span class="st">&quot;%s:%d (%s)&quot;</span><span class="op">,</span> <span class="va">info</span><span class="op">.</span><span class="va">short_src</span><span class="op">,</span> <span class="va">info</span><span class="op">.</span><span class="va">linedefined</span><span class="op">,</span> <span class="va">info</span><span class="op">.</span><span class="va">name</span> <span class="kw">or</span> <span class="st">&quot;anon&quot;</span><span class="op">)</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">event</span> <span class="op">==</span> <span class="st">&quot;call&quot;</span> <span class="cf">then</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>        <span class="fu">table.insert</span><span class="op">(</span><span class="va">call_stack</span><span class="op">,</span> <span class="op">{</span> <span class="va">id</span> <span class="op">=</span> <span class="va">func_id</span><span class="op">,</span> <span class="va">start_time</span> <span class="op">=</span> <span class="fu">os.clock</span><span class="op">()</span> <span class="op">})</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> <span class="va">call_data</span><span class="op">[</span><span class="va">func_id</span><span class="op">]</span> <span class="cf">then</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>            <span class="va">call_data</span><span class="op">[</span><span class="va">func_id</span><span class="op">]</span> <span class="op">=</span> <span class="op">{</span> <span class="va">count</span> <span class="op">=</span> <span class="dv">0</span><span class="op">,</span> <span class="va">total_time</span> <span class="op">=</span> <span class="dv">0</span> <span class="op">}</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>        <span class="va">call_data</span><span class="op">[</span><span class="va">func_id</span><span class="op">].</span><span class="va">count</span> <span class="op">=</span> <span class="va">call_data</span><span class="op">[</span><span class="va">func_id</span><span class="op">].</span><span class="va">count</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">elseif</span> <span class="va">event</span> <span class="op">==</span> <span class="st">&quot;return&quot;</span> <span class="cf">then</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">entry</span> <span class="op">=</span> <span class="fu">table.remove</span><span class="op">(</span><span class="va">call_stack</span><span class="op">)</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">entry</span> <span class="kw">and</span> <span class="va">entry</span><span class="op">.</span><span class="va">id</span> <span class="op">==</span> <span class="va">func_id</span> <span class="cf">then</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>            <span class="kw">local</span> <span class="va">duration</span> <span class="op">=</span> <span class="fu">os.clock</span><span class="op">()</span> <span class="op">-</span> <span class="va">entry</span><span class="op">.</span><span class="va">start_time</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>            <span class="va">call_data</span><span class="op">[</span><span class="va">func_id</span><span class="op">].</span><span class="va">total_time</span> <span class="op">=</span> <span class="va">call_data</span><span class="op">[</span><span class="va">func_id</span><span class="op">].</span><span class="va">total_time</span> <span class="op">+</span> <span class="va">duration</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">profiler</span><span class="op">.</span>start<span class="op">()</span></span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>    <span class="va">call_data</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>    <span class="va">call_stack</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>    <span class="fu">debug.sethook</span><span class="op">(</span><span class="va">hook</span><span class="op">,</span> <span class="st">&quot;cr&quot;</span><span class="op">)</span></span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">profiler</span><span class="op">.</span>stop<span class="op">()</span></span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>    <span class="fu">debug.sethook</span><span class="op">()</span> <span class="co">-- Clears the hook</span></span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">call_data</span></span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<h3 id="caveats-and-technical-limitations">Caveats and Technical
+Limitations</h3>
+<p>While debug hooks provide a straightforward profiling mechanism,
+developers must account for several structural limitations:</p>
+<ul>
+<li><strong>Overhead (The Observer Effect):</strong> Triggering a Lua
+function on every call, return, or line adds significant CPU overhead.
+The profiling code itself can alter the timing profile of the host
+program.</li>
+<li><strong>Tail Calls:</strong> When Lua performs a tail call
+optimization, the calling function's stack frame is reused. This can
+cause unbalanced <code>"call"</code> and <code>"return"</code> events.
+In newer Lua versions, Lua generates a <code>"tail call"</code> event
+instead of a standard <code>"call"</code>, which must be handled
+explicitly.</li>
+<li><strong>LuaJIT Disabling:</strong> If using LuaJIT, registering a
+debug hook typically forces the JIT compiler to abort traces and fall
+back to the slower interpreter mode, producing metrics that do not
+reflect fully compiled execution. For LuaJIT, using its dedicated
+low-overhead C-level sampling profiler API is generally preferred.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-to-build-a-lua-profiler-using-debug-hooks';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

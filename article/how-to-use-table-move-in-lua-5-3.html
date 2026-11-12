@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Use table.move in Lua 5.3 - lua</title>
+    <meta name="description" content="Introduced in Lua 5.3, the table.move function provides an efficient, built-in mechanism for copying contiguous ranges of elements from one table to another or within the same table. This article covers the syntax of table.move, how its parameters dictate">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-to-use-table-move-in-lua-5-3">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How to Use table.move in Lua 5.3 - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-to-use-table-move-in-lua-5-3" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Introduced in Lua 5.3, the table.move function provides an efficient, built-in mechanism for copying contiguous ranges of elements from one table to another or within the same table. This article covers the syntax of table.move, how its parameters dictate" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-to-use-tablemove-in-lua-53">How to Use table.move in Lua
+5.3</h1>
+<p>Introduced in Lua 5.3, the <code>table.move</code> function provides
+an efficient, built-in mechanism for copying contiguous ranges of
+elements from one table to another or within the same table. This
+article covers the syntax of <code>table.move</code>, how its parameters
+dictate the range and destination of data, its internal handling of
+overlapping ranges, and practical code examples demonstrating its
+functionality.</p>
+<h3 id="syntax-and-parameters">Syntax and Parameters</h3>
+<p>The function signature for <code>table.move</code> is:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">table.move</span><span class="op">(</span><span class="va">a1</span><span class="op">,</span> <span class="va">f</span><span class="op">,</span> <span class="va">e</span><span class="op">,</span> <span class="va">t</span> <span class="op">[,</span> <span class="va">a2</span><span class="op">])</span></span></code></pre></div>
+<ul>
+<li><strong><code>a1</code></strong>: The source table containing the
+elements to copy.</li>
+<li><strong><code>f</code></strong>: The starting index (inclusive) of
+the range in <code>a1</code>.</li>
+<li><strong><code>e</code></strong>: The ending index (inclusive) of the
+range in <code>a1</code>.</li>
+<li><strong><code>t</code></strong>: The target index where the copied
+range will begin.</li>
+<li><strong><code>a2</code></strong> <em>(optional)</em>: The
+destination table. If omitted, it defaults to <code>a1</code>, copying
+elements within the source table itself.</li>
+</ul>
+<p>The function returns the destination table (<code>a2</code> if
+provided, otherwise <code>a1</code>).</p>
+<h3 id="how-it-works">How It Works</h3>
+<p>The function copies elements from <code>a1[f]</code> through
+<code>a1[e]</code> into the destination table starting at position
+<code>t</code>. The assignment behaves as follows:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="va">a2</span><span class="op">[</span><span class="va">t</span><span class="op">],</span> <span class="va">a2</span><span class="op">[</span><span class="va">t</span><span class="op">+</span><span class="dv">1</span><span class="op">],</span> <span class="op">...,</span> <span class="va">a2</span><span class="op">[</span><span class="va">t</span> <span class="op">+</span> <span class="op">(</span><span class="va">e</span> <span class="op">-</span> <span class="va">f</span><span class="op">)]</span> <span class="op">=</span> <span class="va">a1</span><span class="op">[</span><span class="va">f</span><span class="op">],</span> <span class="va">a1</span><span class="op">[</span><span class="va">f</span><span class="op">+</span><span class="dv">1</span><span class="op">],</span> <span class="op">...,</span> <span class="va">a1</span><span class="op">[</span><span class="va">e</span><span class="op">]</span></span></code></pre></div>
+<p>If <code>e &lt; f</code>, the function performs no operations and
+simply returns the destination table. Because the function is
+implemented in C, it runs significantly faster than an equivalent manual
+<code>for</code> loop in pure Lua.</p>
+<h3 id="handling-overlapping-ranges">Handling Overlapping Ranges</h3>
+<p>When moving elements within the same table (i.e., when
+<code>a2</code> is omitted or <code>a1 == a2</code>), ranges may
+overlap. Similar to the standard C library function
+<code>memmove</code>, <code>table.move</code> safely handles overlapping
+memory spaces.</p>
+<p>If the destination index <code>t</code> is greater than
+<code>f</code>, the function copies elements in reverse order (from back
+to front) to avoid overwriting elements before they are read. If
+<code>t</code> is less than <code>f</code>, it copies from front to
+back.</p>
+<h3 id="examples">Examples</h3>
+<h4 id="1-copying-between-two-tables">1. Copying Between Two Tables</h4>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">source</span> <span class="op">=</span> <span class="op">{</span><span class="st">&quot;a&quot;</span><span class="op">,</span> <span class="st">&quot;b&quot;</span><span class="op">,</span> <span class="st">&quot;c&quot;</span><span class="op">,</span> <span class="st">&quot;d&quot;</span><span class="op">}</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">dest</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- Copy indices 2 through 4 from source to dest starting at index 1</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">table.move</span><span class="op">(</span><span class="va">source</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">4</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="va">dest</span><span class="op">)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- dest now contains: {&quot;b&quot;, &quot;c&quot;, &quot;d&quot;}</span></span></code></pre></div>
+<h4 id="2-shifting-elements-within-the-same-table">2. Shifting Elements
+Within the Same Table</h4>
+<p>You can use <code>table.move</code> to insert an element at a
+specific index without using <code>table.insert</code>, which is useful
+for large arrays:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">list</span> <span class="op">=</span> <span class="op">{</span><span class="dv">10</span><span class="op">,</span> <span class="dv">20</span><span class="op">,</span> <span class="dv">40</span><span class="op">,</span> <span class="dv">50</span><span class="op">}</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Shift elements at indices 3 and 4 forward by 1</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">table.move</span><span class="op">(</span><span class="va">list</span><span class="op">,</span> <span class="dv">3</span><span class="op">,</span> <span class="op">#</span><span class="va">list</span><span class="op">,</span> <span class="dv">4</span><span class="op">)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- Insert the missing value into the gap</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="va">list</span><span class="op">[</span><span class="dv">3</span><span class="op">]</span> <span class="op">=</span> <span class="dv">30</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- list now contains: {10, 20, 30, 40, 50}</span></span></code></pre></div>
+<h4 id="3-appending-one-table-to-another">3. Appending One Table to
+Another</h4>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">t1</span> <span class="op">=</span> <span class="op">{</span><span class="st">&quot;first&quot;</span><span class="op">,</span> <span class="st">&quot;second&quot;</span><span class="op">}</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">t2</span> <span class="op">=</span> <span class="op">{</span><span class="st">&quot;third&quot;</span><span class="op">,</span> <span class="st">&quot;fourth&quot;</span><span class="op">}</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co">-- Append all elements of t2 to the end of t1</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="fu">table.move</span><span class="op">(</span><span class="va">t2</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="op">#</span><span class="va">t2</span><span class="op">,</span> <span class="op">#</span><span class="va">t1</span> <span class="op">+</span> <span class="dv">1</span><span class="op">,</span> <span class="va">t1</span><span class="op">)</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- t1 now contains: {&quot;first&quot;, &quot;second&quot;, &quot;third&quot;, &quot;fourth&quot;}</span></span></code></pre></div></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-to-use-table-move-in-lua-5-3';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

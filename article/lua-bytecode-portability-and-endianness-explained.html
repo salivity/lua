@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Bytecode Portability and Endianness Explained - lua</title>
+    <meta name="description" content="This article explores how processor endianness affects the portability of compiled Lua bytecode across different CPU architectures. While Lua source code runs identically on any system with a compatible interpreter, precompiled binary chunks are architect">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-bytecode-portability-and-endianness-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Bytecode Portability and Endianness Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-bytecode-portability-and-endianness-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how processor endianness affects the portability of compiled Lua bytecode across different CPU architectures. While Lua source code runs identically on any system with a compatible interpreter, precompiled binary chunks are architect" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-bytecode-portability-and-endianness-explained">Lua Bytecode
+Portability and Endianness Explained</h1>
+<p>This article explores how processor endianness affects the
+portability of compiled Lua bytecode across different CPU architectures.
+While Lua source code runs identically on any system with a compatible
+interpreter, precompiled binary chunks are architecture-dependent. The
+following sections examine the mechanics of endianness in Lua, how the
+virtual machine detects byte-order mismatches, why standard Lua avoids
+automatic conversion, and the practical approaches developers use to
+manage cross-platform deployment.</p>
+<h3 id="what-is-endianness-in-the-context-of-lua">What Is Endianness in
+the Context of Lua?</h3>
+<p>Endianness refers to the order in which a CPU organizes bytes of
+multi-byte words in computer memory. A little-endian system (such as
+x86, x86-64, and most ARM configurations) stores the least significant
+byte at the lowest memory address. Conversely, a big-endian system (such
+as older PowerPC, SPARC, or MIPS hardware) stores the most significant
+byte first.</p>
+<p>When Lua source code is compiled into bytecode using the
+<code>luac</code> compiler or the <code>string.dump</code> function, the
+virtual machine serializes internal structures directly into a binary
+stream. This stream includes numerical constants (floating-point numbers
+and integers) and virtual machine instructions, which are represented as
+32-bit unsigned integers. Because standard Lua writes these values using
+the host CPU's native memory representation, the resulting binary file
+reflects the endianness of the compilation platform.</p>
+<h3 id="how-lua-handles-endianness-during-loading">How Lua Handles
+Endianness During Loading</h3>
+<p>The Lua virtual machine does not automatically translate bytecode
+between different endian architectures at runtime. Instead, it enforces
+strict validation during the loading process via <code>load</code> or
+<code>luaL_loadfile</code>.</p>
+<p>Every compiled Lua binary chunk begins with a predefined header. In
+addition to a signature (the magic bytes <code>\033Lua</code>) and
+version markers, this header contains architecture-validation data:</p>
+<ol type="1">
+<li><strong>Format and Size Indicators:</strong> Flags defining the size
+of pointers, integers, size_t, and Lua numbers.</li>
+<li><strong>Endianness Test Data:</strong> In standard Lua 5.1 through
+5.4, the header includes a test sequence (such as a designated integer
+or specific byte pattern like <code>\x19\x93\r\n\x1a\n</code> in recent
+versions).</li>
+</ol>
+<p>When the target machine reads this header, it evaluates the test
+value. If a big-endian system attempts to load bytecode compiled on a
+little-endian system, the test value reads as corrupted or reversed. The
+loader fails immediately with an error indicating an incompatible binary
+chunk (such as <code>"bad binary format"</code>), preventing the
+execution of improperly ordered instructions.</p>
+<h3 id="the-impact-on-bytecode-portability">The Impact on Bytecode
+Portability</h3>
+<p>Because endianness affects both opcode layout and primitive data
+types, binary chunks cannot run across mismatched CPU platforms without
+translation:</p>
+<ul>
+<li><strong>Instruction Decoding:</strong> Lua instructions consist of
+fields packed into 32-bit words (opcodes, registers, and constants). A
+byte-order mismatch causes the virtual machine to read the wrong bits as
+the operation code, leading to invalid instructions or memory
+violations.</li>
+<li><strong>Numeric Literal Corruption:</strong> Integer and
+floating-point literals are stored as raw multi-byte values. Reading a
+64-bit IEEE 754 floating-point number across an endian mismatch
+scrambles the sign, exponent, and mantissa, producing incorrect
+calculations or <code>NaN</code> values.</li>
+</ul>
+<p>Standard implementations of Lua deliberately omit runtime
+byte-swapping routines. Lua is designed as a lightweight, embeddable
+language with minimal footprint, and maintaining the parsing logic
+required to swap instruction bitfields and float formats on the fly
+would increase the complexity and memory overhead of the core
+engine.</p>
+<h3 id="strategies-for-cross-platform-deployment">Strategies for
+Cross-Platform Deployment</h3>
+<p>Developers targeting diverse hardware architectures rely on three
+main strategies to bypass endianness limitations:</p>
+<ul>
+<li><strong>Distribute Source Code:</strong> The standard and
+recommended practice in Lua is distributing plaintext scripts. The Lua
+compiler is exceptionally fast and lightweight; the performance
+difference between loading source code and loading bytecode at startup
+is negligible for most applications.</li>
+<li><strong>Target-Specific Compilation:</strong> When precompilation is
+required (such as for code obfuscation or embedded environments with no
+built-in compiler), developers use cross-compilers or build pipelines
+that target the specific endianness and word size of the destination
+hardware.</li>
+<li><strong>Custom Bytecode Loaders:</strong> Specialized forks of the
+Lua runtime implement conversion logic inside the deserializer
+(<code>luaU_undump</code>), detecting foreign-endian headers and
+reversing the byte order of instructions and numeric constants during
+the loading phase.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-bytecode-portability-and-endianness-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

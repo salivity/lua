@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spawning Child Processes with Lua os.execute - lua</title>
+    <meta name="description" content="The os.execute function in Lua provides a built-in mechanism to interface directly with the host operating system by passing command strings to the system shell. This article examines the capabilities of os.execute for spawning child processes, covering i">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/spawning-child-processes-with-lua-os-execute">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Spawning Child Processes with Lua os.execute - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/spawning-child-processes-with-lua-os-execute" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The os.execute function in Lua provides a built-in mechanism to interface directly with the host operating system by passing command strings to the system shell. This article examines the capabilities of os.execute for spawning child processes, covering i" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="spawning-child-processes-with-lua-osexecute">Spawning Child
+Processes with Lua os.execute</h1>
+<p>The <code>os.execute</code> function in Lua provides a built-in
+mechanism to interface directly with the host operating system by
+passing command strings to the system shell. This article examines the
+capabilities of <code>os.execute</code> for spawning child processes,
+covering its synchronous execution model, return value semantics across
+Lua versions, support for shell syntax and I/O redirection, and
+techniques for handling process control.</p>
+<h3 id="invoking-host-commands-and-binaries">Invoking Host Commands and
+Binaries</h3>
+<p>At its core, <code>os.execute</code> acts as a wrapper around the
+standard C <code>system()</code> function. When passed a string, it
+starts the host system's default command interpreter
+(<code>/bin/sh</code> on Unix-like platforms or <code>cmd.exe</code> on
+Windows) and instructs it to run the specified command as a child
+process.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Runs an external binary</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">os.execute</span><span class="op">(</span><span class="st">&quot;curl -O https://example.com/data.json&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>If called without arguments, <code>os.execute()</code> tests whether
+a shell is available on the system, returning non-zero (or
+<code>true</code>) if present and zero (or <code>false</code>)
+otherwise.</p>
+<h3 id="synchronous-execution-model">Synchronous Execution Model</h3>
+<p>By default, <code>os.execute</code> is synchronous and blocking. When
+invoked, execution of the parent Lua state halts until the spawned child
+process finishes. This makes it ideal for running scripts, compile jobs,
+or external utilities where the Lua program must wait for completion
+before continuing to the next step.</p>
+<h3 id="detailed-exit-status-reporting">Detailed Exit Status
+Reporting</h3>
+<p>In modern versions of Lua (Lua 5.2, 5.3, and 5.4),
+<code>os.execute</code> provides structured process termination data by
+returning three distinct values:</p>
+<ol type="1">
+<li><strong>Success Status:</strong> A boolean indicating whether the
+command finished successfully without error (<code>true</code>), or
+<code>nil</code> if the process encountered an error or was terminated
+prematurely.</li>
+<li><strong>Termination Type:</strong> A string indicating how the
+process ended: <code>"exit"</code> if it terminated normally, or
+<code>"signal"</code> if it was terminated by an unhandled POSIX
+signal.</li>
+<li><strong>Exit Code:</strong> An integer representing the exit code
+returned by the program (typically <code>0</code> for success), or the
+signal number that caused the termination.</li>
+</ol>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ok</span><span class="op">,</span> <span class="va">exit_type</span><span class="op">,</span> <span class="va">code</span> <span class="op">=</span> <span class="fu">os.execute</span><span class="op">(</span><span class="st">&quot;ls -la&quot;</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="va">ok</span> <span class="cf">then</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Process executed successfully.&quot;</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="st">&quot;Process failed via &quot;</span> <span class="op">..</span> <span class="va">exit_type</span> <span class="op">..</span> <span class="st">&quot; with code: &quot;</span> <span class="op">..</span> <span class="va">code</span><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div>
+<p>In Lua 5.1, the function only returns a single raw integer
+representing the system-dependent exit code returned by C's
+<code>system()</code>.</p>
+<h3 id="access-to-shell-features-and-redirection">Access to Shell
+Features and Redirection</h3>
+<p>Because <code>os.execute</code> invokes a shell instance rather than
+executing binaries directly via <code>execve</code>, it inherits the
+full functionality of the underlying shell. This enables several
+capabilities without requiring additional Lua libraries:</p>
+<ul>
+<li><strong>I/O Redirection:</strong> Standard streams can be routed to
+or from files using standard shell operators (<code>&gt;</code>,
+<code>&lt;</code>, <code>&gt;&gt;</code>,
+<code>2&gt;&amp;1</code>).</li>
+<li><strong>Command Chaining and Piping:</strong> Commands can be
+pipelined or chained conditionally using <code>|</code>,
+<code>&amp;&amp;</code>, <code>;</code>, and <code>||</code>.</li>
+<li><strong>Environment Variable Expansion:</strong> Shell variables
+such as <code>$PATH</code> or <code>%USERPROFILE%</code> are evaluated
+natively by the shell before executing the binary.</li>
+</ul>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Redirecting output and chaining commands</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">os.execute</span><span class="op">(</span><span class="st">&quot;mkdir -p /tmp/build &amp;&amp; gcc main.c -o /tmp/build/app &gt; build.log 2&gt;&amp;1&quot;</span><span class="op">)</span></span></code></pre></div>
+<h3 id="simulating-asynchronous-processes">Simulating Asynchronous
+Processes</h3>
+<p>Although <code>os.execute</code> blocks the caller by default, child
+processes can be spawned asynchronously by delegating the detachment to
+the underlying shell:</p>
+<ul>
+<li><strong>POSIX (Linux/macOS):</strong> Appending an ampersand
+(<code>&amp;</code>) spawns the command in the background, immediately
+returning control to Lua.</li>
+<li><strong>Windows:</strong> Prepending the <code>start</code> command
+(e.g., <code>start /b cmd</code>) launches the executable in a
+background process without waiting.</li>
+</ul>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- POSIX asynchronous invocation</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">os.execute</span><span class="op">(</span><span class="st">&quot;long_running_task.sh &amp;&quot;</span><span class="op">)</span></span></code></pre></div>
+<h3 id="capabilities-overview-and-boundaries">Capabilities Overview and
+Boundaries</h3>
+<p><code>os.execute</code> is best suited for simple execution tasks
+where the output does not need to be captured programmatically within
+Lua variables. It does not provide inter-process communication (IPC)
+channels, bidirectional communication, or granular PID-level management.
+When output capture is required, Lua's <code>io.popen</code> function is
+used instead, while full asynchronous management typically requires
+external bindings such as <code>luaposix</code> or <code>luv</code>.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/spawning-child-processes-with-lua-os-execute';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

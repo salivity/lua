@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How Lua os.exit Terminates the Host Process - lua</title>
+    <meta name="description" content="In the Lua programming language, the os.exit function provides a direct mechanism to immediately stop script execution and terminate the host process running the Lua state. This article examines the internal mechanics of os.exit, how it interfaces with th">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-os-exit-terminates-the-host-process">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How Lua os.exit Terminates the Host Process - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-os-exit-terminates-the-host-process" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, the os.exit function provides a direct mechanism to immediately stop script execution and terminate the host process running the Lua state. This article examines the internal mechanics of os.exit, how it interfaces with th" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua-osexit-terminates-the-host-process">How Lua os.exit
+Terminates the Host Process</h1>
+<p>In the Lua programming language, the <code>os.exit</code> function
+provides a direct mechanism to immediately stop script execution and
+terminate the host process running the Lua state. This article examines
+the internal mechanics of <code>os.exit</code>, how it interfaces with
+the host environment's C standard library, the role of exit codes and
+state cleanup, and the consequences of invoking it from an embedded or
+standalone context.</p>
+<h3 id="the-underlying-mechanism-of-osexit">The Underlying Mechanism of
+<code>os.exit</code></h3>
+<p>Lua is an embedded language written in ANSI C. When a script calls
+<code>os.exit</code>, the Lua runtime delegates the termination request
+directly to the host platform via the standard C runtime library. Under
+the hood, the Lua C source code handles this call by executing the C
+library's <code>exit()</code> function (from
+<code>&lt;stdlib.h&gt;</code>).</p>
+<p>Because the C <code>exit()</code> function directly notifies the
+operating system kernel that the process has finished executing, control
+never returns to the Lua virtual machine or to the host program's main
+execution loop. The operating system reclaims allocated virtual memory,
+closes open file descriptors, and sets the process exit status.</p>
+<h3 id="parameters-and-exit-codes">Parameters and Exit Codes</h3>
+<p>The <code>os.exit</code> function accepts two optional arguments:
+<code>os.exit([code [, close]])</code>.</p>
+<ol type="1">
+<li><strong>The Exit Code (<code>code</code>):</strong>
+<ul>
+<li><strong>Boolean:</strong> Passing <code>true</code> (or omitting the
+argument) yields an exit status indicating success (equivalent to
+<code>EXIT_SUCCESS</code> in C, typically <code>0</code>). Passing
+<code>false</code> results in a failure status (equivalent to
+<code>EXIT_FAILURE</code>, typically <code>1</code>).</li>
+<li><strong>Integer:</strong> Passing a numeric value provides that
+specific integer directly to the host operating system as the process
+return code (e.g., <code>os.exit(2)</code>).</li>
+</ul></li>
+<li><strong>The Lua State Closure (<code>close</code>):</strong>
+<ul>
+<li>Introduced in Lua 5.2 and defaulted to <code>false</code> (changing
+to <code>true</code> by default in Lua 5.4), this boolean dictates
+whether the active Lua state is explicitly closed via
+<code>lua_close()</code> before exiting.</li>
+<li>If <code>close</code> is <code>true</code>, Lua invokes any active
+to-be-closed variables (<code>&lt;close&gt;</code>) and
+garbage-collection metamethods (<code>__gc</code>) across live
+objects.</li>
+<li>If <code>close</code> is <code>false</code>, the process exits
+immediately via C <code>exit()</code>, bypassing Lua-level destructors
+and relying entirely on the operating system to reclaim system
+resources.</li>
+</ul></li>
+</ol>
+<h3 id="impact-on-embedded-environments">Impact on Embedded
+Environments</h3>
+<p>When Lua is run as a standalone executable via the terminal, calling
+<code>os.exit</code> halts the CLI program as expected. However, when
+Lua is embedded inside a larger host application (such as a game engine,
+web server, or desktop software), <code>os.exit</code> terminates the
+entire host executable, not just the isolated Lua script or thread.</p>
+<p>Because <code>os.exit</code> halts the host process unconditionally
+at the operating system level, host applications that require graceful
+shutdowns must either sandbox the <code>os</code> library by removing or
+replacing <code>os.exit</code>, or catch the intent to quit through
+customized bindings.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-os-exit-terminates-the-host-process';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

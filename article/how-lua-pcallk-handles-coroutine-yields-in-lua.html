@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How lua_pcallk Handles Coroutine Yields in Lua - lua</title>
+    <meta name="description" content="In the Lua C API, running protected calls across yieldable coroutines historically presented a fundamental challenge due to C stack boundaries. The luapcallk function resolves this issue by introducing continuation functions, which decouple the state of a">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-lua-pcallk-handles-coroutine-yields-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How lua_pcallk Handles Coroutine Yields in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-lua-pcallk-handles-coroutine-yields-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua C API, running protected calls across yieldable coroutines historically presented a fundamental challenge due to C stack boundaries. The luapcallk function resolves this issue by introducing continuation functions, which decouple the state of a" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-lua_pcallk-handles-coroutine-yields-in-lua">How lua_pcallk
+Handles Coroutine Yields in Lua</h1>
+<p>In the Lua C API, running protected calls across yieldable coroutines
+historically presented a fundamental challenge due to C stack
+boundaries. The <code>lua_pcallk</code> function resolves this issue by
+introducing continuation functions, which decouple the state of a
+protected call from the native C call stack. This article explains how
+<code>lua_pcallk</code> operates, how it records execution contexts, and
+how it reliably preserves protected call semantics—such as error
+trapping and status reporting—when a coroutine yields and subsequently
+resumes.</p>
+<h3 id="the-c-call-boundary-limitation">The C-Call Boundary
+Limitation</h3>
+<p>In standard ANSI C, an application cannot pause a native function
+call mid-execution, preserve its stack frame, and resume it later from
+the exact point of interruption. In Lua 5.1 and earlier, invoking a Lua
+function from C using <code>lua_pcall</code> placed an inflexible C
+frame onto the stack. If the invoked code attempted to yield
+(<code>coroutine.yield</code>), Lua raised an "attempt to yield across a
+C-call boundary" error.</p>
+<p>To circumvent this, Lua 5.2 introduced continuations via
+<code>lua_pcallk</code>. The <code>k</code> suffix denotes a
+continuation function (<code>lua_KFunction</code>), which supplies an
+explicit fallback path for execution to follow once a yielded thread
+resumes.</p>
+<h3 id="anatomy-of-lua_pcallk">Anatomy of <code>lua_pcallk</code></h3>
+<p>The signature of <code>lua_pcallk</code> introduces parameters
+designed to manage yield states:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> lua_pcallk <span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> </span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>                <span class="dt">int</span> nargs<span class="op">,</span> </span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>                <span class="dt">int</span> nresults<span class="op">,</span> </span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>                <span class="dt">int</span> errfunc<span class="op">,</span> </span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>                lua_KContext ctx<span class="op">,</span> </span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>                lua_KFunction k<span class="op">);</span></span></code></pre></div>
+<p>Alongside standard parameters for arguments, results, and error
+handler indices, <code>lua_pcallk</code> accepts:</p>
+<ul>
+<li><strong><code>ctx</code> (<code>lua_KContext</code>)</strong>: An
+integer or pointer-sized context value passed to the continuation
+function to maintain arbitrary application state.</li>
+<li><strong><code>k</code> (<code>lua_KFunction</code>)</strong>: A
+pointer to a C function that Lua invokes when the thread resumes after a
+yield.</li>
+</ul>
+<h3 id="state-storage-inside-lua-call-frames">State Storage Inside Lua
+Call Frames</h3>
+<p>When a protected call begins with <code>lua_pcallk</code>, Lua
+creates a CallInfo (<code>ci</code>) structure on its internal execution
+stack. Instead of storing the continuation inside native CPU registers
+or C stack frames, Lua records <code>k</code>, <code>ctx</code>, and the
+error handling state directly in the <code>CallInfo</code> record of the
+Lua thread (<code>lua_State</code>).</p>
+<p>The internal call record sets the <code>CIST_YPCALL</code> (yieldable
+protected call) flag. This flag tracks:</p>
+<ol type="1">
+<li>The expected number of return values.</li>
+<li>The index of the error handling function.</li>
+<li>The stack base offset where the function was called.</li>
+<li>The continuation function pointer (<code>k</code>) and its
+associated context (<code>ctx</code>).</li>
+</ol>
+<p>Because this metadata lives on Lua's heap-allocated call stack rather
+than the operating system's native C thread stack, the native C function
+that initiated <code>lua_pcallk</code> is free to return and vacate the
+native stack when a yield occurs.</p>
+<h3 id="execution-flow-during-a-yield">Execution Flow During a
+Yield</h3>
+<p>When a child coroutine calls <code>coroutine.yield</code> inside a
+<code>lua_pcallk</code> block:</p>
+<ol type="1">
+<li>Lua gathers the yielded arguments and updates the coroutine’s
+program counter and top pointer.</li>
+<li>Lua unwinds its virtual stack frames up to the point of the yield.
+When it encounters the <code>CallInfo</code> frame created by
+<code>lua_pcallk</code>, it detects the <code>CIST_YPCALL</code>
+flag.</li>
+<li>Rather than rejecting the yield as an illegal cross-boundary
+operation, Lua preserves the call frame on the thread's call list, marks
+the frame as suspended, and propagates the yield status
+(<code>LUA_YIELD</code>) up to the nearest native caller.</li>
+</ol>
+<h3 id="preserving-protected-semantics-on-resumption">Preserving
+Protected Semantics on Resumption</h3>
+<p>When the coroutine is resumed via <code>lua_resume</code>, Lua
+inspects the top suspended frame on the coroutine's stack:</p>
+<ol type="1">
+<li><strong>Successful Execution</strong>: Once the yielded function
+completes execution, Lua recognizes that the completed frame was
+protected by <code>lua_pcallk</code>. Lua restores the stack base
+according to the saved <code>CallInfo</code>, places the returned values
+onto the stack, and calls the continuation function <code>k</code>. The
+continuation receives the resumed <code>lua_State</code>, the status
+code <code>LUA_YIELD</code>, and the original <code>ctx</code>.</li>
+<li><strong>Error Trapping</strong>: If an error occurs after resumption
+(either inside the resumed code or when raising a runtime error), Lua
+initiates longjmp or error propagation routines. Because the frame was
+marked as protected, the error search logic halts at the
+<code>CallInfo</code> frame containing <code>CIST_YPCALL</code>.</li>
+<li><strong>Error Recovery</strong>: The registered error handler
+(referenced by <code>errfunc</code>) is executed if present. Lua then
+cleans up the stack frames between the error origin and the
+<code>pcallk</code> boundary, leaves the error object on the stack, and
+executes <code>k</code> with an error status code such as
+<code>LUA_ERRRUN</code>.</li>
+</ol>
+<p>By attaching continuation pointers and execution metadata to Lua's
+managed virtual call structures, <code>lua_pcallk</code> ensures that
+coroutine suspensions bypass native C stack limitations without
+abandoning error boundaries or stack cleanup duties.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-lua-pcallk-handles-coroutine-yields-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

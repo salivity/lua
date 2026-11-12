@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Using Lua os.rename to Move Files Across Directories - lua</title>
+    <meta name="description" content="In the Lua programming language, moving files between directories using the os.rename function is a common task, but its behavior depends entirely on the underlying operating system and filesystem architecture. This article explains how os.rename function">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/using-lua-os-rename-to-move-files-across-directories">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Using Lua os.rename to Move Files Across Directories - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/using-lua-os-rename-to-move-files-across-directories" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, moving files between directories using the os.rename function is a common task, but its behavior depends entirely on the underlying operating system and filesystem architecture. This article explains how os.rename function" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="using-lua-osrename-to-move-files-across-directories">Using Lua
+os.rename to Move Files Across Directories</h1>
+<p>In the Lua programming language, moving files between directories
+using the <code>os.rename</code> function is a common task, but its
+behavior depends entirely on the underlying operating system and
+filesystem architecture. This article explains how
+<code>os.rename</code> functions during cross-directory file operations,
+why cross-device moves fail, and how to implement a reliable fallback
+mechanism in your Lua applications.</p>
+<h3 id="how-osrename-works-under-the-hood">How <code>os.rename</code>
+Works Under the Hood</h3>
+<p>The <code>os.rename(oldname, newname)</code> function in Lua is a
+direct wrapper around the ISO C runtime library function
+<code>rename()</code>. Because Lua delegates this operation directly to
+the host operating system, it does not implement its own filesystem
+abstraction layer.</p>
+<p>When you pass two different directory paths to
+<code>os.rename</code>, the operating system attempts to move the file
+by changing its directory entry:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">os.rename</span><span class="op">(</span><span class="st">&quot;source_dir/data.txt&quot;</span><span class="op">,</span> <span class="st">&quot;target_dir/data.txt&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>If the call succeeds, <code>os.rename</code> returns
+<code>true</code>. If it fails, it returns <code>nil</code> followed by
+an error message string and an error code.</p>
+<h3 id="same-filesystem-vs-cross-device-moves">Same Filesystem vs.
+Cross-Device Moves</h3>
+<p>The success of a cross-directory move depends on whether the source
+and destination paths reside on the same filesystem or mount point:</p>
+<ol type="1">
+<li><strong>Same Filesystem (Intra-device move):</strong> If both
+directories are located on the same partition or drive, the operation
+succeeds nearly instantaneously. The operating system simply updates the
+directory entries and file pointers (such as inodes in Unix-like
+systems) without physically copying the file data on the disk.</li>
+<li><strong>Different Filesystems (Cross-device move):</strong> If the
+destination directory belongs to a different drive letter (such as
+moving from <code>C:\</code> to <code>D:\</code> on Windows) or a
+separate mount point/partition on Linux or macOS, the operation fails.
+The C standard library <code>rename()</code> cannot link file metadata
+across distinct filesystems, triggering an <code>EXDEV</code> error
+("Invalid cross-device link").</li>
+</ol>
+<p>Because Lua relies purely on the C implementation, it will not
+automatically fall back to copying and deleting the file when a
+cross-device move is attempted.</p>
+<h3 id="implementing-a-reliable-fallback">Implementing a Reliable
+Fallback</h3>
+<p>To ensure your Lua code safely moves files across arbitrary
+directories and separate partitions, you should check the result of
+<code>os.rename</code> and provide a manual copy-and-remove fallback
+when it fails:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> move_file<span class="op">(</span><span class="va">source</span><span class="op">,</span> <span class="va">destination</span><span class="op">)</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Attempt atomic rename first</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="fu">os.rename</span><span class="op">(</span><span class="va">source</span><span class="op">,</span> <span class="va">destination</span><span class="op">)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">success</span> <span class="cf">then</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="kw">true</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Fallback: Copy content and delete the original</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">src_file</span><span class="op">,</span> <span class="va">src_err</span> <span class="op">=</span> <span class="fu">io.open</span><span class="op">(</span><span class="va">source</span><span class="op">,</span> <span class="st">&quot;rb&quot;</span><span class="op">)</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="va">src_file</span> <span class="cf">then</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="kw">nil</span><span class="op">,</span> <span class="st">&quot;Failed to open source: &quot;</span> <span class="op">..</span> <span class="fu">tostring</span><span class="op">(</span><span class="va">src_err</span><span class="op">)</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">dest_file</span><span class="op">,</span> <span class="va">dest_err</span> <span class="op">=</span> <span class="fu">io.open</span><span class="op">(</span><span class="va">destination</span><span class="op">,</span> <span class="st">&quot;wb&quot;</span><span class="op">)</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="va">dest_file</span> <span class="cf">then</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">src_file</span><span class="op">:</span><span class="fu">close</span><span class="op">()</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="kw">nil</span><span class="op">,</span> <span class="st">&quot;Failed to open destination: &quot;</span> <span class="op">..</span> <span class="fu">tostring</span><span class="op">(</span><span class="va">dest_err</span><span class="op">)</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Stream data in chunks to prevent excessive memory usage</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">chunk_size</span> <span class="op">=</span> <span class="dv">65536</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">while</span> <span class="kw">true</span> <span class="cf">do</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>        <span class="kw">local</span> <span class="va">chunk</span> <span class="op">=</span> <span class="va">src_file</span><span class="op">:</span><span class="fu">read</span><span class="op">(</span><span class="va">chunk_size</span><span class="op">)</span></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> <span class="va">chunk</span> <span class="cf">then</span> <span class="cf">break</span> <span class="cf">end</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>        <span class="va">dest_file</span><span class="op">:</span><span class="fu">write</span><span class="op">(</span><span class="va">chunk</span><span class="op">)</span></span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>    <span class="va">src_file</span><span class="op">:</span><span class="fu">close</span><span class="op">()</span></span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>    <span class="va">dest_file</span><span class="op">:</span><span class="fu">close</span><span class="op">()</span></span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>    <span class="co">-- Remove original file after successful copy</span></span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">removed</span><span class="op">,</span> <span class="va">remove_err</span> <span class="op">=</span> <span class="fu">os.remove</span><span class="op">(</span><span class="va">source</span><span class="op">)</span></span>
+<span id="cb2-33"><a href="#cb2-33" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> <span class="va">removed</span> <span class="cf">then</span></span>
+<span id="cb2-34"><a href="#cb2-34" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="kw">nil</span><span class="op">,</span> <span class="st">&quot;Copied, but failed to remove source: &quot;</span> <span class="op">..</span> <span class="fu">tostring</span><span class="op">(</span><span class="va">remove_err</span><span class="op">)</span></span>
+<span id="cb2-35"><a href="#cb2-35" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-36"><a href="#cb2-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-37"><a href="#cb2-37" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">true</span></span>
+<span id="cb2-38"><a href="#cb2-38" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>By attempting <code>os.rename</code> first, your program retains the
+performance benefits of atomic metadata updates on the same filesystem
+while remaining resilient when moving files across different drives or
+partitions.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/using-lua-os-rename-to-move-files-across-directories';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

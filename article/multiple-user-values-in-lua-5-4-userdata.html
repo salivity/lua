@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiple User Values in Lua 5.4 Userdata - lua</title>
+    <meta name="description" content="Lua 5.4 significantly enhanced how C extensions manage Lua-side state by introducing native support for multiple user values per full userdata. This article details the evolution of this mechanism, contrasting the single-value limitation of earlier versio">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/multiple-user-values-in-lua-5-4-userdata">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Multiple User Values in Lua 5.4 Userdata - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/multiple-user-values-in-lua-5-4-userdata" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Lua 5.4 significantly enhanced how C extensions manage Lua-side state by introducing native support for multiple user values per full userdata. This article details the evolution of this mechanism, contrasting the single-value limitation of earlier versio" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="multiple-user-values-in-lua-54-userdata">Multiple User Values in
+Lua 5.4 Userdata</h1>
+<p>Lua 5.4 significantly enhanced how C extensions manage Lua-side state
+by introducing native support for multiple user values per full
+userdata. This article details the evolution of this mechanism,
+contrasting the single-value limitation of earlier versions with the
+indexed multi-value architecture in Lua 5.4, covering the updated C API
+functions and the resulting performance and architectural benefits.</p>
+<h3 id="the-historical-limitation-lua-51-to-53">The Historical
+Limitation (Lua 5.1 to 5.3)</h3>
+<p>In Lua 5.1, custom C data exposed to Lua through full userdata relied
+on environment tables via <code>lua_setfenv</code> and
+<code>lua_getfenv</code> to associate arbitrary Lua values with raw C
+memory. Lua 5.2 refined this concept by replacing environment tables
+with a single associated value called a "uservalue," managed using
+<code>lua_setuservalue</code> and <code>lua_getuservalue</code>. Lua 5.3
+retained this single-value model.</p>
+<p>While this single uservalue mechanism reduced overhead compared to
+environments, it imposed a strict structural constraint: a userdata
+block could reference only one Lua value directly. If a C library author
+needed a userdata object to hold multiple distinct Lua values—such as a
+collection of callbacks, parent object references, or cached states—they
+were forced to allocate a Lua table to act as a container inside that
+single slot. This workaround caused unnecessary heap allocations,
+increased garbage collector pressure, and added an extra layer of
+indirection for read and write operations.</p>
+<h3 id="the-lua-54-architecture">The Lua 5.4 Architecture</h3>
+<p>Lua 5.4 resolved this constraint by allowing full userdata to be
+created with an arbitrary number of direct user value slots (up to 255).
+Instead of referencing a single slot or forcing an intermediary table,
+the userdata header directly tracks an array of Lua values.</p>
+<h4 id="creation-with-lua_newuserdatauv">Creation with
+<code>lua_newuserdatauv</code></h4>
+<p>The legacy <code>lua_newuserdata</code> function was replaced by
+<code>lua_newuserdatauv</code>:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> <span class="op">*</span>lua_newuserdatauv<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">,</span> <span class="dt">size_t</span> size<span class="op">,</span> <span class="dt">int</span> nuvalue<span class="op">);</span></span></code></pre></div>
+<p>When allocating the userdata, the caller explicitly defines
+<code>nuvalue</code>, the exact number of uservalue slots to attach.
+Each slot is automatically initialized to <code>nil</code>. For backward
+compatibility, <code>lua_newuserdata(L, sz)</code> is retained as a
+macro that simply calls <code>lua_newuserdatauv(L, sz, 1)</code>.</p>
+<h4 id="indexed-access-functions">Indexed Access Functions</h4>
+<p>To interact with these slots individually, Lua 5.4 introduced 1-based
+indexed accessor functions:</p>
+<ul>
+<li><strong><code>int lua_setiuservalue(lua_State *L, int idx, int n);</code></strong><br />
+Pops a value from the top of the stack and assigns it to the
+<code>n</code>-th user value of the userdata at index <code>idx</code>.
+If <code>n</code> is invalid (e.g., less than 1 or greater than the
+allocated count), the function pops the value and returns 0 without
+writing anything.</li>
+<li><strong><code>int lua_getiuservalue(lua_State *L, int idx, int n);</code></strong><br />
+Pushes the <code>n</code>-th user value of the userdata at index
+<code>idx</code> onto the stack and returns its type. If <code>n</code>
+is out of bounds, it pushes <code>nil</code> and returns
+<code>LUA_TNONE</code>.</li>
+</ul>
+<p>The older <code>lua_setuservalue</code> and
+<code>lua_getuservalue</code> functions were updated to act as wrappers
+targeting index 1.</p>
+<h3 id="practical-impact-and-benefits">Practical Impact and
+Benefits</h3>
+<ol type="1">
+<li><strong>Reduced Memory Overhead:</strong> C bindings no longer need
+auxiliary tables to manage multiple related Lua references. Eliminating
+these tables saves table allocation overhead and minimizes memory
+fragmentation.</li>
+<li><strong>Improved Garbage Collection Performance:</strong> Direct
+user values are stored inline or adjacent to the userdata structure in
+memory. The garbage collector traverses these values directly during the
+marking phase, avoiding the overhead of traversing intermediate table
+structures.</li>
+<li><strong>Cleaner C API Design:</strong> C libraries can map distinct
+semantic roles directly to dedicated slot indices (for instance, index 1
+for an event handler, index 2 for an owner reference, and index 3 for a
+payload object), leading to more robust and readable C code.</li>
+</ol></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/multiple-user-values-in-lua-5-4-userdata';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

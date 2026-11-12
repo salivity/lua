@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Lexical Scoping and Closures Explained - lua</title>
+    <meta name="description" content="This article explores how the Lua programming language implements lexical scoping and manages closures. In Lua, every function is a first-class value, and the language enforces strict static scoping rules. When an inner function references a variable from">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-lexical-scoping-and-closures-explained">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Lexical Scoping and Closures Explained - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-lexical-scoping-and-closures-explained" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="This article explores how the Lua programming language implements lexical scoping and manages closures. In Lua, every function is a first-class value, and the language enforces strict static scoping rules. When an inner function references a variable from" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-lexical-scoping-and-closures-explained">Lua Lexical Scoping
+and Closures Explained</h1>
+<p>This article explores how the Lua programming language implements
+lexical scoping and manages closures. In Lua, every function is a
+first-class value, and the language enforces strict static scoping
+rules. When an inner function references a variable from an enclosing
+block, Lua creates a closure by binding that function to an external
+local variable—termed an "upvalue." Below, we break down the mechanics
+of Lua's scope resolution, the transition of upvalues from the stack to
+the heap, and practical examples demonstrating closures in action.</p>
+<h2 id="lexical-scoping-in-lua">Lexical Scoping in Lua</h2>
+<p>Lexical (or static) scoping means that the scope of a variable is
+determined by its physical location within the source code. In Lua,
+variables are global by default unless explicitly declared with the
+<code>local</code> keyword.</p>
+<p>A local variable is visible only within the block in which it is
+declared. Blocks include:</p>
+<ul>
+<li>The body of a control structure (such as <code>if</code>,
+<code>while</code>, or <code>for</code>)</li>
+<li>Explicit <code>do ... end</code> blocks</li>
+<li>The body of a function or chunk</li>
+</ul>
+<p>Inner blocks have access to local variables declared in any enclosing
+outer blocks. However, outer blocks cannot access variables declared
+inside their nested inner blocks.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">x</span> <span class="op">=</span> <span class="dv">10</span> <span class="co">-- Enclosing scope</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">do</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">y</span> <span class="op">=</span> <span class="dv">20</span> <span class="co">-- Nested scope</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">print</span><span class="op">(</span><span class="va">x</span> <span class="op">+</span> <span class="va">y</span><span class="op">)</span> <span class="co">-- Valid: prints 30</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co">-- print(y) would return nil or error, as y is out of scope here</span></span></code></pre></div>
+<h2 id="first-class-functions-and-upvalues">First-Class Functions and
+Upvalues</h2>
+<p>In Lua, functions are first-class values without intrinsic names.
+When you define a function, you instantiate a function object and assign
+it to a variable.</p>
+<p>When a nested function accesses a local variable from an outer
+function, that variable is known in Lua terminology as an
+<strong>upvalue</strong> (an external local variable).</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> createCounter<span class="op">()</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">count</span> <span class="op">=</span> <span class="dv">0</span> <span class="co">-- Upvalue for the inner function</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>        <span class="va">count</span> <span class="op">=</span> <span class="va">count</span> <span class="op">+</span> <span class="dv">1</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">count</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>In the example above, <code>count</code> is local to
+<code>createCounter</code>. The anonymous function returned accesses and
+modifies <code>count</code>.</p>
+<h2 id="how-closures-work-under-the-hood">How Closures Work Under the
+Hood</h2>
+<p>A closure consists of the function's bytecode along with an array of
+references to its upvalues. The Lua Virtual Machine (Lua VM) manages
+upvalues in two distinct states: <strong>open</strong> and
+<strong>closed</strong>.</p>
+<h3 id="1-open-upvalues">1. Open Upvalues</h3>
+<p>While the enclosing function is executing, its local variables reside
+on the Lua execution stack. Any inner function accessing these variables
+holds an "open upvalue," which is a direct pointer to the variable's
+slot on the stack.</p>
+<p>If multiple inner functions reference the same local variable while
+it is on the stack, Lua ensures they point to the identical open upvalue
+rather than creating redundant copies.</p>
+<h3 id="2-closed-upvalues">2. Closed Upvalues</h3>
+<p>When the enclosing function finishes and returns, its stack frame is
+discarded. If an inner function referencing those local variables still
+exists, the Lua VM moves the variable off the stack and copies it into
+the heap inside the upvalue structure itself.</p>
+<p>The upvalue is now "closed." The inner function's pointer is updated
+to reference this heap-allocated value instead of the stack slot. This
+mechanism ensures that the variable persists for as long as the closure
+remains reachable by the garbage collector.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">counterA</span> <span class="op">=</span> createCounter<span class="op">()</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">counterB</span> <span class="op">=</span> createCounter<span class="op">()</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>counterA<span class="op">())</span> <span class="co">-- Output: 1</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>counterA<span class="op">())</span> <span class="co">-- Output: 2</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>counterB<span class="op">())</span> <span class="co">-- Output: 1 (counterB has its own distinct upvalue)</span></span></code></pre></div>
+<h2 id="shared-upvalues-between-closures">Shared Upvalues Between
+Closures</h2>
+<p>Because upvalues are managed as references, multiple closures created
+within the same execution context can share access to the same upvalue.
+Mutating the upvalue in one closure immediately affects the other.</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> createAccount<span class="op">(</span><span class="va">initialBalance</span><span class="op">)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">balance</span> <span class="op">=</span> <span class="va">initialBalance</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="kw">function</span> deposit<span class="op">(</span><span class="va">amount</span><span class="op">)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>        <span class="va">balance</span> <span class="op">=</span> <span class="va">balance</span> <span class="op">+</span> <span class="va">amount</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">balance</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="kw">function</span> withdraw<span class="op">(</span><span class="va">amount</span><span class="op">)</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">amount</span> <span class="op">&lt;=</span> <span class="va">balance</span> <span class="cf">then</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>            <span class="va">balance</span> <span class="op">=</span> <span class="va">balance</span> <span class="op">-</span> <span class="va">amount</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="va">balance</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">else</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>            <span class="fu">error</span><span class="op">(</span><span class="st">&quot;Insufficient funds&quot;</span><span class="op">)</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">deposit</span><span class="op">,</span> <span class="va">withdraw</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">deposit</span><span class="op">,</span> <span class="va">withdraw</span> <span class="op">=</span> createAccount<span class="op">(</span><span class="dv">100</span><span class="op">)</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>deposit<span class="op">(</span><span class="dv">50</span><span class="op">))</span>   <span class="co">-- Output: 150</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span>withdraw<span class="op">(</span><span class="dv">30</span><span class="op">))</span>  <span class="co">-- Output: 120</span></span></code></pre></div>
+<p>Here, both <code>deposit</code> and <code>withdraw</code> share the
+same closed upvalue <code>balance</code>. When
+<code>createAccount</code> terminates, <code>balance</code> moves to the
+heap, and both closures maintain access to that single memory
+location.</p>
+<h2 id="memory-management">Memory Management</h2>
+<p>Closures and their closed upvalues are managed by Lua's automatic
+garbage collector. An upvalue remains in memory as long as at least one
+active closure references it. Once all closures referencing a specific
+upvalue become unreachable, the garbage collector reclaims the memory
+occupied by both the closures and the shared upvalue.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-lexical-scoping-and-closures-explained';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

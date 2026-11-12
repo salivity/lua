@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inspecting the Lua Call Stack with lua_getinfo - lua</title>
+    <meta name="description" content="The luagetinfo function in the Lua C API is the primary interface for introspecting function metadata, execution states, and call stack frames at runtime. By populating a luaDebug record, this function allows developers to extract debugging details such a">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/inspecting-the-lua-call-stack-with-lua-getinfo">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Inspecting the Lua Call Stack with lua_getinfo - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/inspecting-the-lua-call-stack-with-lua-getinfo" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The luagetinfo function in the Lua C API is the primary interface for introspecting function metadata, execution states, and call stack frames at runtime. By populating a luaDebug record, this function allows developers to extract debugging details such a" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="inspecting-the-lua-call-stack-with-lua_getinfo">Inspecting the
+Lua Call Stack with lua_getinfo</h1>
+<p>The <code>lua_getinfo</code> function in the Lua C API is the primary
+interface for introspecting function metadata, execution states, and
+call stack frames at runtime. By populating a <code>lua_Debug</code>
+record, this function allows developers to extract debugging details
+such as active source filenames, line numbers, function names, and
+parameter counts. Understanding how <code>lua_getinfo</code> operates—in
+tandem with stack traversal utilities like <code>lua_getstack</code>—is
+essential for implementing custom error handlers, profilers, and
+debuggers within embedded Lua environments.</p>
+<h3 id="the-inspection-workflow">The Inspection Workflow</h3>
+<p>Querying the call stack using <code>lua_getinfo</code> is typically a
+two-step process: obtaining an activation record handle, and then
+requesting specific debug information for that record.</p>
+<pre><code>+---------------+      lua_getstack(L, level, &amp;ar)      +--------------------+
+|  Call Stack   |  ----------------------------------&gt;  | lua_Debug (handle) |
++---------------+                                       +--------------------+
+                                                                  |
+                                                                  | lua_getinfo(L, &quot;Sl&quot;, &amp;ar)
+                                                                  v
+                                                        +--------------------+
+                                                        | Populated Fields   |
+                                                        | (source, line, etc)|
+                                                        +--------------------+</code></pre>
+<ol type="1">
+<li><strong>Locate the Stack Frame:</strong> Call
+<code>lua_getstack(lua_State *L, int level, lua_Debug *ar)</code>. The
+<code>level</code> parameter specifies the stack depth: level
+<code>0</code> refers to the currently executing function, level
+<code>1</code> is the function that called it, and higher numbers
+traverse further up the execution chain. If the level exists,
+<code>lua_getstack</code> initializes internal pointers inside the
+<code>lua_Debug</code> structure and returns <code>1</code>; otherwise,
+it returns <code>0</code>.</li>
+<li><strong>Retrieve Field Data:</strong> Call
+<code>lua_getinfo(lua_State *L, const char *what, lua_Debug *ar)</code>.
+The <code>what</code> string defines which fields Lua must
+populate.</li>
+</ol>
+<p>Alternatively, <code>lua_getinfo</code> can inspect a function
+directly without traversing the call stack. When the target function is
+pushed onto the top of the Lua stack, passing a <code>&gt;</code>
+character at the beginning of the <code>what</code> string instructs Lua
+to inspect that function, popping it from the stack in the process.</p>
+<h3 id="the-what-string-options">The <code>what</code> String
+Options</h3>
+<p>To minimize performance overhead, <code>lua_getinfo</code> does not
+populate all fields of the <code>lua_Debug</code> struct by default. The
+developer provides a string of character flags in the <code>what</code>
+parameter to select the required data:</p>
+<ul>
+<li><strong><code>'n'</code> (Name):</strong> Fills the
+<code>name</code> and <code>namewhat</code> fields. Lua attempts to
+deduce a reasonable name for the function (such as a global variable,
+local variable, or table field name) based on how it was invoked.</li>
+<li><strong><code>'S'</code> (Source):</strong> Fills
+<code>source</code>, <code>short_src</code>, <code>linedefined</code>,
+<code>lastlinedefined</code>, and <code>what</code>. The
+<code>what</code> field identifies the type of function
+(<code>"Lua"</code>, <code>"C"</code>, or <code>"main"</code>).
+<code>source</code> indicates the origin (e.g., a file path or chunk
+string), and <code>short_src</code> contains a truncated, printable
+version suitable for error messages.</li>
+<li><strong><code>'l'</code> (Line):</strong> Fills
+<code>currentline</code>, which represents the line of code currently
+executing inside the specified activation frame. If execution is inside
+a C function or outside an active line, this value is set to
+<code>-1</code>.</li>
+<li><strong><code>'t'</code> (Tail Call):</strong> Sets
+<code>istailcall</code> to true if the current frame was invoked via a
+tail call.</li>
+<li><strong><code>'u'</code> (Parameters and Upvalues):</strong> Fills
+<code>nups</code> (number of upvalues), <code>nparams</code> (number of
+parameters), and <code>isvararg</code> (boolean indicating variable
+argument lists).</li>
+<li><strong><code>'f'</code> (Function Push):</strong> Pushes the
+function executing at the given level onto the Lua stack.</li>
+<li><strong><code>'L'</code> (Line Table):</strong> Pushes a table onto
+the Lua stack whose indices are the line numbers that contain executable
+code within the function.</li>
+</ul>
+<h3 id="practical-implementation-example">Practical Implementation
+Example</h3>
+<p>The following C function demonstrates how to inspect the immediate
+caller (level 1) of the current function to log its file origin, current
+line, and name:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#include </span><span class="im">&lt;lua.h&gt;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#include </span><span class="im">&lt;lauxlib.h&gt;</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="pp">#include </span><span class="im">&lt;stdio.h&gt;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> print_caller_info<span class="op">(</span>lua_State <span class="op">*</span>L<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    lua_Debug ar<span class="op">;</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Retrieve activation record for the caller (level 1)</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">(</span>lua_getstack<span class="op">(</span>L<span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="op">&amp;</span>ar<span class="op">))</span> <span class="op">{</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>        <span class="co">// Query source information (&#39;S&#39;), line number (&#39;l&#39;), and name (&#39;n&#39;)</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="op">(</span>lua_getinfo<span class="op">(</span>L<span class="op">,</span> <span class="st">&quot;Sln&quot;</span><span class="op">,</span> <span class="op">&amp;</span>ar<span class="op">))</span> <span class="op">{</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>            <span class="dt">const</span> <span class="dt">char</span> <span class="op">*</span>func_name <span class="op">=</span> ar<span class="op">.</span>name <span class="op">?</span> ar<span class="op">.</span>name <span class="op">:</span> <span class="st">&quot;(anonymous)&quot;</span><span class="op">;</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>            </span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>            printf<span class="op">(</span><span class="st">&quot;Called from: </span><span class="sc">%s\n</span><span class="st">&quot;</span><span class="op">,</span> ar<span class="op">.</span>short_src<span class="op">);</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>            printf<span class="op">(</span><span class="st">&quot;Line number: </span><span class="sc">%d\n</span><span class="st">&quot;</span><span class="op">,</span> ar<span class="op">.</span>currentline<span class="op">);</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>            printf<span class="op">(</span><span class="st">&quot;Function:    </span><span class="sc">%s</span><span class="st"> (</span><span class="sc">%s</span><span class="st">)</span><span class="sc">\n</span><span class="st">&quot;</span><span class="op">,</span> func_name<span class="op">,</span> ar<span class="op">.</span>namewhat<span class="op">);</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>            printf<span class="op">(</span><span class="st">&quot;Origin:      lines </span><span class="sc">%d</span><span class="st"> to </span><span class="sc">%d\n</span><span class="st">&quot;</span><span class="op">,</span> ar<span class="op">.</span>linedefined<span class="op">,</span> ar<span class="op">.</span>lastlinedefined<span class="op">);</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>        printf<span class="op">(</span><span class="st">&quot;No caller frame found on the stack.</span><span class="sc">\n</span><span class="st">&quot;</span><span class="op">);</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 id="stack-frame-traversal">Stack Frame Traversal</h3>
+<p>To produce a full stack trace similar to Lua's native
+<code>debug.traceback</code>, iterate the <code>level</code> integer
+starting from <code>0</code> and increment it until
+<code>lua_getstack</code> returns <code>0</code>. At each step, invoke
+<code>lua_getinfo(L, "Sl", &amp;ar)</code> to collect the source file
+and line number for every active stack frame.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/inspecting-the-lua-call-stack-with-lua-getinfo';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

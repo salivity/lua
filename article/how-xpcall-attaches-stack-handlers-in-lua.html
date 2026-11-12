@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How xpcall Attaches Stack Handlers in Lua - lua</title>
+    <meta name="description" content="The xpcall function in Lua provides protected execution with custom error handling by intercepting errors prior to call stack unwinding. Unlike pcall, which reports errors only after the execution frames have collapsed, xpcall registers a message handler">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/how-xpcall-attaches-stack-handlers-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="How xpcall Attaches Stack Handlers in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/how-xpcall-attaches-stack-handlers-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="The xpcall function in Lua provides protected execution with custom error handling by intercepting errors prior to call stack unwinding. Unlike pcall, which reports errors only after the execution frames have collapsed, xpcall registers a message handler" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="how-xpcall-attaches-stack-handlers-in-lua">How xpcall Attaches
+Stack Handlers in Lua</h1>
+<p>The <code>xpcall</code> function in Lua provides protected execution
+with custom error handling by intercepting errors prior to call stack
+unwinding. Unlike <code>pcall</code>, which reports errors only after
+the execution frames have collapsed, <code>xpcall</code> registers a
+message handler that executes at the exact point of failure. This design
+ensures that the entire call hierarchy, local variables, and execution
+contexts remain intact when the handler runs, making comprehensive stack
+inspection and traceback generation possible.</p>
+<h3 id="the-limitation-of-standard-stack-unwinding">The Limitation of
+Standard Stack Unwinding</h3>
+<p>In standard protected calls (<code>pcall</code>), Lua sets a recovery
+point using C's <code>setjmp</code> or C++ exceptions under the hood.
+When an unhandled error occurs inside the protected block:</p>
+<ol type="1">
+<li>The runtime initiates an immediate jump to the recovery point.</li>
+<li>The Lua virtual machine unwinds the call stack, discarding
+activation records (the internal <code>CallInfo</code> structures)
+associated with the failed code.</li>
+<li>Control returns to the caller of <code>pcall</code>, along with a
+status code and an error message.</li>
+</ol>
+<p>Because the stack has already been dismantled by the time
+<code>pcall</code> returns, diagnostic tools cannot inspect the
+activation frames where the error originated. Any local variable states
+and line-by-line call histories are lost.</p>
+<h3 id="internal-handler-registration-in-xpcall">Internal Handler
+Registration in xpcall</h3>
+<p>To solve this issue, <code>xpcall</code> accepts two primary
+arguments: the target function to run and a custom error handler (often
+<code>debug.traceback</code>).</p>
+<p>When <code>xpcall</code> is invoked:</p>
+<ul>
+<li>The Lua C API pushes both the target function and the error handler
+onto the data stack.</li>
+<li>The Lua core tracks the stack position of the error handler by
+associating its relative stack index with the protected frame's
+execution state.</li>
+<li>Lua then establishes the recovery jump point (via internal
+structures such as <code>luaD_pcall</code>) before executing the target
+function.</li>
+</ul>
+<p>The handler is not executed immediately; instead, its reference sits
+at a fixed offset relative to the base of the protected call
+boundary.</p>
+<h3 id="execution-at-the-error-site">Execution at the Error Site</h3>
+<p>When an error is raised—whether through an explicit call to
+<code>error()</code> or via a runtime fault like attempting to index a
+<code>nil</code> value—the Lua VM calls its internal error-dispatching
+function (<code>luaG_errormsg</code>).</p>
+<p>Before triggering any stack-unwinding mechanism,
+<code>luaG_errormsg</code> checks if the innermost protected call frame
+has an associated error handler:</p>
+<ol type="1">
+<li><strong>Locating the Handler:</strong> The runtime inspects the
+thread state to retrieve the message handler stored on the stack for the
+active protected context.</li>
+<li><strong>Pushing the Error Object:</strong> The runtime pushes the
+active error object onto the top of the current stack as an argument to
+the handler.</li>
+<li><strong>In-Place Invocation:</strong> The VM executes the error
+handler immediately at the top of the stack.</li>
+</ol>
+<p>Because this execution takes place inside the current execution
+context before any frames are popped, the full sequence of nested
+function calls remains active. Functions like
+<code>debug.traceback()</code> or custom reflection hooks can traverse
+the chain of <code>CallInfo</code> records to read the exact line
+numbers, function names, and lexical scopes of every frame leading up to
+the failure.</p>
+<h3 id="the-unwinding-phase">The Unwinding Phase</h3>
+<p>Once the custom error handler finishes execution:</p>
+<ol type="1">
+<li>The return value of the handler replaces the original error object
+on the stack.</li>
+<li>If the error handler itself raises an error, Lua aborts the handler
+and substitutes a generic error indicating a failure within the
+error-handling routine.</li>
+<li>The VM finally initiates the jump (using <code>longjmp</code> or
+exception throwing) back to the recovery point established at the entry
+of <code>xpcall</code>.</li>
+<li>The stack unwinds cleanly, removing the exhausted execution
+frames.</li>
+</ol>
+<p><code>xpcall</code> then returns <code>false</code> followed by the
+processed error object returned by the custom handler, providing
+developers with detailed diagnostic information that would otherwise be
+destroyed by early stack unwinding.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/how-xpcall-attaches-stack-handlers-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

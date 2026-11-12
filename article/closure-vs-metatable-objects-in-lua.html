@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Closure vs Metatable Objects in Lua - lua</title>
+    <meta name="description" content="In the Lua programming language, object-oriented programming is achieved through conventions rather than built-in class constructs, with the two dominant paradigms being closure-based objects and metatable-based objects. Closure-based objects use function">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/closure-vs-metatable-objects-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Closure vs Metatable Objects in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/closure-vs-metatable-objects-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, object-oriented programming is achieved through conventions rather than built-in class constructs, with the two dominant paradigms being closure-based objects and metatable-based objects. Closure-based objects use function" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="closure-vs-metatable-objects-in-lua">Closure vs Metatable
+Objects in Lua</h1>
+<p>In the Lua programming language, object-oriented programming is
+achieved through conventions rather than built-in class constructs, with
+the two dominant paradigms being closure-based objects and
+metatable-based objects. Closure-based objects use function factory
+scopes to achieve encapsulation and provide strict privacy for internal
+states, but they incur higher memory costs. Metatable-based objects rely
+on prototypes and Lua's <code>__index</code> metamethod to share method
+definitions among multiple instances, offering superior memory
+efficiency at the expense of data privacy. This article examines the
+mechanics, performance trade-offs, and practical implementations of both
+approaches.</p>
+<h2 id="the-closure-based-approach">The Closure-Based Approach</h2>
+<p>The closure-based approach relies on Lua's lexical scoping. A
+constructor function creates local variables to hold an object's state
+and returns a table containing methods that capture these variables as
+upvalues.</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> createAccount<span class="op">(</span><span class="va">initialBalance</span><span class="op">)</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">balance</span> <span class="op">=</span> <span class="va">initialBalance</span> <span class="co">-- Private variable</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">self</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">function</span> <span class="va">self</span><span class="op">.</span>deposit<span class="op">(</span><span class="va">amount</span><span class="op">)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>        <span class="va">balance</span> <span class="op">=</span> <span class="va">balance</span> <span class="op">+</span> <span class="va">amount</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">function</span> <span class="va">self</span><span class="op">.</span>withdraw<span class="op">(</span><span class="va">amount</span><span class="op">)</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="va">amount</span> <span class="op">&lt;=</span> <span class="va">balance</span> <span class="cf">then</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>            <span class="va">balance</span> <span class="op">=</span> <span class="va">balance</span> <span class="op">-</span> <span class="va">amount</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="kw">true</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="kw">false</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="kw">function</span> <span class="va">self</span><span class="op">.</span>getBalance<span class="op">()</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="va">balance</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">self</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">acc</span> <span class="op">=</span> createAccount<span class="op">(</span><span class="dv">100</span><span class="op">)</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="va">acc</span><span class="op">.</span>deposit<span class="op">(</span><span class="dv">50</span><span class="op">)</span></span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">acc</span><span class="op">.</span>getBalance<span class="op">())</span> <span class="co">-- 150</span></span></code></pre></div>
+<h3 id="advantages">Advantages</h3>
+<ul>
+<li><strong>Strict Privacy:</strong> Local variables are inaccessible
+from the outside scope, providing true encapsulation without external
+access to internal state.</li>
+<li><strong>Simpler Call Syntax:</strong> Methods do not rely on passing
+a <code>self</code> reference, meaning callers can use dot syntax
+(<code>acc.deposit()</code>) instead of colon syntax
+(<code>acc:deposit()</code>).</li>
+<li><strong>Safe Callbacks:</strong> Methods can be passed directly as
+first-class callback functions without losing their reference to the
+instance.</li>
+</ul>
+<h3 id="disadvantages">Disadvantages</h3>
+<ul>
+<li><strong>High Memory Overhead:</strong> Every instance creates and
+stores its own distinct copies of each method closure, significantly
+increasing memory usage when generating many instances.</li>
+<li><strong>Inheritance Complexity:</strong> Implementing traditional
+object inheritance requires manual delegation or table cloning, which
+can become unwieldy.</li>
+</ul>
+<h2 id="the-metatable-based-approach">The Metatable-Based Approach</h2>
+<p>The metatable-based approach is the idiomatic way to implement object
+orientation in Lua. It relies on a shared prototype table and the
+<code>__index</code> metamethod, which redirects method lookups when a
+key is not found directly on an instance.</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">Account</span> <span class="op">=</span> <span class="op">{}</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="va">Account</span><span class="op">.</span><span class="va">__index</span> <span class="op">=</span> <span class="va">Account</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Account</span><span class="op">.</span>new<span class="op">(</span><span class="va">initialBalance</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="kw">local</span> <span class="va">self</span> <span class="op">=</span> <span class="fu">setmetatable</span><span class="op">({},</span> <span class="va">Account</span><span class="op">)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span><span class="op">.</span><span class="va">balance</span> <span class="op">=</span> <span class="va">initialBalance</span> <span class="co">-- Public property</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">self</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Account</span><span class="op">:</span>deposit<span class="op">(</span><span class="va">amount</span><span class="op">)</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="va">self</span><span class="op">.</span><span class="va">balance</span> <span class="op">=</span> <span class="va">self</span><span class="op">.</span><span class="va">balance</span> <span class="op">+</span> <span class="va">amount</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Account</span><span class="op">:</span>withdraw<span class="op">(</span><span class="va">amount</span><span class="op">)</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="va">amount</span> <span class="op">&lt;=</span> <span class="va">self</span><span class="op">.</span><span class="va">balance</span> <span class="cf">then</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span><span class="op">.</span><span class="va">balance</span> <span class="op">=</span> <span class="va">self</span><span class="op">.</span><span class="va">balance</span> <span class="op">-</span> <span class="va">amount</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="kw">true</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">false</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="va">Account</span><span class="op">:</span>getBalance<span class="op">()</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="va">self</span><span class="op">.</span><span class="va">balance</span></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">acc</span> <span class="op">=</span> <span class="va">Account</span><span class="op">.</span>new<span class="op">(</span><span class="dv">100</span><span class="op">)</span></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a><span class="va">acc</span><span class="op">:</span>deposit<span class="op">(</span><span class="dv">50</span><span class="op">)</span></span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">acc</span><span class="op">:</span>getBalance<span class="op">())</span> <span class="co">-- 150</span></span></code></pre></div>
+<h3 id="advantages-1">Advantages</h3>
+<ul>
+<li><strong>Memory Efficiency:</strong> All instances share a single
+copy of the methods stored in the prototype table, resulting in a
+minimal memory footprint per object.</li>
+<li><strong>Fast Instantiation:</strong> Creating an object requires
+only allocating a small table and setting its metatable, which is faster
+than creating multiple closures.</li>
+<li><strong>Straightforward Inheritance:</strong> Establishing class
+hierarchies is natural by setting one class table's metatable to
+another.</li>
+</ul>
+<h3 id="disadvantages-1">Disadvantages</h3>
+<ul>
+<li><strong>No Built-in Privacy:</strong> All fields in the instance
+table are public. Privacy must be simulated using naming conventions
+(such as <code>self._balance</code>) or external weak tables.</li>
+<li><strong>Colon Syntax Requirement:</strong> Callers must remember to
+use colon notation (<code>object:method()</code>) to pass
+<code>self</code> implicitly; using dot notation accidentally can lead
+to runtime errors.</li>
+</ul>
+<h2 id="key-differences-and-comparison">Key Differences and
+Comparison</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th style="text-align: left;">Feature</th>
+<th style="text-align: left;">Closure-Based</th>
+<th style="text-align: left;">Metatable-Based</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Encapsulation</strong></td>
+<td style="text-align: left;">Complete (lexical scope)</td>
+<td style="text-align: left;">Convention-only (all fields public)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Memory Usage</strong></td>
+<td style="text-align: left;">High (new closures per instance)</td>
+<td style="text-align: left;">Low (methods shared via prototype)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Creation Cost</strong></td>
+<td style="text-align: left;">Higher (allocates multiple functions)</td>
+<td style="text-align: left;">Lower (allocates single empty table)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Method Invocation</strong></td>
+<td style="text-align: left;">Dot syntax
+(<code>obj.method()</code>)</td>
+<td style="text-align: left;">Colon syntax
+(<code>obj:method()</code>)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Idiom in Lua</strong></td>
+<td style="text-align: left;">Less common</td>
+<td style="text-align: left;">Standard pattern</td>
+</tr>
+</tbody>
+</table>
+<h2 id="choosing-the-right-pattern">Choosing the Right Pattern</h2>
+<p>Use the <strong>closure-based approach</strong> when creating a small
+number of long-lived objects (such as singletons, module services, or
+state machines) where strict security, API simplicity, or callback
+safety takes precedence over memory constraints.</p>
+<p>Use the <strong>metatable-based approach</strong> for
+mass-instantiated objects (such as game entities, data structures, or
+GUI widgets) where memory footprint and instantiation speed are critical
+to performance.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/closure-vs-metatable-objects-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

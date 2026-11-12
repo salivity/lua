@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Generational Garbage Collector Parameters - lua</title>
+    <meta name="description" content="Starting in Lua 5.4, the runtime introduced a generational garbage collection mode alongside its traditional incremental collector. In this mode, the cadence and aggressiveness of collection cycles are controlled by two distinct parameters: the minor coll">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-generational-garbage-collector-parameters">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Generational Garbage Collector Parameters - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-generational-garbage-collector-parameters" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Starting in Lua 5.4, the runtime introduced a generational garbage collection mode alongside its traditional incremental collector. In this mode, the cadence and aggressiveness of collection cycles are controlled by two distinct parameters: the minor coll" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-generational-garbage-collector-parameters">Lua Generational
+Garbage Collector Parameters</h1>
+<p>Starting in Lua 5.4, the runtime introduced a generational garbage
+collection mode alongside its traditional incremental collector. In this
+mode, the cadence and aggressiveness of collection cycles are controlled
+by two distinct parameters: the minor collection multiplier
+(<code>minor_mul</code>) and the major collection multiplier
+(<code>major_mul</code>). Adjusting these parameters governs how
+frequently the collector sweeps short-lived young objects versus running
+complete, expensive collection cycles across all objects.</p>
+<h3 id="the-two-control-parameters">The Two Control Parameters</h3>
+<p>Modern Lua allows developers to switch to and configure the
+generational collector using
+<code>collectgarbage("generational", minor_mul, major_mul)</code> in Lua
+code, or <code>lua_gc(L, LUA_GCGEN, minormul, majormul)</code> in the C
+API.</p>
+<ol type="1">
+<li><p><strong>Minor Collection Multiplier
+(<code>minor_mul</code>)</strong> The <code>minor_mul</code> parameter
+controls the frequency of minor collections, which only inspect and
+clean objects created since the previous collection (the "young"
+generation). When set to a value <span class="math inline">\(x\)</span>,
+a new minor collection is scheduled when memory in the young generation
+grows by approximately <span class="math inline">\(x\%\)</span> relative
+to the memory surviving the previous collection. By default, this value
+is 20, meaning a minor collection triggers after young memory grows by
+about 20%.</p></li>
+<li><p><strong>Major Collection Multiplier
+(<code>major_mul</code>)</strong> The <code>major_mul</code> parameter
+determines when the runtime should escalate to a major collection, which
+sweeps the entire heap including long-lived (old) objects. If the memory
+occupied by old objects grows by <span
+class="math inline">\(x\%\)</span> (where <span
+class="math inline">\(x\)</span> is <code>major_mul</code>) relative to
+the size after the last major collection, a full major cycle begins. The
+default value is typically 100, which initiates a major collection when
+the memory of surviving objects doubles.</p></li>
+</ol>
+<h3 id="tuning-the-cadence">Tuning the Cadence</h3>
+<p>The generational collector is optimized under the weak generational
+hypothesis: most allocated objects die young. Tuning these two
+parameters changes the collector's cadence to match specific workload
+characteristics:</p>
+<ul>
+<li><strong>Increasing <code>minor_mul</code>:</strong> Decreases the
+frequency of minor collections, allowing the program to run with fewer
+interruptions and lower CPU overhead at the cost of higher temporary
+memory usage.</li>
+<li><strong>Decreasing <code>minor_mul</code>:</strong> Causes minor
+collections to run more frequently, maintaining a tighter memory
+footprint at the expense of more CPU cycles spent traversing young
+objects.</li>
+<li><strong>Increasing <code>major_mul</code>:</strong> Postpones
+full-heap scans, reducing heavy pauses when handling stable sets of
+long-lived objects.</li>
+<li><strong>Decreasing <code>major_mul</code>:</strong> Forces full
+sweeps more frequently, useful when long-lived objects become garbage
+regularly and must be reclaimed quickly to prevent heap bloat.</li>
+</ul>
+<p>Passing zero as an argument retains the parameter's current or
+default value, allowing individual adjustments without altering the
+entire collector profile.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-generational-garbage-collector-parameters';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

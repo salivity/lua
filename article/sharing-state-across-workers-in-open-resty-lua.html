@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sharing State Across Workers in OpenResty Lua - lua</title>
+    <meta name="description" content="Sharing state across worker processes in the OpenResty framework is essential for caching, rate limiting, and synchronizing configuration. Because OpenResty utilizes Nginx’s single-threaded, multi-process architecture rather than OS-level multi-threading,">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/sharing-state-across-workers-in-open-resty-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Sharing State Across Workers in OpenResty Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/sharing-state-across-workers-in-open-resty-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Sharing state across worker processes in the OpenResty framework is essential for caching, rate limiting, and synchronizing configuration. Because OpenResty utilizes Nginx’s single-threaded, multi-process architecture rather than OS-level multi-threading," />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="sharing-state-across-workers-in-openresty-lua">Sharing State
+Across Workers in OpenResty Lua</h1>
+<p>Sharing state across worker processes in the OpenResty framework is
+essential for caching, rate limiting, and synchronizing configuration.
+Because OpenResty utilizes Nginx’s single-threaded, multi-process
+architecture rather than OS-level multi-threading, each worker operates
+within its own isolated Lua VM. Consequently, standard Lua global
+variables are not shared between workers. To coordinate data across the
+entire instance, OpenResty provides built-in shared memory zones
+(<code>lua_shared_dict</code>), non-blocking external datastores,
+inter-process communication libraries, and copy-on-write memory
+initialized during startup.</p>
+<h3 id="the-openresty-worker-model">The OpenResty Worker Model</h3>
+<p>In OpenResty, Nginx spawns multiple independent OS processes
+(workers) to handle network events asynchronously. Because memory is
+isolated per process, modifying a global variable in one worker does not
+affect the others. Modifying global variables in Lua handlers can also
+lead to race conditions within a single worker across coroutines.
+Managing global or cross-worker state therefore requires external
+synchronization or dedicated shared memory structures.</p>
+<h3 id="1-built-in-shared-memory-dictionaries-lua_shared_dict">1.
+Built-in Shared Memory Dictionaries (<code>lua_shared_dict</code>)</h3>
+<p>The most common and highest-performing method for sharing state
+across workers is <code>lua_shared_dict</code>. This directive allocates
+an in-memory key-value store in the Nginx master process before workers
+are forked, making the allocated block accessible to all worker
+processes.</p>
+<h4 id="configuration">Configuration</h4>
+<p>Define the dictionary in the <code>http</code> block of
+<code>nginx.conf</code>:</p>
+<pre class="nginx"><code>http {
+    lua_shared_dict app_cache 10m;
+}</code></pre>
+<h4 id="access-in-lua">Access in Lua</h4>
+<p>Access the dictionary within any Lua phase using the
+<code>ngx.shared</code> API:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">cache</span> <span class="op">=</span> <span class="va">ngx</span><span class="op">.</span><span class="va">shared</span><span class="op">.</span><span class="va">app_cache</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Set a key with an optional expiration time (in seconds)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">success</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">cache</span><span class="op">:</span>set<span class="op">(</span><span class="st">&quot;key&quot;</span><span class="op">,</span> <span class="st">&quot;value&quot;</span><span class="op">,</span> <span class="dv">60</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co">-- Read a key</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">val</span><span class="op">,</span> <span class="va">flags</span> <span class="op">=</span> <span class="va">cache</span><span class="op">:</span>get<span class="op">(</span><span class="st">&quot;key&quot;</span><span class="op">)</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- Atomic operations</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">new_val</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">cache</span><span class="op">:</span>incr<span class="op">(</span><span class="st">&quot;counter&quot;</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">0</span><span class="op">)</span></span></code></pre></div>
+<h4 id="key-characteristics">Key Characteristics</h4>
+<ul>
+<li><strong>Concurrency Safe:</strong> Read and write operations use
+internal mutexes to ensure atomicity across workers.</li>
+<li><strong>Primitive Types:</strong> Supported data types are strings,
+numbers, and booleans. Complex types like Lua tables must be serialized
+(e.g., using JSON) before storage.</li>
+<li><strong>LRU Eviction:</strong> If the allocated memory zone runs out
+of space, the store automatically purges the least-recently used items
+unless using <code>safe_set</code>.</li>
+</ul>
+<h3 id="2-synchronization-and-locking-lua-resty-lock">2. Synchronization
+and Locking (<code>lua-resty-lock</code>)</h3>
+<p>When multiple workers attempt to update a shared value simultaneously
+(such as fetching data on a cache miss), dog-piling or race conditions
+can occur. The <code>lua-resty-lock</code> library uses
+<code>lua_shared_dict</code> to build a non-blocking, cross-process
+mutex.</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">resty_lock</span> <span class="op">=</span> <span class="fu">require</span> <span class="st">&quot;resty.lock&quot;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">lock</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">resty_lock</span><span class="op">:</span>new<span class="op">(</span><span class="st">&quot;app_cache&quot;</span><span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">elapsed</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">lock</span><span class="op">:</span>lock<span class="op">(</span><span class="st">&quot;resource_key&quot;</span><span class="op">)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="kw">not</span> <span class="va">elapsed</span> <span class="cf">then</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="va">ngx</span><span class="op">.</span>log<span class="op">(</span><span class="va">ngx</span><span class="op">.</span><span class="cn">ERR</span><span class="op">,</span> <span class="st">&quot;Failed to acquire lock: &quot;</span><span class="op">,</span> <span class="va">err</span><span class="op">)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a><span class="co">-- Perform critical update or database fetch here</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">ok</span><span class="op">,</span> <span class="va">err</span> <span class="op">=</span> <span class="va">lock</span><span class="op">:</span>unlock<span class="op">()</span></span></code></pre></div>
+<h3 id="3-copy-on-write-via-init_by_lua_block">3. Copy-on-Write via
+<code>init_by_lua_block</code></h3>
+<p>If your state is static or read-only (such as static configuration
+files, routing tables, or predefined lookup lists), you can load it in
+the <code>init_by_lua</code> or <code>init_by_lua_block</code>
+phase.</p>
+<pre class="nginx"><code>http {
+    init_by_lua_block {
+        _G.CONFIG = {
+            timeout = 5000,
+            api_endpoint = &quot;https://api.example.com&quot;
+        }
+    }
+}</code></pre>
+<p>Because Nginx calls <code>init_by_lua</code> in the master process
+before forking worker processes, the operating system uses Copy-on-Write
+(COW) memory. All workers share this memory space with zero runtime
+locking overhead, provided the data is never modified after
+initialization.</p>
+<h3 id="4-inter-process-communication-lua-resty-ipc">4. Inter-Process
+Communication (<code>lua-resty-ipc</code>)</h3>
+<p>When one worker needs to notify other workers about an event (such as
+clearing local in-memory caches or updating a runtime setting), polling
+a shared dictionary can become inefficient. Third-party modules like
+<code>lua-resty-ipc</code> use Unix domain sockets to broadcast messages
+directly across worker processes, allowing pub/sub messaging patterns
+inside a single Nginx instance.</p>
+<h3 id="5-external-non-blocking-datastores">5. External Non-Blocking
+Datastores</h3>
+<p>When state needs to persist across server restarts or be shared
+across a multi-server OpenResty cluster, external storage engines are
+required. OpenResty provides non-blocking cosocket-based drivers for
+this purpose:</p>
+<ul>
+<li><strong>Redis (<code>lua-resty-redis</code>):</strong> Ideal for
+distributed counters, session stores, and pub/sub messaging across
+multiple nodes.</li>
+<li><strong>Memcached (<code>lua-resty-memcached</code>):</strong>
+Suitable for high-throughput distributed caching.</li>
+</ul>
+<p>Using these external drivers preserves OpenResty's non-blocking event
+loop while synchronizing state beyond the boundaries of a single
+host.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/sharing-state-across-workers-in-open-resty-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua Multiple Return Values in Parentheses - lua</title>
+    <meta name="description" content="In the Lua programming language, enclosing a multiple-return function call within parentheses alters how its results are handled by explicitly truncating the output to a single value. While Lua natively supports returning multiple values from a single fun">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-multiple-return-values-in-parentheses">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua Multiple Return Values in Parentheses - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-multiple-return-values-in-parentheses" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, enclosing a multiple-return function call within parentheses alters how its results are handled by explicitly truncating the output to a single value. While Lua natively supports returning multiple values from a single fun" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-multiple-return-values-in-parentheses">Lua Multiple Return
+Values in Parentheses</h1>
+<p>In the Lua programming language, enclosing a multiple-return function
+call within parentheses alters how its results are handled by explicitly
+truncating the output to a single value. While Lua natively supports
+returning multiple values from a single function, wrapping that function
+call in parentheses forces the expression to evaluate to only its first
+return value, discarding all subsequent returns. This article explains
+the mechanics behind this truncation behavior, why Lua implements it,
+and how it is practically used in code.</p>
+<h3 id="how-lua-handles-multiple-returns">How Lua Handles Multiple
+Returns</h3>
+<p>Functions in Lua can return multiple values simultaneously using
+commas:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> getCoordinates<span class="op">()</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">10</span><span class="op">,</span> <span class="dv">20</span><span class="op">,</span> <span class="dv">30</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div>
+<p>Under normal circumstances, Lua adjusts the number of returned values
+depending on the context in which the function is called:</p>
+<ul>
+<li>When assigned to a list of variables, Lua maps each returned value
+to its corresponding variable:
+<code>local x, y, z = getCoordinates()</code> assigns <code>10</code> to
+<code>x</code>, <code>20</code> to <code>y</code>, and <code>30</code>
+to <code>z</code>.</li>
+<li>When used as the last argument to another function or inside a table
+constructor, all returned values are passed through:
+<code>print(getCoordinates())</code> prints
+<code>10   20   30</code>.</li>
+</ul>
+<h3 id="the-truncation-rule-of-parentheses">The Truncation Rule of
+Parentheses</h3>
+<p>In Lua's grammar, enclosing an expression within parentheses
+<code>(...)</code> forces the expression into a single-value context.
+When a function returning multiple values is placed inside parentheses,
+Lua evaluates the function but strictly limits the result of the
+parenthesized expression to exactly one value—the first one. All
+additional values are discarded.</p>
+<p>Consider the following comparison:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="kw">function</span> getCoordinates<span class="op">()</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dv">10</span><span class="op">,</span> <span class="dv">20</span><span class="op">,</span> <span class="dv">30</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- Standard call: both variables receive values</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">a</span><span class="op">,</span> <span class="va">b</span> <span class="op">=</span> getCoordinates<span class="op">()</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">a</span><span class="op">,</span> <span class="va">b</span><span class="op">)</span> <span class="co">-- Output: 10   20</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co">-- Parenthesized call: truncated to the first value</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">c</span><span class="op">,</span> <span class="va">d</span> <span class="op">=</span> <span class="op">(</span>getCoordinates<span class="op">())</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="va">c</span><span class="op">,</span> <span class="va">d</span><span class="op">)</span> <span class="co">-- Output: 10   nil</span></span></code></pre></div>
+<p>In the second example, <code>(getCoordinates())</code> evaluates to
+just <code>10</code>. Because only one value exists, <code>c</code>
+receives <code>10</code>, and <code>d</code> receives
+<code>nil</code>.</p>
+<h3 id="practical-applications-of-value-truncation">Practical
+Applications of Value Truncation</h3>
+<p>Value truncation is not an accidental side effect; it is an
+intentional language feature often used to control argument lists and
+sanitize outputs.</p>
+<h4 id="1-suppressing-secondary-returns-in-function-calls">1.
+Suppressing Secondary Returns in Function Calls</h4>
+<p>A common use case involves built-in Lua functions like
+<code>string.gsub</code>, which returns both the modified string and the
+number of substitutions made:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">-- Without parentheses: passes both the string and the count</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">(</span><span class="fu">string.gsub</span><span class="op">(</span><span class="st">&quot;hello world&quot;</span><span class="op">,</span> <span class="st">&quot;l&quot;</span><span class="op">,</span> <span class="st">&quot;x&quot;</span><span class="op">))</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="co">-- Output: hexxo worxd    3</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- With parentheses: suppresses the count, passing only the string</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span><span class="op">((</span><span class="fu">string.gsub</span><span class="op">(</span><span class="st">&quot;hello world&quot;</span><span class="op">,</span> <span class="st">&quot;l&quot;</span><span class="op">,</span> <span class="st">&quot;x&quot;</span><span class="op">)))</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">-- Output: hexxo worxd</span></span></code></pre></div>
+<p>By wrapping <code>string.gsub</code> in parentheses, the integer
+count is truncated, preventing it from leaking into functions that
+accept variable arguments (<code>...</code>).</p>
+<h4 id="2-table-constructors">2. Table Constructors</h4>
+<p>When a multiple-return function is placed at the end of a table
+constructor, Lua normally appends all return values. Parentheses ensure
+only one element is inserted:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">list1</span> <span class="op">=</span> <span class="op">{</span> getCoordinates<span class="op">()</span> <span class="op">}</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co">-- list1 contains { 10, 20, 30 }</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> <span class="va">list2</span> <span class="op">=</span> <span class="op">{</span> <span class="op">(</span>getCoordinates<span class="op">())</span> <span class="op">}</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co">-- list2 contains { 10 }</span></span></code></pre></div>
+<p>Enclosing a function call in parentheses provides an idiomatic,
+concise mechanism in Lua to enforce single-value evaluation without
+needing to declare intermediate local variables.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-multiple-return-values-in-parentheses';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

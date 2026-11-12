@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luau vs Lua: Types and Iteration Improvements - lua</title>
+    <meta name="description" content="Luau enhances the traditional Lua 5.1 language by introducing modern language features designed for large-scale development and performance. While Lua is renowned for its lightweight, purely dynamic nature, Luau extends it with an opt-in gradual type syst">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/luau-vs-lua-types-and-iteration-improvements">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Luau vs Lua: Types and Iteration Improvements - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/luau-vs-lua-types-and-iteration-improvements" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Luau enhances the traditional Lua 5.1 language by introducing modern language features designed for large-scale development and performance. While Lua is renowned for its lightweight, purely dynamic nature, Luau extends it with an opt-in gradual type syst" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="luau-vs-lua-types-and-iteration-improvements">Luau vs Lua: Types
+and Iteration Improvements</h1>
+<p>Luau enhances the traditional Lua 5.1 language by introducing modern
+language features designed for large-scale development and performance.
+While Lua is renowned for its lightweight, purely dynamic nature, Luau
+extends it with an opt-in gradual type system, intelligent type
+inference, and generalized iteration. These additions significantly
+reduce runtime errors, improve developer ergonomics, and preserve the
+flexibility and speed that make Lua appealing.</p>
+<h3 id="gradual-typing">Gradual Typing</h3>
+<p>Standard Lua is dynamically typed, meaning types are associated with
+runtime values rather than variables. While this offers rapid
+prototyping, it can lead to silent errors, such as nil indexing or
+unexpected type mismatches, that are only caught when executing the
+faulty code path.</p>
+<p>Luau introduces gradual typing, allowing developers to annotate their
+code with types incrementally. Typing is completely optional, meaning
+existing Lua code remains valid Luau code. Luau provides distinct
+typechecking modes configured via comments at the top of a file:</p>
+<ul>
+<li><code>--!nocheck</code>: Disables type analysis entirely.</li>
+<li><code>--!nonstrict</code>: Checks only basic syntax and operations
+where types are obvious, prioritizing dynamic flexibility.</li>
+<li><code>--!strict</code>: Rigorously verifies all expressions, types,
+and annotations to catch mismatches before execution.</li>
+</ul>
+<p>Developers can define custom type aliases, annotate function
+signatures, and specify table shapes:</p>
+<pre class="luau"><code>type Player = {
+    name: string,
+    score: number,
+}
+
+local function updateScore(player: Player, points: number): number
+    player.score += points
+    return player.score
+end</code></pre>
+<p>By allowing teams to enforce strict types where reliability is
+critical while leaving loose scripts dynamic, gradual typing bridges the
+gap between speed of development and software reliability.</p>
+<h3 id="type-inference">Type Inference</h3>
+<p>Even when explicit type annotations are omitted, Luau includes a
+powerful type inference engine that analyzes code statically to deduce
+types. Unlike Lua, which defers all type verification to the runtime
+environment, Luau infers variable types from their initial values and
+control flow.</p>
+<p>Key aspects of Luau’s type inference include:</p>
+<ul>
+<li><strong>Flow-Sensitive Analysis:</strong> Luau refines types based
+on conditionals. If a variable can be <code>string | nil</code>,
+performing a check like <code>if value ~= nil then</code> narrows the
+type within that block exclusively to <code>string</code>.</li>
+<li><strong>Table Shape Inference:</strong> When a table is constructed
+and mutated, Luau infers its structure and prevents reads or writes to
+undefined fields.</li>
+<li><strong>Bidirectional Inference:</strong> The solver analyzes both
+how a value is produced and how it is consumed by surrounding
+expressions to determine its intended type.</li>
+</ul>
+<p>This allows developers working in <code>--!strict</code> mode to
+receive early compile-time warnings about logic bugs, nil-pointer
+exceptions, and missing table keys without writing extensive boilerplate
+annotations.</p>
+<h3 id="generalized-iteration">Generalized Iteration</h3>
+<p>In standard Lua 5.1, traversing tables requires invoking specific
+iterator functions: <code>pairs()</code> for iterating through arbitrary
+key-value pairs or <code>ipairs()</code> for contiguous, numeric arrays.
+This requirement creates syntactic noise and can introduce subtle bugs
+if the wrong generator is chosen.</p>
+<p>Luau addresses this by implementing generalized iteration. Developers
+can loop directly over tables using the <code>in</code> keyword without
+wrapping the target in <code>pairs</code> or <code>ipairs</code>:</p>
+<pre class="luau"><code>local inventory = {&quot;Sword&quot;, &quot;Shield&quot;, &quot;Potion&quot;}
+
+-- Luau generalized iteration
+for index, item in inventory do
+    print(index, item)
+end</code></pre>
+<p>Luau also supports custom iteration via the <code>__iter</code>
+metamethod. When an object defines <code>__iter</code>, the runtime
+invokes it automatically during a <code>for..in</code> loop, making it
+easier to build custom data structures like sets, linked lists, or trees
+that integrate seamlessly into standard iteration syntax. In addition to
+being cleaner and more expressive, generalized iteration allows the Luau
+runtime to apply low-level compiler optimizations that frequently
+outperform standard <code>pairs</code> iteration.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/luau-vs-lua-types-and-iteration-improvements';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

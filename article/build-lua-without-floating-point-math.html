@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Build Lua Without Floating-Point Math - lua</title>
+    <meta name="description" content="Running the Lua programming language on embedded hardware without a Hardware Floating-Point Unit (FPU) requires configuring the interpreter to operate exclusively using integer arithmetic. By modifying configuration headers in the source code prior to com">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/build-lua-without-floating-point-math">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Build Lua Without Floating-Point Math - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/build-lua-without-floating-point-math" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Running the Lua programming language on embedded hardware without a Hardware Floating-Point Unit (FPU) requires configuring the interpreter to operate exclusively using integer arithmetic. By modifying configuration headers in the source code prior to com" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="build-lua-without-floating-point-math">Build Lua Without
+Floating-Point Math</h1>
+<p>Running the Lua programming language on embedded hardware without a
+Hardware Floating-Point Unit (FPU) requires configuring the interpreter
+to operate exclusively using integer arithmetic. By modifying
+configuration headers in the source code prior to compilation,
+developers can strip out software floating-point emulation libraries,
+reduce binary size, and drastically increase execution speed on
+resource-constrained microcontrollers.</p>
+<h3 id="modifying-luaconfh-in-lua-53-and-54">Modifying luaconf.h in Lua
+5.3 and 5.4</h3>
+<p>Modern versions of Lua natively distinguish between integers and
+floating-point numbers. To eliminate floating-point arithmetic entirely,
+Lua provides a specific macro configuration within
+<code>src/luaconf.h</code>.</p>
+<ol type="1">
+<li><p>Open <code>src/luaconf.h</code> in a text editor.</p></li>
+<li><p>Locate the configuration section for numeric types
+(<code>LUA_FLOAT_TYPE</code>).</p></li>
+<li><p>Set the floating-point type to none:</p>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_FLOAT_TYPE </span>LUA_FLOAT_NONE</span></code></pre></div></li>
+<li><p>Define the desired integer width using <code>LUA_INT_TYPE</code>.
+For typical 32-bit microcontrollers (such as ARM Cortex-M0/M3), ensure
+it is set to a standard 32-bit integer:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode c"><code class="sourceCode c"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_INT_TYPE </span>LUA_INT_INT</span></code></pre></div>
+<p>Alternatively, select <code>LUA_INT_LONG</code> or
+<code>LUA_INT_LONGLONG</code> depending on the target architecture's
+native register size.</p></li>
+</ol>
+<p>Setting <code>LUA_FLOAT_TYPE</code> to <code>LUA_FLOAT_NONE</code>
+disables real numbers completely. The standard float division operator
+(<code>/</code>) will either be disabled or mirror integer floor
+division (<code>//</code>), and any syntax containing decimal points
+will produce a parsing error.</p>
+<h3 id="configuring-lua-51-and-52">Configuring Lua 5.1 and 5.2</h3>
+<p>Older versions of Lua represent all numbers using a single numeric
+type (<code>lua_Number</code>), which defaults to double-precision
+floating-point (<code>double</code>). Converting older versions to
+integer-only requires redefining this type.</p>
+<ol type="1">
+<li><p>Open <code>src/luaconf.h</code>.</p></li>
+<li><p>Locate the definition of <code>LUA_NUMBER</code>.</p></li>
+<li><p>Redefine <code>LUA_NUMBER</code> and its supporting macros to use
+standard integers:</p>
+<div class="sourceCode" id="cb3"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_NUMBER_DOUBLE</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="co">/* Change to: */</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_NUMBER_INT</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="kw">typedef</span> <span class="dt">int</span> LUA_NUMBER<span class="op">;</span></span></code></pre></div></li>
+<li><p>Adjust the conversion and formatting macros:</p>
+<div class="sourceCode" id="cb4"><pre
+class="sourceCode c"><code class="sourceCode c"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_NUMBER_SCAN         </span><span class="st">&quot;</span><span class="sc">%d</span><span class="st">&quot;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="pp">#define LUA_NUMBER_FMT          </span><span class="st">&quot;</span><span class="sc">%d</span><span class="st">&quot;</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="pp">#define lua_number2str</span><span class="op">(</span><span class="pp">s</span><span class="op">,</span><span class="pp">sz</span><span class="op">,</span><span class="pp">n</span><span class="op">)</span><span class="pp">  l_sprintf</span><span class="op">((</span><span class="pp">s</span><span class="op">),</span><span class="pp"> sz</span><span class="op">,</span><span class="pp"> </span>LUA_NUMBER_FMT<span class="op">,</span><span class="pp"> </span><span class="op">(</span><span class="pp">n</span><span class="op">))</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="pp">#define lua_str2number</span><span class="op">(</span><span class="pp">s</span><span class="op">,</span><span class="pp">p</span><span class="op">)</span><span class="pp">     strtol</span><span class="op">((</span><span class="pp">s</span><span class="op">),</span><span class="pp"> </span><span class="op">(</span><span class="pp">p</span><span class="op">),</span><span class="pp"> </span><span class="dv">10</span><span class="op">)</span></span></code></pre></div></li>
+<li><p>Ensure the standard <code>math.h</code> functions (like
+<code>floor</code>, <code>ceil</code>, <code>pow</code>) are not called
+by replacing or undefining <code>luai_num*</code> macros with standard C
+integer operators.</p></li>
+</ol>
+<h3 id="adjusting-the-standard-libraries">Adjusting the Standard
+Libraries</h3>
+<p>An integer-only build cannot support functions that inherently rely
+on real numbers. You must trim or adapt the standard libraries in
+<code>src/linit.c</code> and <code>src/lmathlib.c</code>:</p>
+<ul>
+<li><strong>Disable the Math Library:</strong> The simplest approach is
+to remove <code>luaopen_math</code> from <code>linit.c</code> entirely
+to prevent compilation errors caused by missing transcendental math
+functions (<code>sin</code>, <code>cos</code>, <code>exp</code>,
+<code>log</code>).</li>
+<li><strong>Prune Floating Functions:</strong> If basic integer math
+functions are still required (such as <code>math.abs</code>,
+<code>math.min</code>, <code>math.max</code>, or integer pseudo-random
+generation), edit <code>src/lmathlib.c</code> and comment out any
+functions that call C standard library floating-point routines.</li>
+</ul>
+<h3 id="cross-compiling">Cross-Compiling</h3>
+<p>When building the modified source with a cross-compiler (such as
+<code>arm-none-eabi-gcc</code>), pass flags to avoid linking software
+floating-point emulation routines:</p>
+<div class="sourceCode" id="cb5"><pre
+class="sourceCode bash"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="fu">make</span> generic CC=arm-none-eabi-gcc AR=<span class="st">&quot;arm-none-eabi-ar rcu&quot;</span> RANLIB=arm-none-eabi-ranlib CFLAGS=<span class="st">&quot;-O2 -mthumb -mcpu=cortex-m0 -DLUA_FLOAT_TYPE=LUA_FLOAT_NONE&quot;</span></span></code></pre></div>
+<p>Using these flags ensures the compiler emits pure integer
+instructions, producing a compact Lua runtime that runs natively on
+hardware lacking an FPU.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/build-lua-without-floating-point-math';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

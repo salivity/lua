@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guide to Busted Unit Testing and Assertions in Lua - lua</title>
+    <meta name="description" content="Busted is a behavior-driven development (BDD) unit-testing framework for the Lua programming language designed to make tests readable and maintainable. This article explains how Busted organizes test suites through hierarchical blocks, manages test lifecy">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/guide-to-busted-unit-testing-and-assertions-in-lua">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Guide to Busted Unit Testing and Assertions in Lua - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/guide-to-busted-unit-testing-and-assertions-in-lua" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="Busted is a behavior-driven development (BDD) unit-testing framework for the Lua programming language designed to make tests readable and maintainable. This article explains how Busted organizes test suites through hierarchical blocks, manages test lifecy" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="guide-to-busted-unit-testing-and-assertions-in-lua">Guide to
+Busted Unit Testing and Assertions in Lua</h1>
+<p>Busted is a behavior-driven development (BDD) unit-testing framework
+for the Lua programming language designed to make tests readable and
+maintainable. This article explains how Busted organizes test suites
+through hierarchical blocks, manages test lifecycles with setup and
+teardown hooks, and verifies program behavior using its fluent and
+extensible assertion library.</p>
+<h3 id="test-suite-structure">Test Suite Structure</h3>
+<p>Busted structures test files using a nested block syntax inspired by
+frameworks like RSpec and Jasmine. This design groups related tests
+logically and defines their scope clearly.</p>
+<ul>
+<li><strong><code>describe</code></strong>: Defines the top-level test
+suite or a major component under test. It serves as an organizational
+container for related specifications.</li>
+<li><strong><code>context</code></strong>: An alias for
+<code>describe</code>, typically used to delineate specific scenarios,
+states, or input conditions within a broader component test.</li>
+<li><strong><code>it</code></strong>: Defines an individual test case (a
+specification). The code inside an <code>it</code> block executes the
+tested functionality and contains the assertions.</li>
+</ul>
+<div class="sourceCode" id="cb1"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>describe<span class="op">(</span><span class="st">&quot;Calculator&quot;</span><span class="op">,</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    context<span class="op">(</span><span class="st">&quot;when adding numbers&quot;</span><span class="op">,</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>        it<span class="op">(</span><span class="st">&quot;correctly sums two positive integers&quot;</span><span class="op">,</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>            <span class="kw">local</span> <span class="va">result</span> <span class="op">=</span> <span class="dv">2</span> <span class="op">+</span> <span class="dv">3</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>            <span class="va">assert</span><span class="op">.</span><span class="va">are</span><span class="op">.</span>equal<span class="op">(</span><span class="dv">5</span><span class="op">,</span> <span class="va">result</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>        <span class="kw">end</span><span class="op">)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="op">)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span><span class="op">)</span></span></code></pre></div>
+<h3 id="lifecycle-hooks">Lifecycle Hooks</h3>
+<p>Busted manages test fixtures through lifecycle functions that run
+before or after test blocks. These hooks can be scoped to individual
+tests or entire suites:</p>
+<ul>
+<li><strong><code>before_each(fn)</code></strong>: Executes before every
+<code>it</code> block in the current scope and its child scopes.</li>
+<li><strong><code>after_each(fn)</code></strong>: Executes after every
+<code>it</code> block in the current scope.</li>
+<li><strong><code>lazy_setup(fn)</code> /
+<code>setup(fn)</code></strong>: Executes once before any test in the
+block runs. <code>lazy_setup</code> executes only if tests within the
+block are actually executed.</li>
+<li><strong><code>lazy_teardown(fn)</code> /
+<code>teardown(fn)</code></strong>: Executes once after all tests in the
+block have completed.</li>
+</ul>
+<p>Hooks inherit hierarchically: an outer <code>before_each</code>
+executes before an inner <code>before_each</code>, ensuring dependencies
+are established in order.</p>
+<h3 id="assertion-syntax">Assertion Syntax</h3>
+<p>Busted integrates the <code>luassert</code> library to provide
+natural-language assertions. Assertions are formed using modifier chains
+that improve readability without altering logic.</p>
+<h4 id="basic-equality-and-truthiness">Basic Equality and
+Truthiness</h4>
+<p>Assertions use chained properties to state expectations clearly:</p>
+<ul>
+<li><code>assert.are.equal(expected, actual)</code> checks value
+equality.</li>
+<li><code>assert.are.same(tableA, tableB)</code> performs deep
+comparisons of tables.</li>
+<li><code>assert.is_true(value)</code> and
+<code>assert.is_false(value)</code> verify boolean values.</li>
+<li><code>assert.is_nil(value)</code> checks for <code>nil</code>.</li>
+</ul>
+<h4 id="negation-and-modifiers">Negation and Modifiers</h4>
+<p>Modifiers alter or clarify the assertion chain:</p>
+<ul>
+<li><code>assert.is_not.equal(expected, actual)</code> negates the
+evaluation.</li>
+<li>Modifiers like <code>is</code>, <code>are</code>, and
+<code>has</code> can be chained interchangeably to produce readable
+phrases (e.g., <code>assert.is.truthy(val)</code> or
+<code>assert.has.errors(fn)</code>).</li>
+</ul>
+<h4 id="error-handling-and-execution">Error Handling and Execution</h4>
+<p>Testing for runtime errors or raised exceptions is handled using
+functions:</p>
+<div class="sourceCode" id="cb2"><pre
+class="sourceCode lua"><code class="sourceCode lua"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>it<span class="op">(</span><span class="st">&quot;raises an error on invalid input&quot;</span><span class="op">,</span> <span class="kw">function</span><span class="op">()</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="va">assert</span><span class="op">.</span>has_error<span class="op">(</span><span class="kw">function</span><span class="op">()</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>        <span class="fu">error</span><span class="op">(</span><span class="st">&quot;invalid operation&quot;</span><span class="op">)</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">end</span><span class="op">,</span> <span class="st">&quot;invalid operation&quot;</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span><span class="op">)</span></span></code></pre></div>
+<h3 id="test-modifiers-pending-tags-and-focus">Test Modifiers: Pending,
+Tags, and Focus</h3>
+<p>Busted provides inline keywords to control test execution directly
+from code:</p>
+<ul>
+<li><strong><code>pending</code></strong>: Replaces <code>it</code> to
+mark a test as unimplemented without failing the test run.</li>
+<li><strong><code>#tag</code></strong>: Appending <code>#tag_name</code>
+to describe or test names allows running specific subsets via the
+command line (e.g., <code>busted --tags=unit</code>).</li>
+<li><strong><code>expose</code> / <code>insulate</code></strong>:
+Isolates global variables within specific test files or blocks to
+prevent side effects across tests.</li>
+</ul></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/guide-to-busted-unit-testing-and-assertions-in-lua';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>

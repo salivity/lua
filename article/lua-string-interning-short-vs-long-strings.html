@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lua String Interning: Short vs Long Strings - lua</title>
+    <meta name="description" content="In the Lua programming language, string handling differs significantly depending on string size, a design choice formalized in Lua 5.2 and refined in subsequent releases. Short strings are globally interned into a central hash table to ensure instant poin">
+    <link rel="canonical" href="https://salivity.github.io/lua/article/lua-string-interning-short-vs-long-strings">
+    <link rel="search" type="application/opensearchdescription+xml" title="lua" href="/lua/opensearch.xml">
+    <link rel="icon" href="/lua/favicon.ico">
+    <link rel="stylesheet" href="/lua/css/style.css">
+    <link media="print" rel="stylesheet" href="/lua/css/print.css">
+    <script src="/lua/js/fuse.min.js"></script>
+    <script src="/lua/js/script.js"></script>
+    <script id="MathJax-script" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.1.3/tex-chtml.min.js" defer></script>
+    <script src="/monetize/monetize.js"></script>
+    <script src="/social/social.js"></script>
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Lua String Interning: Short vs Long Strings - lua" />
+    <meta property="og:url" content="https://salivity.github.io/lua/article/lua-string-interning-short-vs-long-strings" />
+    <meta property="og:image" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:secure_url" content="https://salivity.github.io/lua/images/open-graph/default.webp" />
+    <meta property="og:image:width" content="1120" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:description" content="In the Lua programming language, string handling differs significantly depending on string size, a design choice formalized in Lua 5.2 and refined in subsequent releases. Short strings are globally interned into a central hash table to ensure instant poin" />
+    <link rel="manifest" href="/lua/pwa/manifest.json" />
+</head>
+<body>
+    <header>
+        <a href="/lua/" aria-label="Go To Home Page" title="Go To Home Page" id="logo">
+            <span>salivity.github.io/</span><span>lua</span>
+        </a>
+        <nav>
+            <ul class="header-links">
+                <li><a href="/lua/search" title="Search" aria-label="Go To Search Page"><svg class="svg-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path></svg></a></li>
+                <li><a id="theme-toggle" title="Theme" href="javascript:void(0);" aria-label="Toggle Website Theme"></a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        
+    <div class="article-layout">
+        <aside id="profile-sidebar" class="profile-column" aria-label="Author Profile"></aside>
+        <div class="article-main-column">
+            <article><h1 id="lua-string-interning-short-vs-long-strings">Lua String
+Interning: Short vs Long Strings</h1>
+<p>In the Lua programming language, string handling differs
+significantly depending on string size, a design choice formalized in
+Lua 5.2 and refined in subsequent releases. Short strings are globally
+interned into a central hash table to ensure instant pointer-based
+equality checks and rapid table lookups, whereas long strings bypass
+global interning to avoid severe performance penalties, memory churn,
+and denial-of-service vulnerabilities. This article explores the
+architectural reasons behind this bifurcation, examining how short
+strings optimize Lua’s core runtime while long strings maintain
+performance when processing large data payloads.</p>
+<h3 id="the-role-and-mechanism-of-short-strings">The Role and Mechanism
+of Short Strings</h3>
+<p>By default, any string shorter than a compile-time
+threshold—typically 40 bytes (<code>LUAI_MAXSHORTSTR</code>)—is
+classified as a short string. When a short string is created, Lua checks
+a global hash table stored inside the global state
+(<code>global_State</code>). If the string already exists, the runtime
+returns a pointer to the existing string object; otherwise, a new string
+is allocated and inserted into the table.</p>
+<p>This approach provides two primary benefits:</p>
+<ol type="1">
+<li><strong>Instant Comparisons:</strong> Because duplicate short
+strings share identical memory addresses, equality checks
+(<code>a == b</code>) operate in <span
+class="math inline">\(O(1)\)</span> time via simple pointer comparison,
+avoiding byte-by-byte traversal.</li>
+<li><strong>Optimized Table Access:</strong> Lua relies heavily on
+tables for records, modules, and object-oriented programming.
+Identifiers and method names are typically short strings. Interning
+ensures that table lookups use precomputed hash values and pointer
+equality, keeping property accesses consistently fast.</li>
+</ol>
+<h3 id="the-problem-with-interning-long-strings">The Problem with
+Interning Long Strings</h3>
+<p>Prior to Lua 5.2, all strings were interned regardless of length.
+While this guaranteed universal pointer equality, it introduced
+substantial bottlenecks when handling large blocks of text, such as file
+contents, network buffers, or serialized JSON payloads:</p>
+<ul>
+<li><strong>Expensive Hash Calculation:</strong> Interning requires
+computing the hash of every incoming string upfront. Computing hashes
+for large data buffers requires reading through megabytes of memory,
+severely bottlenecking operations like concatenation and file I/O.</li>
+<li><strong>Hash Collisions and Table Overhead:</strong> Constantly
+inserting and removing large, transient strings causes churn in Lua's
+internal string table. Reallocating and rehashing the global string
+table degrades performance across the entire runtime.</li>
+<li><strong>Denial of Service (Hash-DoS):</strong> Global interning of
+arbitrary-length strings created a vulnerability where an attacker could
+provide tailored payloads that trigger hash collisions, forcing the
+internal hash table into worst-case lookup times.</li>
+</ul>
+<h3 id="how-modern-lua-handles-long-strings">How Modern Lua Handles Long
+Strings</h3>
+<p>In recent Lua versions, strings exceeding the threshold are created
+as independent heap-allocated objects rather than tracked within the
+global string cache.</p>
+<p>Long strings use the following design patterns:</p>
+<ul>
+<li><strong>Lazy Hashing:</strong> A long string does not compute its
+hash value upon creation. Instead, hashing is deferred until the string
+is explicitly used as a key in a table. If a long string is merely
+created, manipulated, and discarded, no hash computation ever takes
+place.</li>
+<li><strong>Direct Equality Checks:</strong> Comparing two long strings
+first compares their lengths and pointers. If both pointers differ, Lua
+performs a standard byte-wise memory comparison (<code>memcmp</code>).
+While byte comparison takes <span class="math inline">\(O(N)\)</span>
+time in the worst case, long strings are rarely compared for equality
+repeatedly in typical scripting workloads.</li>
+<li><strong>Independent Lifecycles:</strong> Long strings are collected
+independently by Lua’s garbage collector without the overhead of
+unlinking them from the global string registry, reducing garbage
+collection sweep times.</li>
+</ul>
+<h3 id="summary">Summary</h3>
+<p>The separation between short and long strings balances execution
+speed and scalability. Lua interns short strings globally because their
+primary usage lies in table keys, identifiers, and frequent comparisons,
+where deduplication and <span class="math inline">\(O(1)\)</span> checks
+yield massive performance gains. Conversely, long strings bypass global
+interning to eliminate unnecessary hashing costs, protect against hash
+collisions, and ensure efficient handling of large-scale data.</p></article>
+        <div id='disqus_thread'></div>
+        <script>
+
+            var disqus_config = function () {
+                this.page.url =         'https://salivity.github.io/lua/article/lua-string-interning-short-vs-long-strings';  
+                //this.page.identifier =  PAGE_IDENTIFIER; 
+            };
+            
+            (function() {
+                var d = document, s = d.createElement('script');
+                s.src = 'https://salivity-github-io.disqus.com/embed.js';
+                s.setAttribute('data-timestamp', +new Date());
+                (d.head || d.body).appendChild(s);
+            })();
+        </script>
+    
+        </div>
+    </div>
+    
+    </main>
+    <footer>
+        <nav>
+            <ul class="social-links">
+            </ul>
+        </nav>
+        <nav>
+            <ul class="footer-links">
+                <li><a href="https://smvc.dev/contact">Contact</a></li>
+                <li><a href="/lua/privacy-policy">Privacy Policy</a></li>
+                <li><a href="/lua/terms-and-conditions">Terms and Conditions</a></li>
+            </ul>
+        </nav>
+        <div class="copyright">
+            Copyright &copy; <span id="current-year"></span>
+        </div>
+    </footer>
+</body>
+</html>
